@@ -103,7 +103,7 @@
 ---@class FiletreeRefScanResult
 ---@field refs  FiletreeRef[]
 ---@field plans table<string, table<string, FiletreeRefPlan>>  source path → provider → plan
----@field incomplete? boolean  The candidate search was cut short (fallback walk capped or cancelled, already warned about); refs may be missing. Informational for now: no flow reads it, the warning is the user-visible signal.
+---@field incomplete? boolean  The candidate search was cut short (fallback walk capped or cancelled, already warned about); refs may be missing. `refs.handle_result` and `refs.for_delete` warn when it is set.
 
 ---@class FiletreeRefsScanConfig
 ---@field root              "project"|"cwd"  Search root (default "project").

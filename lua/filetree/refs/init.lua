@@ -290,6 +290,16 @@ function M.prefetch(paths, opts)
   }
 end
 
+---The candidate search was cut short (ripgrep failed and the fallback walk hit its cap or was
+---cancelled), so references may be missing. Says so right where the user decides, because the
+---dialog (or its absence when nothing was found) would otherwise read as "all references seen".
+---@param result FiletreeRefScanResult
+local function warn_if_incomplete(result)
+  if result and result.incomplete then
+    notify.warn("The reference search was cut short: some references may be missing")
+  end
+end
+
 ---Scan without the prefetch/await split, for callers that have nothing to
 ---overlap it with (the delete flow, which must know the refs before it can
 ---even draw its confirmation).
@@ -374,6 +384,7 @@ end
 function M.handle_result(result, moves, opts, done)
   opts = opts or {}
   done = done or function() end
+  warn_if_incomplete(result)
 
   local resolved, unresolved = M.resolve(result, moves, opts)
   if unresolved > 0 then
@@ -485,6 +496,7 @@ end
 function M.for_delete(paths, opts, cb)
   opts = vim.tbl_extend("force", { op = "delete" }, opts or {})
   M.scan(paths, opts, function(result)
+    warn_if_incomplete(result)
     local out = {}
     for _, ref in ipairs(result.refs) do
       local provider = registry.get(ref.provider)
