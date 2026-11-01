@@ -21,7 +21,6 @@
 ---   :Filetree open pick       (floating picker of configured apps)
 
 local notify = require("filetree.util.notify").create("[filetree.open_with]")
-local platform = require("filetree.util.platform")
 local ui_select = require("filetree.util.select")
 local bind = require("filetree.util.bind")
 
@@ -63,45 +62,11 @@ local _adapter = nil
 -- ── Open helpers ──────────────────────────────────────────────────────────────
 
 ---@internal
----Per-OS "open with default handler" command (fallback for Neovim < 0.10).
----@return string[]
-local function system_open_cmd()
-  -- explorer.exe hands the target straight to the registered file handler
-  -- with no cmd.exe re-tokenizing in between; `cmd /c start` silently
-  -- truncates a path containing an unescaped `&` (cmd.exe treats a bare
-  -- `&` outside quotes as a command separator).
-  if platform.is_windows() then return { "explorer.exe" } end
-  if platform.is_mac() then return { "open" } end
-  if platform.is_wsl() or platform.has_executable("wslview") then return { "wslview" } end
-  return { "xdg-open" }
-end
-
----@internal
----@param cmd_parts string[]
----@param path string
-local function open_with_cmd(cmd_parts, path)
-  local full_cmd = vim.deepcopy(cmd_parts)
-  full_cmd[#full_cmd + 1] = path
-  vim.system(full_cmd, { detach = true }, function(result)
-    if result.code ~= 0 then
-      vim.schedule(function()
-        notify.error("Open failed (exit " .. result.code .. "): " .. (result.stderr or ""))
-      end)
-    end
-  end)
-end
-
----@internal
----Open `path` with the OS default handler. Prefers Neovim's built-in
----`vim.ui.open` (0.10+, platform-correct + maintained); falls back to a manual
----per-OS spawn otherwise.
+---Open `path` with the OS default handler (`lib.nvim.cross.open_default`).
 ---@param path string
 local function system_open(path)
-  if type(vim.ui.open) == "function" then
-    local ok, obj = pcall(vim.ui.open, path)
-    if ok and obj ~= nil then return end
-  end
-  open_with_cmd(system_open_cmd(), path)
+  local ok, err = require("lib.nvim.cross.open_default")(path)
+  if not ok then notify.error("Open failed: " .. tostring(err)) end
 end
 
 ---@internal

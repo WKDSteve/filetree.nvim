@@ -17,7 +17,6 @@
 ---   <CR>   — image/PDF/system_exts dispatch only; other nodes pass through to adapter's <CR>.
 
 local notify = require("filetree.util.notify").create("[filetree.preview]")
-local platform = require("filetree.util.platform")
 local line_count = require("filetree.util.line_count")
 local bufutil = require("filetree.util.buffer")
 
@@ -196,25 +195,8 @@ end
 -- ── Cross-platform system-open ────────────────────────────────────────────────
 
 local function system_open(path)
-  local args
-  if platform.is_windows() then
-    -- explorer.exe hands the target straight to the registered file handler
-    -- with no cmd.exe re-tokenizing in between; `cmd /c start` silently
-    -- truncates a path containing an unescaped `&` (cmd.exe treats a bare
-    -- `&` outside quotes as a command separator).
-    -- The parentheses matter: gsub() returns the replacement count as a second
-    -- value, and the last expression of a table constructor keeps all of its
-    -- values, so without them explorer.exe is handed the count as an argument.
-    args = { "explorer.exe", (path:gsub("/", "\\")) }
-  elseif platform.is_mac() then
-    args = { "open", path }
-  elseif platform.is_wsl() or platform.has_executable("wslview") then
-    args = { "wslview", path }
-  else
-    args = { "xdg-open", path }
-  end
-  local ok = vim.fn.jobstart(args, { detach = true })
-  if not ok or ok <= 0 then notify.warn("Could not open in system app: " .. path) end
+  local ok = require("lib.nvim.cross.open_default")(path)
+  if not ok then notify.warn("Could not open in system app: " .. path) end
 end
 
 -- ── Image backend dispatch ────────────────────────────────────────────────────

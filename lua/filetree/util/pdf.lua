@@ -16,7 +16,6 @@
 --- Note: pdfport's Lua module is `pdfport` (dir `lua/pdfport/`), and
 --- its `open()` takes a *table* (`{ path = …, mode = … }`), not a bare path.
 
-local platform = require("filetree.util.platform")
 local notify = require("filetree.util.notify").create("[filetree.pdf]")
 
 local M = {}
@@ -32,22 +31,8 @@ end
 ---@param path string
 ---@return boolean ok
 function M.system_open(path)
-  local args
-  if platform.is_windows() then
-    -- explorer.exe hands the target straight to the registered file handler
-    -- with no cmd.exe re-tokenizing in between; `cmd /c start` silently
-    -- truncates a path containing an unescaped `&` (cmd.exe treats a bare
-    -- `&` outside quotes as a command separator).
-    args = { "explorer.exe", (path:gsub("/", "\\")) }
-  elseif platform.is_mac() then
-    args = { "open", path }
-  elseif platform.is_wsl() or platform.has_executable("wslview") then
-    args = { "wslview", path }
-  else
-    args = { "xdg-open", path }
-  end
-  local job = vim.fn.jobstart(args, { detach = true })
-  if not job or job <= 0 then
+  local ok = require("lib.nvim.cross.open_default")(path)
+  if not ok then
     notify.warn("Could not open in system viewer: " .. path)
     return false
   end
