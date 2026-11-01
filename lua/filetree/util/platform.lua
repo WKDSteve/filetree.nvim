@@ -64,16 +64,19 @@ end
 ---holding the editor's inherited stdout, so `scripts/test.sh | tail` never
 ---saw EOF. Started directly, ripgrep is the job member and dies with it.
 ---
----Limits: only Scoop shims are resolved. A Chocolatey (shimgen) shim has no
----side file naming its target and is started by name, with the same risk. A
----Scoop shim that also adds arguments (an `args = ...` line) is started by
+---A Chocolatey (shimgen) shim has no side file; its target is looked up in
+---the package folder next to its `bin` (`lib/ripgrep/tools/**/rg.exe`, see
+---`M.chocolatey_target`).
+---
+---Limits: a shim that cannot be resolved is started by name, with the same
+---risk. A Scoop shim that also adds arguments (an `args = ...` line) is started by
 ---name too, so those arguments are never dropped.
 ---@return string
 function M.rg_binary()
   local exe = vim.fn.exepath("rg")
   if exe == "" then return "rg" end
   local shim = exe:gsub("%.[eE][xX][eE]$", "") .. ".shim"
-  if vim.fn.filereadable(shim) == 0 then return "rg" end
+  if vim.fn.filereadable(shim) == 0 then return M.chocolatey_target(exe) or "rg" end
   local target
   for _, line in ipairs(vim.fn.readfile(shim)) do
     if line:match("^%s*args%s*=") then return "rg" end
@@ -81,6 +84,24 @@ function M.rg_binary()
   end
   if target and vim.fn.executable(target) == 1 then return target end
   return "rg"
+end
+
+---@internal
+---The real `rg.exe` behind a Chocolatey shim: `<root>/bin/rg.exe` stands for
+---`<root>/lib/ripgrep/tools/**/rg.exe`. nil when `exe` is not in a `bin` folder
+---next to such a package folder.
+---@param exe string  the path `exepath("rg")` found
+---@return string|nil
+function M.chocolatey_target(exe)
+  local bin = vim.fs.dirname(exe)
+  if not bin or vim.fs.basename(bin) ~= "bin" then return nil end
+  local tools = vim.fs.dirname(bin) .. "/lib/ripgrep/tools"
+  if vim.fn.isdirectory(tools) == 0 then return nil end
+  local found = vim.fn.globpath(tools, "**/rg.exe", true, true)
+  table.sort(found)
+  local target = found[#found]
+  if target and vim.fn.executable(target) == 1 then return target end
+  return nil
 end
 
 ---Return the current working directory (never nil).

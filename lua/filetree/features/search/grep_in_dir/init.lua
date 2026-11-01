@@ -24,6 +24,37 @@ local list = require("lib.nvim.ui.list")
 
 local M = {}
 
+-- Builtin searches still running, keyed by their `vim.SystemObj`. Neovim does not
+-- stop a `vim.system` child at exit on POSIX: VimLeavePre kills them. No
+-- timeout on purpose: a search of a big tree is slow, not stuck, and the user
+-- sees the progress indicator.
+---@type table<vim.SystemObj, true>
+local live = {}
+local leave_hook = false
+
+---@internal
+---Kill every builtin search that has not exited yet.
+---@return integer killed
+function M.kill_live()
+  local n = 0
+  for obj in pairs(live) do
+    live[obj] = nil
+    if pcall(obj.kill, obj, "sigkill") then n = n + 1 end
+  end
+  return n
+end
+
+---@internal
+---How many builtin searches are running (for the specs).
+---@return integer
+function M.live_count()
+  local n = 0
+  for _ in pairs(live) do
+    n = n + 1
+  end
+  return n
+end
+
 -- Optional: shows a "searching…" indicator around the builtin backend's
 -- blocking rg/grep process, which can take a while under a large directory.
 -- No-op (returns nil) when lib.nvim isn't installed.
@@ -220,7 +251,19 @@ local function run_builtin_search(dir, pattern)
   -- above could never even paint. It is a callback now. The `true` returned
   -- below is a formality: this is always the last fallback in M.grep's chain
   -- and no caller consults it (see via_builtin's doc comment).
-  vim.system(args, { text = true }, function(result)
+  local obj
+  if not leave_hook then
+    leave_hook = true
+    vim.api.nvim_create_autocmd("VimLeavePre", {
+      group = vim.api.nvim_create_augroup("filetree.grep_in_dir", { clear = true }),
+      desc = "filetree grep_in_dir: stop searches still running",
+      callback = function()
+        M.kill_live()
+      end,
+    })
+  end
+  obj = vim.system(args, { text = true }, function(result)
+    if obj then live[obj] = nil end
     local output = vim.split(result.stdout or "", "\n", { trimempty = true })
     -- vim.system callbacks run off the main loop; quickfix, notify and :copen
     -- all need the main loop.
@@ -228,6 +271,7 @@ local function run_builtin_search(dir, pattern)
       builtin_search_done(dir, pattern, output, result.code, prog)
     end)
   end)
+  live[obj] = true
 
   return true
 end
