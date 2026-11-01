@@ -19,7 +19,8 @@
 local this = debug.getinfo(1, "S").source:sub(2)
 local root = vim.fn.fnamemodify(this, ":p:h:h")
 vim.opt.rtp:prepend(root)
--- lib.nvim is a declared dependency. Candidates in order: $FILETREE_LIB_NVIM,
+-- lib.nvim is a declared dependency. Candidates in order: $LIB_NVIM_DIR (the one scripts/test.sh resolved first, so
+-- this script tests the same lib.nvim as the rest of the suite), $FILETREE_LIB_NVIM,
 -- $LIB_NVIM_PATH (the name lib.nvim's own resolve template uses, and the one
 -- TESTS/refs/run.lua reads), a sibling checkout, then lazy.nvim's managed copy.
 -- All four suites and refs/run.lua accept both variables, so one exported name
@@ -32,7 +33,7 @@ local lib_candidates = {}
 -- `vim.env.X` is nil, and a nil inside a table constructor truncates the array
 -- for ipairs -- with neither variable exported the whole list would be skipped
 -- and the fallbacks below would never be reached.
-for _, env in ipairs({ "FILETREE_LIB_NVIM", "LIB_NVIM_PATH" }) do
+for _, env in ipairs({ "LIB_NVIM_DIR", "FILETREE_LIB_NVIM", "LIB_NVIM_PATH" }) do
   local v = vim.env[env]
   if v and v ~= "" then lib_candidates[#lib_candidates + 1] = v end
 end
@@ -49,7 +50,7 @@ end
 -- unconditionally (not lazy, not pcall'd), and setup() below loads refs
 -- eagerly -- same candidate order as lib.nvim above.
 local ui_candidates = {}
-for _, env in ipairs({ "FILETREE_UI_NVIM", "UI_NVIM_PATH" }) do
+for _, env in ipairs({ "UI_NVIM_DIR", "FILETREE_UI_NVIM", "UI_NVIM_PATH" }) do
   local v = vim.env[env]
   if v and v ~= "" then ui_candidates[#ui_candidates + 1] = v end
 end
