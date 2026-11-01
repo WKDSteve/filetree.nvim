@@ -37,7 +37,7 @@ vim.fn.writefile({
   ("dofile(%q)"):format(smoke),
 }, wrapper)
 
-vim.system({ "nvim", "--clean", "--headless", "-u", "NONE", "-l", wrapper }, {
+vim.system({ vim.v.progpath, "--clean", "--headless", "-u", "NONE", "-l", wrapper }, {
   env = { LIB_NVIM_DIR = fake_lib, UI_NVIM_DIR = fake_ui },
   cwd = root,
   text = true,
