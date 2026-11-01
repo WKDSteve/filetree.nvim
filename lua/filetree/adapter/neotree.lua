@@ -1117,6 +1117,12 @@ function M.close()
   return ok
 end
 
+---How long after a refresh further refresh requests are folded into one (see `M.refresh`).
+local REFRESH_WINDOW_MS = 60
+---@type uv.uv_timer_t|nil
+local refresh_window = nil
+local refresh_pending = false
+
 ---Re-scan the filesystem and re-render the tree — the same thing neo-tree's own
 ---`R` mapping does.
 ---
@@ -1128,10 +1134,33 @@ end
 ---then only appeared when some *unrelated* event happened to re-navigate the
 ---tree (opening a file right after a create, follow_current_file firing, ...),
 ---which is why a manual `R` was needed roughly half the time.
+---
+---**Bursts are coalesced.** One user action can ask for several refreshes in a row (a batch rename, a move, the
+---file watcher on top of a fileop): each one is a full re-scan (~12 ms, 1 967 of them in 52 sessions in the
+---telemetry). The first call of a burst runs at once; calls inside `REFRESH_WINDOW_MS` of it are folded into ONE
+---trailing refresh that runs when the window ends (they answer `true`: the refresh is on its way).
 ---@return boolean
 function M.refresh()
+  if refresh_window then
+    refresh_pending = true
+    return true
+  end
   local manager = get_manager()
   if not manager or type(manager.refresh) ~= "function" then return false end
+  refresh_window = vim.uv.new_timer()
+  refresh_window:start(
+    REFRESH_WINDOW_MS,
+    0,
+    vim.schedule_wrap(function()
+      local timer = refresh_window
+      refresh_window = nil
+      if timer and not timer:is_closing() then timer:close() end
+      if refresh_pending then
+        refresh_pending = false
+        M.refresh()
+      end
+    end)
+  )
   return (pcall(manager.refresh, "filesystem"))
 end
 
