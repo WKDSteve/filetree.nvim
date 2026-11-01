@@ -748,6 +748,7 @@
 ---@field keymap               string?   Key inside tree (default "r").
 ---@field use_safety?          boolean   Create safety backup before rename (default true).
 ---@field dry_run?             boolean   Log without executing (default false).
+---@field cursor?              "before_ext"|"end"  Prompt cursor: before the last extension (default) or at the end.
 ---@field update_references?   boolean   **Deprecated** — migrated to `refs.providers` (`false` turns the lua/python/ts_js providers off).
 ---@field check_markdown_refs? boolean   **Deprecated** — migrated to `refs.on_rename` (`false` → `"off"`). See @types/refs.lua.
 ---@field refs_picker_prefer?  "auto"|"telescope"|"fzf-lua"|"quickfix"  **Deprecated** — migrated to `refs.picker`.

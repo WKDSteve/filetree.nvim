@@ -18,6 +18,7 @@
 ---   keymap      string?   Key inside tree (default "r").
 ---   use_safety  boolean   Create safety backup before rename (default true).
 ---   dry_run     boolean   Log without executing (default false).
+---   cursor      string    Prompt cursor: "before_ext" (before the last extension, default) or "end".
 ---
 --- Reference handling is configured centrally under `refs` (see
 --- `filetree.refs.DEFAULTS`), not per feature.
@@ -54,6 +55,7 @@ local DEFAULTS = {
   keymap = "r",
   use_safety = true,
   dry_run = false,
+  cursor = "before_ext",
 }
 
 ---@type FiletreeSmartRenameConfig
@@ -67,6 +69,7 @@ M.SCHEMA = {
   keymap = "keymap",
   use_safety = "boolean",
   dry_run = "boolean",
+  cursor = { "string", enum = { "before_ext", "end" } },
   -- Deprecated, migrated by config/init.lua's apply_legacy_refs().
   update_references = "boolean",
   check_markdown_refs = "boolean",
@@ -274,7 +277,7 @@ function M.rename_current()
 
   -- kit.input parks the cursor at the end of the line; for a file put it right
   -- before the extension so typing replaces just the stem.
-  local stem_end = M.stem_end(old_name, node.type == "directory")
+  local stem_end = _cfg.cursor ~= "end" and M.stem_end(old_name, node.type == "directory") or nil
   if surf and stem_end then
     vim.schedule(function()
       if surf:is_valid() then pcall(vim.api.nvim_win_set_cursor, surf.winid, { 1, stem_end }) end

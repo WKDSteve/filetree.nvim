@@ -1487,6 +1487,10 @@ is picked up by the reference engine.
 
 Keymaps: r
 
+Option `cursor`: `"before_ext"` (default) parks the prompt cursor before the last
+extension (`init|.lua`; directories, dotfiles and extension-less names keep it at
+the end), `"end"` always puts it at the end.
+
 Module: lua/filetree/features/fileops/smart_rename/
 
 ------------------------------------------------------------------------------

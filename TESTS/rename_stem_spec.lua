@@ -73,6 +73,17 @@ eq("no extension: cursor at the end", (prompt_cursor_col("Makefile", "file")), 8
 eq("directory with a dot: cursor at the end", (prompt_cursor_col("v1.2", "directory")), 4)
 sr.teardown()
 
+sr.setup({ enabled = true, cursor = "end" }, {
+  get_current_node = function()
+    return current
+  end,
+  refresh = function()
+    return true
+  end,
+})
+eq("cursor = end: file keeps the cursor at the end", (prompt_cursor_col("init.lua", "file")), 8)
+sr.teardown()
+
 print(("\nfiletree.nvim rename_stem_spec: %d passed, %d failed"):format(passed, failed))
 if failed > 0 then
   vim.cmd("cq")
