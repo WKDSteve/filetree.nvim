@@ -54,6 +54,7 @@ local progress = require("filetree.util.progress")
 -- surface as a hard failure — see the handle_guard plan.
 local fsops = require("lib.nvim.cross.fs.mutate")
 local bind = require("filetree.util.bind")
+local hooks = require("filetree.util.hooks")
 
 local M = {}
 
@@ -314,7 +315,7 @@ end
 ---@return string? err  libuv-style failure reason, when rc == 1 -- e.g. the
 ---  same kind of Windows sharing lock `do_move` now reports (see that
 ---  function's own doc comment); a copy can hit it exactly the same way.
-local function do_copy(src, dst)
+local function do_copy_impl(src, dst)
   if is_symlink(src) then
     local ok, err = copy_symlink(src, dst)
     return ok and 0 or 1, err
@@ -322,6 +323,20 @@ local function do_copy(src, dst)
   if vim.fn.isdirectory(src) == 1 then return copy_dir(src, dst) end
   local ok, err = fsops.copy_file(src, dst)
   return ok and 0 or 1, err
+end
+
+---@internal
+---`do_copy_impl` announcing itself on the `hooks_api` bus: `before_copy`, then
+---`after_copy` with the outcome.
+---@param src string
+---@param dst string
+---@return integer rc
+---@return string? err
+local function do_copy(src, dst)
+  hooks.emit("before_copy", { src = src, dst = dst })
+  local rc, err = do_copy_impl(src, dst)
+  hooks.emit("after_copy", { src = src, dst = dst, ok = rc == 0 })
+  return rc, err
 end
 
 ---@internal
@@ -337,7 +352,9 @@ end
 local function do_move(src, dst)
   -- Windows sharing-lock retry and the cross-drive EXDEV fallback both live in
   -- util.mutate, shared with rename_batch/move/smart_rename.
+  hooks.emit("before_move", { src = src, dst = dst })
   local ok, err = mutate.move(src, dst)
+  hooks.emit("after_move", { src = src, dst = dst, ok = ok == true })
   if ok then return 0, dst end
   return 1, nil, err
 end

@@ -43,6 +43,7 @@ local refs = require("filetree.refs")
 
 local kit = require("ui.kit")
 local bind = require("filetree.util.bind")
+local hooks = require("filetree.util.hooks")
 
 local M = {}
 
@@ -184,7 +185,9 @@ local function run(plan, resolution, scan_result)
     end
 
     if not skip then
+      hooks.emit("before_move", { src = op.src, dst = dst })
       local ok, err = mutate.move(op.src, dst)
+      hooks.emit("after_move", { src = op.src, dst = dst, ok = ok == true })
       if not ok then
         notify.error(
           string.format(

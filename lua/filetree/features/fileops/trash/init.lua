@@ -65,6 +65,7 @@ local progress = require("filetree.util.progress")
 -- touches the path. No-op unless the handle_guard feature installed the registry.
 local watch = require("lib.nvim.neotree.watch")
 local bind = require("filetree.util.bind")
+local hooks = require("filetree.util.hooks")
 
 local M = {}
 
@@ -234,7 +235,7 @@ end
 ---@param cb fun(ok: boolean)  invoked on the main loop once the delete attempt settled
 ---@param require_symlink boolean|nil  see `symlink_still_ok`'s doc comment
 ---@return nil
-local function do_trash(path, cb, require_symlink)
+local function do_trash_impl(path, cb, require_symlink)
   if not symlink_still_ok(path, require_symlink) then
     cb(false)
     return
@@ -307,6 +308,22 @@ local function do_trash(path, cb, require_symlink)
   else
     spawn()
   end
+end
+
+---@internal
+---`do_trash_impl` announcing itself on the `hooks_api` bus: `before_delete`, then
+---`after_delete` with the outcome. A dry run deletes nothing, so it announces nothing.
+---@param path string
+---@param cb fun(ok: boolean)
+---@param require_symlink boolean|nil
+---@return nil
+local function do_trash(path, cb, require_symlink)
+  if _cfg.dry_run then return do_trash_impl(path, cb, require_symlink) end
+  hooks.emit("before_delete", { path = path })
+  do_trash_impl(path, function(ok)
+    hooks.emit("after_delete", { path = path, ok = ok })
+    cb(ok)
+  end, require_symlink)
 end
 
 ---Metadata lines for the confirm popup — reuses node_info's formatter so the
@@ -665,6 +682,10 @@ local function run_all_batched(paths, require_symlink)
     end
   end
 
+  for _, p in ipairs(existing) do
+    hooks.emit("before_delete", { path = p })
+  end
+
   local function spawn()
     if prog then
       prog:update({ text = string.format("%d item(s)", #existing), current = 0, total = #existing })
@@ -673,7 +694,9 @@ local function run_all_batched(paths, require_symlink)
       local ok_count = 0
       for i, p in ipairs(existing) do
         local result = results[i]
-        if result and result.ok then
+        local deleted = result and result.ok
+        hooks.emit("after_delete", { path = p, ok = deleted == true })
+        if deleted then
           ok_count = ok_count + 1
           undo.record(p)
           buffer.close_for_path(p)

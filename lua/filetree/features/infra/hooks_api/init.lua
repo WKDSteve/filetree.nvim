@@ -11,10 +11,10 @@
 ---     hooks.on("before_delete", function(data) ... end)
 ---   end
 ---
---- CDX: none of the events below are actually emitted anywhere in this repo
---- (grepped for `.emit(` — only this module's own definition and doc comment
---- match). Either the wiring in the listed features was never added, or this
---- list is aspirational; needs a decision either way.
+--- Wired today (via `filetree.util.hooks.emit`): `before_delete`/`after_delete`
+--- (trash), `before_move`/`after_move` (move, and the cut half of copy_move),
+--- `before_copy`/`after_copy` (copy_move). The rest are declared but have no
+--- emit site yet.
 ---
 --- Built-in events emitted by features:
 ---   before_delete   { path: string }
