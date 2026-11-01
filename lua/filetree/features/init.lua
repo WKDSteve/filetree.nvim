@@ -70,6 +70,7 @@ M.FEATURES = {
   live_search = { mod = "filetree.features.search.live_search", category = "search" },
   find_files = { mod = "filetree.features.search.find_files", category = "search" },
   grep_in_dir = { mod = "filetree.features.search.grep_in_dir", category = "search" },
+  spotlight_node = { mod = "filetree.features.search.spotlight_node", category = "search" },
 
   -- ── paths: clipboard / path tools ──────────────────────────────────────────
   path_copy = { mod = "filetree.features.paths.path_copy", category = "paths" },

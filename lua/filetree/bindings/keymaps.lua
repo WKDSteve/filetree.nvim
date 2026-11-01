@@ -283,6 +283,12 @@ return {
       feature = "lua_require_copy",
       scope = "tree",
     },
+    {
+      lhs = "<leader>sp",
+      desc = "Spotlight the node's name (spotlight.nvim)",
+      feature = "spotlight_node",
+      scope = "tree",
+    },
     { lhs = "[f", desc = "Copy file list (abs)", feature = "copy_file_list", scope = "tree" },
     { lhs = "]f", desc = "Copy file list (rel)", feature = "copy_file_list", scope = "tree" },
     { lhs = "[F", desc = "Copy dir list (abs)", feature = "copy_file_list", scope = "tree" },

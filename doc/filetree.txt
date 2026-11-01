@@ -2173,6 +2173,18 @@ Keymaps: rq
 Module: lua/filetree/features/paths/lua_require_copy/
 
 ------------------------------------------------------------------------------
+SPOTLIGHT NODE                                       *filetree-spotlight-node*
+
+`<leader>sp` turns the basename of the node under the cursor into a spotlight
+token (`require("spotlight").add(name)`), so the open logs and buffers that
+mention the file light up. Soft dependency: without spotlight.nvim it only
+warns. Off by default (`features.spotlight_node.enabled`).
+
+Keymaps: <leader>sp
+
+Module: lua/filetree/features/search/spotlight_node/
+
+------------------------------------------------------------------------------
 MARKDOWN LINKS                                       *filetree-markdown-links*
 
 Copies the current node, a recursive listing, or every marked node as Markdown

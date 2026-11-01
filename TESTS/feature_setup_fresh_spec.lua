@@ -121,6 +121,7 @@ local MUST_BE_EXERCISED = {
   "link_marker",
   "live_search",
   "lua_require_copy",
+  "spotlight_node",
   "markdown_links",
   "marks",
   "move",

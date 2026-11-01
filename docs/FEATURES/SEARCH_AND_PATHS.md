@@ -165,6 +165,15 @@ directory, the canonical dotted module path.
 - **Module:** `lua/filetree/features/paths/lua_require_copy/`
 - **Keymaps:** `rq`
 
+## Spotlight Node
+
+`<leader>sp` turns the basename of the node under the cursor into a
+`spotlight.nvim` token, so open logs and buffers that mention the file light up.
+Soft dependency (a warning when spotlight.nvim is absent), off by default.
+
+- **Module:** `lua/filetree/features/search/spotlight_node/`
+- **Keymaps:** `<leader>sp`
+
 ## Copy File List
 
 Copies a recursive listing of files and/or directories under the node —

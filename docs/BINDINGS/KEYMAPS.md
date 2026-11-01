@@ -65,6 +65,7 @@ at runtime with `:lua vim.print(require("filetree.bindings").live())` —
 | `gs` | live_search | `keymap` | Open live search in tree |
 | `I` | node_info | `keymap` | Show node info float |
 | `rq` | lua_require_copy | `keymap` | Copy file as `require("…")` string |
+| `<leader>sp` | spotlight_node | `keymap` | Spotlight the node's basename (spotlight.nvim) |
 | `[f` | copy_file_list | `keymap_files_abs` | Copy recursive file list, absolute (or all marked) |
 | `]f` | copy_file_list | `keymap_files_rel` | Copy recursive file list, relative (or all marked) |
 | `[F` | copy_file_list | `keymap_dirs_abs` | Copy recursive dir list, absolute (or all marked) |

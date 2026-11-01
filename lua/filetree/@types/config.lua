@@ -153,6 +153,7 @@
 ---@field node_info               FiletreeNodeInfoConfig?
 ---@field tree_traverse           FiletreeTreeTraverseConfig?
 ---@field lua_require_copy        FiletreeLuaRequireCopyConfig?
+---@field spotlight_node          FiletreeSpotlightNodeConfig?
 ---@field copy_file_list          FiletreeCopyFileListConfig?
 ---@field markdown_links          FiletreeMarkdownLinksConfig?
 ---@field smart_create            FiletreeSmartCreateConfig?
@@ -819,6 +820,12 @@
 ---@class FiletreeLuaRequireCopyConfig
 ---@field enabled   boolean
 ---@field keymap    string?   Key inside tree (default "rq").
+
+-- ── spotlight_node ───────────────────────────────────────────────────────────
+
+---@class FiletreeSpotlightNodeConfig
+---@field enabled   boolean
+---@field keymap    string?   Key inside tree (default "<leader>sp").
 
 -- ── copy_file_list ────────────────────────────────────────────────────────────
 
