@@ -91,7 +91,7 @@ end
 local function write_zip(tool, out, sources, done)
   local cmd, cwd = archiver.build(tool, out, sources)
   if not cmd then return done(cwd) end
-  local ok, err = pcall(vim.system, cmd, { cwd = cwd, text = true }, function(res)
+  local ok, err = pcall(require("filetree.util.live_procs").spawn, cmd, { cwd = cwd, text = true }, function(res)
     vim.schedule(function()
       if res.code == 0 and vim.uv.fs_stat(out) then return done(nil) end
       os.remove(out) -- a half-written archive is worse than none

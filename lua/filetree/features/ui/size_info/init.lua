@@ -148,7 +148,7 @@ local function query_dir_size(path, callback)
     cmd = { "du", "-sk", path }
   end
 
-  vim.system(
+  require("filetree.util.live_procs").spawn(
     cmd,
     { text = true },
     vim.schedule_wrap(function(result)
