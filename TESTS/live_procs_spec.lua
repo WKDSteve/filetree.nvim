@@ -49,4 +49,8 @@ eq("finished process is forgotten", live.count(), 0)
 obj:wait(1000)
 
 print(("\nfiletree.nvim live_procs_spec: %d passed, %d failed"):format(passed, failed))
-if failed > 0 then vim.cmd("cq") else vim.cmd("qa!") end
+if failed > 0 then
+  vim.cmd("cq")
+else
+  vim.cmd("qa!")
+end

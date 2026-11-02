@@ -77,8 +77,16 @@ eq("failed sort says why", messages[#messages]:find("not been shown", 1, true) ~
 feature.setup({ enabled = true }, { name = "oil" })
 messages = {}
 eq("unsupported adapter: false", feature.cycle(), false)
-eq("unsupported adapter: names it", messages[#messages]:find("not applicable: the oil adapter", 1, true) ~= nil, true)
+eq(
+  "unsupported adapter: names it",
+  messages[#messages]:find("not applicable: the oil adapter", 1, true) ~= nil,
+  true
+)
 
 feature.teardown()
 print(("\nfiletree.nvim sort_cycle_spec: %d passed, %d failed"):format(passed, failed))
-if failed > 0 then vim.cmd("cq") else vim.cmd("qa!") end
+if failed > 0 then
+  vim.cmd("cq")
+else
+  vim.cmd("qa!")
+end

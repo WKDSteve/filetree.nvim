@@ -67,10 +67,20 @@ end
 touch(choco .. "/bin/rg.exe", true)
 touch(real, true)
 local got = platform.chocolatey_target(choco .. "/bin/rg.exe")
-check("a Chocolatey shim resolves to the real rg.exe", got ~= nil and vim.fs.normalize(got) == vim.fs.normalize(real), tostring(got))
-check("an exe outside a bin folder is left alone", platform.chocolatey_target(choco .. "/lib/rg.exe") == nil)
+check(
+  "a Chocolatey shim resolves to the real rg.exe",
+  got ~= nil and vim.fs.normalize(got) == vim.fs.normalize(real),
+  tostring(got)
+)
+check(
+  "an exe outside a bin folder is left alone",
+  platform.chocolatey_target(choco .. "/lib/rg.exe") == nil
+)
 vim.fn.delete(real)
-check("a missing package folder falls back", platform.chocolatey_target(choco .. "/bin/rg.exe") == nil)
+check(
+  "a missing package folder falls back",
+  platform.chocolatey_target(choco .. "/bin/rg.exe") == nil
+)
 vim.fn.delete(choco, "rf")
 
 print(("\nfiletree.nvim process_tracking_spec: %d passed, %d failed"):format(passed, failed))

@@ -63,18 +63,7 @@ resolve({}, { "plenary.nvim" }, "lua/plenary")
 resolve({}, { "nvim-web-devicons" }, "lua/nvim-web-devicons")
 local has_nui = resolve({}, { "nui.nvim" }, "lua/nui")
 local has_neotree = resolve({ "FILETREE_NEOTREE" }, { "neo-tree.nvim" }, "lua/neo-tree")
-local has_nvimtree = resolve({ "FILETREE_NVIMTREE" }, { "nvim-tree.lua" }, "lua/nvim-tree")
-
-local passed, failed = 0, 0
-local function check(name, ok, detail)
-  if ok then
-    passed = passed + 1
-    print("  ok   " .. name)
-  else
-    failed = failed + 1
-    print("  FAIL " .. name .. (detail and ("  -- " .. detail) or ""))
-  end
-end
+resolve({ "FILETREE_NVIMTREE" }, { "nvim-tree.lua" }, "lua/nvim-tree")
 
 local passed, failed = 0, 0
 local function check(name, ok, detail)
@@ -161,7 +150,10 @@ end
 
 check("default: name, ascending", order() == "big,mid,small", order())
 local initial = adapter.get_sort()
-check("get_sort before any sort: name ascending", initial.kind == "name" and initial.descending == false)
+check(
+  "get_sort before any sort: name ascending",
+  initial.kind == "name" and initial.descending == false
+)
 
 local got = sorted(function()
   adapter.set_sort("size", true)
@@ -200,7 +192,11 @@ vim.wait(6000, function()
 end, 50)
 settle(300)
 local cur = adapter.get_current_node()
-check("cursor identity: still on mid.lua after the re-sort", cur and cur.path:find("mid.lua", 1, true) ~= nil, cur and cur.path)
+check(
+  "cursor identity: still on mid.lua after the re-sort",
+  cur and cur.path:find("mid.lua", 1, true) ~= nil,
+  cur and cur.path
+)
 
 -- the feature on top: cycle and reverse
 adapter.set_sort("name", false)
@@ -222,4 +218,8 @@ check("cycle: modified -> name", adapter.get_sort().kind == "name")
 
 vim.fn.delete(work, "rf")
 print(("\nfiletree.nvim sort_cycle_backends: %d passed, %d failed"):format(passed, failed))
-if failed > 0 then vim.cmd("cq") else vim.cmd("qa!") end
+if failed > 0 then
+  vim.cmd("cq")
+else
+  vim.cmd("qa!")
+end

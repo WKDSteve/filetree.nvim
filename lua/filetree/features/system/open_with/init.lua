@@ -62,6 +62,22 @@ local _adapter = nil
 -- ── Open helpers ──────────────────────────────────────────────────────────────
 
 ---@internal
+---Run a configured app on `path` (detached; a non-zero exit is reported).
+---@param cmd_parts string[]
+---@param path string
+local function open_with_cmd(cmd_parts, path)
+  local full_cmd = vim.deepcopy(cmd_parts)
+  full_cmd[#full_cmd + 1] = path
+  vim.system(full_cmd, { detach = true }, function(result)
+    if result.code ~= 0 then
+      vim.schedule(function()
+        notify.error("Open failed (exit " .. result.code .. "): " .. (result.stderr or ""))
+      end)
+    end
+  end)
+end
+
+---@internal
 ---Open `path` with the OS default handler (`lib.nvim.cross.open_default`).
 ---@param path string
 local function system_open(path)

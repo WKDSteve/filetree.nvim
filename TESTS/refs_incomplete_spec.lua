@@ -70,4 +70,8 @@ eq("for_delete: incomplete scan warns", delete({ refs = {}, incomplete = true })
 eq("for_delete: complete scan is silent", delete({ refs = {} }), false)
 
 print(("\nfiletree.nvim refs_incomplete_spec: %d passed, %d failed"):format(passed, failed))
-if failed > 0 then vim.cmd("cq") else vim.cmd("qa!") end
+if failed > 0 then
+  vim.cmd("cq")
+else
+  vim.cmd("qa!")
+end

@@ -927,9 +927,7 @@ function M.set_sort(kind, descending)
 
   state.sort = { label = label, direction = descending and -1 or 1 }
   state.sort_field_provider = sort_field(kind)
-  if not pcall(manager.refresh, state.name or "filesystem") then
-    return false, "refresh failed"
-  end
+  if not pcall(manager.refresh, state.name or "filesystem") then return false, "refresh failed" end
 
   if keep then
     -- The refresh is asynchronous: the entry has a line again once the tree re-rendered.

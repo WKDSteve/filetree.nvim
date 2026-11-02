@@ -51,7 +51,11 @@ package.loaded["spotlight"] = nil
 package.preload["spotlight"] = nil
 current = { path = "/proj/src/init.lua", type = "file" }
 eq("absent spotlight: returns false", feature.spotlight(), false)
-eq("absent spotlight: warns", #warnings > 0 and warnings[#warnings]:find("not installed", 1, true) ~= nil, true)
+eq(
+  "absent spotlight: warns",
+  #warnings > 0 and warnings[#warnings]:find("not installed", 1, true) ~= nil,
+  true
+)
 
 -- present: gets the basename
 local added = {}
@@ -71,4 +75,8 @@ feature.teardown()
 eq("after teardown: returns false", feature.spotlight(), false)
 
 print(("\nfiletree.nvim spotlight_node_spec: %d passed, %d failed"):format(passed, failed))
-if failed > 0 then vim.cmd("cq") else vim.cmd("qa!") end
+if failed > 0 then
+  vim.cmd("cq")
+else
+  vim.cmd("qa!")
+end

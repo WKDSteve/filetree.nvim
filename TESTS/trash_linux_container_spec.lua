@@ -47,19 +47,16 @@ local function check(cond, msg)
 end
 
 local function in_container(script, extra_env)
-  return container.run(
-    {
-      "nvim",
-      "--headless",
-      "--clean",
-      "-u",
-      "NONE",
-      "-l",
-      "/repos/filetree.nvim/TESTS/container/" .. script,
-      "/repos",
-    },
-    { mounts = { [repos] = "/repos" }, env = extra_env }
-  )
+  return container.run({
+    "nvim",
+    "--headless",
+    "--clean",
+    "-u",
+    "NONE",
+    "-l",
+    "/repos/filetree.nvim/TESTS/container/" .. script,
+    "/repos",
+  }, { mounts = { [repos] = "/repos" }, env = extra_env })
 end
 
 local res = in_container("trash_linux.lua")

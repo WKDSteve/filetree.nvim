@@ -37,11 +37,13 @@ vim.fn.writefile({
   ("dofile(%q)"):format(smoke),
 }, wrapper)
 
-vim.system({ vim.v.progpath, "--clean", "--headless", "-u", "NONE", "-l", wrapper }, {
-  env = { LIB_NVIM_DIR = fake_lib, UI_NVIM_DIR = fake_ui },
-  cwd = root,
-  text = true,
-}):wait(60000)
+vim
+  .system({ vim.v.progpath, "--clean", "--headless", "-u", "NONE", "-l", wrapper }, {
+    env = { LIB_NVIM_DIR = fake_lib, UI_NVIM_DIR = fake_ui },
+    cwd = root,
+    text = true,
+  })
+  :wait(60000)
 
 local rtp = vim.fn.filereadable(out) == 1 and vim.fn.readfile(out) or {}
 local function index_of(dir)
@@ -60,4 +62,8 @@ check("the sibling ui.nvim is not used instead", sibling_ui == nil)
 
 vim.fn.delete(tmp, "rf")
 print(("\nfiletree.nvim smoke_env_dirs_spec: %d passed, %d failed"):format(passed, failed))
-if failed > 0 then vim.cmd("cq") else vim.cmd("qa!") end
+if failed > 0 then
+  vim.cmd("cq")
+else
+  vim.cmd("qa!")
+end
