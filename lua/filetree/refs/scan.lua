@@ -104,6 +104,14 @@ local STDIN_PATTERN_BYTES = 6000
 ---@return string
 M.rg_binary = require("filetree.util.platform").rg_binary
 
+---@internal
+---The monotonic clock (nanoseconds) the shared submodule deadline is measured with.
+---A field so the specs can swap it for a deterministic one.
+---@return integer
+function M.clock()
+  return vim.uv.hrtime()
+end
+
 -- ripgrep processes still running, keyed by their `vim.SystemObj`.
 --
 -- Neovim does not stop a `vim.system` child when it exits (on POSIX; on
@@ -337,7 +345,7 @@ local git_listing
 ---@param depth integer  nesting level of the nested repository
 ---@return string[]
 local function nested_listing(abs, deadline, depth)
-  local remaining = math.floor((deadline - vim.uv.hrtime()) / 1e6)
+  local remaining = math.floor((deadline - M.clock()) / 1e6)
   return (remaining > 0 and git_listing(abs, remaining, depth, deadline)) or plain_listing(abs)
 end
 
@@ -359,7 +367,7 @@ end
 ---@return string[]|nil
 function git_listing(root, timeout, depth, deadline)
   depth = depth or 0
-  deadline = deadline or (vim.uv.hrtime() + timeout * 1e6)
+  deadline = deadline or (M.clock() + timeout * 1e6)
   if vim.fn.isdirectory(root) ~= 1 or vim.fn.executable("git") == 0 then return nil end
   local ok, res = pcall(function()
     return vim
@@ -405,6 +413,10 @@ function git_listing(root, timeout, depth, deadline)
   end
   return out
 end
+
+---@internal
+---`git_listing` for the specs (the deadline sharing is checked against a fake `M.clock`).
+M.git_listing = git_listing
 
 ---@internal
 ---Every file under `root` the walk may look at, listed once per session.
