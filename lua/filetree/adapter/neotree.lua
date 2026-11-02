@@ -933,12 +933,21 @@ function M.set_sort(kind, descending)
 
   if keep then
     -- The refresh is asynchronous: the entry has a line again once the tree re-rendered.
+    -- One shot: the first render, or nothing after 3 s (a refresh that never renders must not
+    -- leave a hook behind that later drags the cursor back to a stale entry).
     local unsubscribe
-    unsubscribe = M.on_render(function()
+    local armed = true
+    local function disarm()
+      armed = false
       if unsubscribe then unsubscribe() end
+    end
+    unsubscribe = M.on_render(function()
+      if not armed then return end
+      disarm()
       local line = M.get_node_line(keep)
       if line then M.scroll_to_line(line) end
     end)
+    vim.defer_fn(disarm, 3000)
   end
   return true, nil
 end
