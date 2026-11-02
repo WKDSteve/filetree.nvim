@@ -44,6 +44,8 @@ local ICON = {
   markdown_link = nerd.glyph("F0354", "M"), -- language-markdown
   search = nerd.glyph("F0349", "f"), -- magnify
   info = nerd.glyph("F02FC", "i"), -- information-outline
+  preview = nerd.glyph("F0208", "v"), -- eye-outline
+  ocr = nerd.glyph("F0A5B", "t"), -- text-recognition
   mark_on = nerd.glyph("F0C52", "m"), -- checkbox-marked-outline
   mark_off = nerd.glyph("F0131", "u"), -- checkbox-blank-outline
   mark_list = nerd.glyph("F0C60", "l"), -- format-list-bulleted
@@ -122,6 +124,57 @@ local function add_group(out, ...)
     out[#out + 1] = e
   end
   return true
+end
+
+---@internal
+--- "image" / "pdf" for the node under the cursor, nil for anything else (no node, no adapter,
+--- `preview` disabled). Asked per `items()` call, so the group follows the clicked node.
+---@return "image"|"pdf"|nil kind
+---@return string? path
+local function media_node()
+  local adapter = get_adapter()
+  local preview = feature("preview")
+  if not (adapter and type(adapter.get_current_node) == "function") then return nil end
+  if not (preview and type(preview.media_kind) == "function") then return nil end
+  local ok, node = pcall(adapter.get_current_node)
+  local path = ok and type(node) == "table" and node.path or nil
+  local kind = preview.media_kind(path)
+  return kind, kind and path or nil
+end
+
+---@internal
+--- The Image/PDF group: only entries that work for the node's kind. OCR and image info come from
+--- images.nvim (soft dependency, omitted without it); PDFs get preview and open externally.
+---@param out table
+local function add_media_group(out)
+  local kind, path = media_node()
+  if not kind then return end
+
+  local function images_entry(fn, label, icon)
+    local ok, images = pcall(require, "images")
+    if not (ok and type(images[fn]) == "function") then return nil end
+    return {
+      name = label,
+      icon = icon,
+      cmd = function()
+        images[fn](path)
+      end,
+    }
+  end
+
+  add_group(
+    out,
+    entry(
+      "preview",
+      "toggle_or_open",
+      kind == "pdf" and "Preview PDF" or "Preview image",
+      "<Tab>",
+      ICON.preview
+    ),
+    entry("open_with", "open_system", "Open externally", nil, ICON.open_external),
+    kind == "image" and images_entry("ocr", "OCR (recognise text)", ICON.ocr) or nil,
+    kind == "image" and images_entry("info", "Image info", ICON.info) or nil
+  )
 end
 
 ---Whether a host that asks first (ui.nvim's `ui.menu`) may offer the
@@ -232,6 +285,8 @@ function M.items()
       entry("open_in_fm", "open", "Reveal in file manager", "<leader>fm", ICON.open_external)
     )
   end
+
+  if on("media") then add_media_group(out) end
 
   if on("paths") then
     add_group(

@@ -710,6 +710,18 @@ function M.open_or_fallback(fallback)
   if fallback then fallback() end
 end
 
+---"image" or "pdf" when `path` is a node the image/PDF dispatch of `<Tab>`/`<CR>` would handle
+---(backend not switched off in `features.preview.image`/`.pdf`), else nil. The context menu uses
+---it to decide whether to offer its Image/PDF group.
+---@param path string?
+---@return "image"|"pdf"|nil
+function M.media_kind(path)
+  if type(path) ~= "string" or path == "" then return nil end
+  if (_cfg.image or {}).backend ~= false and is_image(path) then return "image" end
+  if (_cfg.pdf or {}).backend ~= false and is_pdf(path) then return "pdf" end
+  return nil
+end
+
 function M.close()
   close_preview()
   buf_stop(true)

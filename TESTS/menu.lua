@@ -180,6 +180,77 @@ do
   package.loaded["filetree.integrations.menu"] = nil
 end
 
+-- ── Image/PDF group: follows the node under the cursor ──────────────────────
+do
+  local features = {}
+  features.open_with = (stub_action("open_with", { "open_system" }))
+  local preview_calls
+  features.preview, preview_calls = stub_action("preview", { "toggle_or_open" })
+  features.preview.media_kind = function(path)
+    if not path then return nil end
+    if path:match("%.png$") then return "image" end
+    if path:match("%.pdf$") then return "pdf" end
+  end
+
+  local function menu_for(path, menu_cfg)
+    return install_stub(menu_cfg or { enable = true }, features, {
+      get_current_node = function()
+        return path and { path = path } or nil
+      end,
+    })
+  end
+
+  local pdf = names(menu_for("/x/book.pdf").items())
+  check("media: PDF node gets Preview PDF", has(pdf, "Preview PDF"))
+  check("media: PDF node gets Open externally", has(pdf, "Open externally"))
+  check("media: PDF node gets no OCR/Image info", not has(pdf, "OCR (recognise text)"))
+
+  local png = names(menu_for("/x/shot.png").items())
+  check("media: image node gets Preview image", has(png, "Preview image"))
+  check("media: no OCR row without images.nvim", not has(png, "OCR (recognise text)"))
+
+  -- With images.nvim present, OCR and info are offered for images and get the node's path.
+  local ocr_path
+  package.loaded["images"] = {
+    ocr = function(p)
+      ocr_path = p
+    end,
+    info = function() end,
+  }
+  local png_items = menu_for("/x/shot.png").items()
+  local png_names = names(png_items)
+  check("media: image node gets OCR with images.nvim", has(png_names, "OCR (recognise text)"))
+  check("media: image node gets Image info with images.nvim", has(png_names, "Image info"))
+  for _, it in ipairs(png_items) do
+    if it.name == "OCR (recognise text)" then it.cmd() end
+  end
+  eq("media: OCR is called with the clicked node's path", ocr_path, "/x/shot.png")
+  local pdf_with_images = names(menu_for("/x/book.pdf").items())
+  check(
+    "media: PDF still gets no OCR with images.nvim",
+    not has(pdf_with_images, "OCR (recognise text)")
+  )
+  package.loaded["images"] = nil
+
+  for _, it in ipairs(menu_for("/x/shot.png").items()) do
+    if it.name == "Preview image" then it.cmd() end
+  end
+  eq("media: Preview row calls preview.toggle_or_open", preview_calls[1], "preview.toggle_or_open")
+
+  local txt = names(menu_for("/x/notes.txt").items())
+  check(
+    "media: text node gets no media group",
+    not has(txt, "Preview image") and not has(txt, "Preview PDF")
+  )
+  local none = names(menu_for(nil).items())
+  check("media: no node under the cursor -> no media group", not has(none, "Open externally"))
+  local off = names(menu_for("/x/book.pdf", { enable = true, media = false }).items())
+  check("media: media=false hides the group", not has(off, "Preview PDF"))
+
+  package.loaded["filetree"] = nil
+  package.loaded["filetree.integrations.menu"] = nil
+end
+
 -- ── Regression: a disabled entry in the MIDDLE of a group must not drop ─────
 -- entries after it (a table constructor with a nil in a non-trailing slot
 -- makes `ipairs` stop early — add_group must not iterate that way).

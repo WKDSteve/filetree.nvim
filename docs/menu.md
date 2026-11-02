@@ -104,6 +104,7 @@ require("filetree").setup({
     clipboard = true, -- copy / cut / paste / copy to the system clipboard
     delete    = true, -- trash
     open      = true, -- vsplit / split / tab / system app / file manager
+    media     = true, -- image/PDF nodes only: preview / open externally / OCR / image info
     paths     = true, -- copy path / markdown link
     search    = true, -- find files / grep in dir
     info      = true, -- node info + Inspect (`:Inspect`, highlight/treesitter groups at the click)

@@ -360,6 +360,7 @@ do
     { "open_variants", "open_tabnew" },
     { "open_with", "open_system" },
     { "open_in_fm", "open" },
+    { "preview", "toggle_or_open" },
     { "path_copy", "pick" },
     { "markdown_links", "link_current" },
     { "find_files", "find" },

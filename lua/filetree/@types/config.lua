@@ -20,6 +20,7 @@
 ---@field clipboard boolean?  copy / cut / paste (default true).
 ---@field delete    boolean?  trash (default true).
 ---@field open      boolean?  vsplit / split / tab / system app / file manager (default true).
+---@field media     boolean?  image/PDF nodes only: preview / open externally / OCR / image info (default true).
 ---@field paths     boolean?  copy path / markdown link (default true).
 ---@field search    boolean?  find files / grep in dir (default true).
 ---@field info      boolean?  node info (default true).
