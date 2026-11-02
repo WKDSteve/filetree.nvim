@@ -10,11 +10,8 @@ local repos = assert(arg and arg[1], "usage: trash_linux.lua <repos dir>")
 vim.opt.rtp:prepend(repos .. "/lib.nvim")
 vim.opt.rtp:prepend(repos .. "/filetree.nvim")
 
--- The container shares the kernel of the podman machine (WSL2 on Windows), whose release string says
--- "microsoft": is_wsl() would be true although there is no wslpath or interop. The userland is plain Linux.
-package.loaded["lib.nvim.cross.platform.is_wsl"] = function()
-  return false
-end
+-- The container shares the WSL2 kernel of the podman machine; without wslpath it must not count as WSL.
+assert(not require("lib.nvim.cross.platform.is_wsl")(), "a Linux container on the WSL2 kernel is not WSL")
 
 local platform = require("filetree.features.fileops.trash.platform")
 local home = assert(vim.env.HOME)
