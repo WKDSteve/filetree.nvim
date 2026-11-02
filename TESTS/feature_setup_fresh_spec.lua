@@ -132,6 +132,7 @@ local MUST_BE_EXERCISED = {
   "path_copy",
   "pdf_create",
   "pdf_open",
+  "mdview_open",
   "project_root",
   "rename_batch",
   "session",

@@ -145,6 +145,7 @@
 ---@field open_with               FiletreeOpenWithConfig?
 ---@field file_clipboard          FiletreeFileClipboardConfig?
 ---@field pdf_open               FiletreePdfOpenConfig?
+---@field mdview_open            FiletreeMdviewOpenConfig?
 ---@field pdf_create              FiletreePdfCreateConfig?
 ---@field compress                FiletreeCompressConfig?
 ---@field move                    FiletreeMoveConfig?
@@ -722,6 +723,12 @@
 ---@field keymap_system   string|false?  Force the OS default viewer (default false, off).
 ---@field keymap_terminal string|false?  Force pdfport's terminal mode (default false, off).
 ---@field keymap_picker   string|false?  Ask how to open it — `default_mode = "picker"` (default false, off).
+
+-- ── mdview_open ───────────────────────────────────────────────────────────────
+
+---@class FiletreeMdviewOpenConfig
+---@field enabled     boolean
+---@field keymap_open string|false?  Open the markdown node under the cursor in mdview.nvim's browser preview (default "gM").
 
 -- ── pdf_create ────────────────────────────────────────────────────────────────
 

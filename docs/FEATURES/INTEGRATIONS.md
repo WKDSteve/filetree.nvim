@@ -225,6 +225,17 @@ system reader directly, no empty prompt).
   [pdfport.nvim](https://github.com/WKDSteve/pdfport.nvim) for the
   render side
 
+## Markdown preview (mdview.nvim)
+
+Opt-in feature `mdview_open` (`enabled = true`, key `gM`): opens the markdown file under the
+cursor in [mdview.nvim](https://github.com/WKDSteve/mdview.nvim)'s browser preview without showing it
+in a window first. mdview previews the current buffer, so the file is loaded into an unlisted buffer
+for the call. A running mdview session is required (`:MDView start`); without one mdview says so,
+and without mdview.nvim installed the key only warns (`:checkhealth filetree` notes it). Soft
+dependency, like pdfport above.
+
+- **Module:** `lua/filetree/features/system/mdview_open/`
+
 ## PDF Create
 
 The write direction of the same bridge: `gP` turns the image, markdown,

@@ -220,6 +220,11 @@ function M.check()
     vim.health.info("pdf_open: pdfport.nvim not installed — PDFs open in the system viewer only")
   end
 
+  -- mdview_open: mdview.nvim is optional; without it the key only warns
+  if is_enabled("mdview_open") and not pcall(require, "mdview") then
+    vim.health.info("mdview_open: mdview.nvim not installed — the key only warns")
+  end
+
   -- pdf_create: pdfport.nvim is a hard soft-dependency here (no fallback —
   -- there is no dependency-free way to turn a file into a PDF), so flag it
   -- more strongly than pdf_open's info-only note.
@@ -391,6 +396,7 @@ function M.check()
     { mod = "telescope", label = "Telescope (for future telescope integration)" },
     { mod = "fzf-lua", label = "fzf-lua (for future fzf integration)" },
     { mod = "pdfport", label = "pdfport.nvim (for pdf_open text extraction and pdf_create)" },
+    { mod = "mdview", label = "mdview.nvim (for mdview_open)" },
     {
       mod = "menu",
       label = "nvzone/menu (optional renderer for context_menu; ui.kit.menu is used otherwise)",

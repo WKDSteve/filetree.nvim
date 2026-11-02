@@ -368,6 +368,12 @@ return {
       scope = "tree",
     },
     {
+      lhs = "gM",
+      desc = "Open markdown in mdview preview (opt-in feature mdview_open)",
+      feature = "mdview_open",
+      scope = "tree",
+    },
+    {
       lhs = "gP",
       desc = "Create PDF from node/marks/folder (pdfport, confirms first)",
       feature = "pdf_create",

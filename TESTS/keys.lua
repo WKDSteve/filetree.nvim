@@ -107,6 +107,7 @@ local KEY_FEATURES = {
   "pdf_create",
   "compress",
   "pdf_open",
+  "mdview_open",
   "shell_run",
   "cheatsheet",
   "context_menu",
