@@ -122,6 +122,11 @@ jobs:
           repository: "WKDSteve/testing.nvim"
           path: testing.nvim
           ref: ci-verified
+      # TESTS/trash_linux_container_spec.lua runs the Linux trash backend in a container
+      # (testing.container); without the image it reports n/a instead of running.
+      - name: Build the Linux container image
+        if: runner.os == 'Linux'
+        run: podman build -t localhost/testing-linux:1 testing.nvim/containers/linux
       - name: Run test suites
         working-directory: filetree.nvim
         run: |

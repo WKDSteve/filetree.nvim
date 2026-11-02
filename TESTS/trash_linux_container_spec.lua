@@ -34,8 +34,23 @@ if not available then
   return
 end
 
--- The mounts need the engine's view of the host path (podman on Windows takes `E:\repos` as is).
-local repos = vim.fn.fnamemodify(root, ":h")
+-- The container sees this project and lib.nvim, wherever the checkouts are (a sibling, .deps/ on CI).
+local function find_dep(dep)
+  for _, candidate in ipairs({
+    vim.env[dep:upper():gsub("%.", "_") .. "_DIR"] or "",
+    vim.fn.fnamemodify(root, ":h") .. "/" .. dep,
+    root .. "/" .. dep,
+    root .. "/.deps/" .. dep,
+  }) do
+    if candidate ~= "" and vim.fn.isdirectory(candidate .. "/lua") == 1 then return candidate end
+  end
+end
+local lib_dir = find_dep("lib.nvim")
+if not lib_dir then
+  print("n/a  lib.nvim is not found (the container needs it)")
+  return
+end
+local mounts = { [root] = "/repos/filetree.nvim", [lib_dir] = "/repos/lib.nvim" }
 local passed, failed = 0, 0
 local function check(cond, msg)
   if cond then
@@ -56,7 +71,7 @@ local function in_container(script, extra_env)
     "-l",
     "/repos/filetree.nvim/TESTS/container/" .. script,
     "/repos",
-  }, { mounts = { [repos] = "/repos" }, env = extra_env })
+  }, { mounts = mounts, env = extra_env })
 end
 
 local res = in_container("trash_linux.lua")
@@ -73,7 +88,7 @@ local no_gio = container.run({
   "mkdir -p /home/tester/bin && ln -s /usr/bin/trash-put /home/tester/bin/trash-put && ln -s /usr/bin/nvim /home/tester/bin/nvim"
     .. " && ln -s /usr/bin/python3 /home/tester/bin/python3 && PATH=/home/tester/bin:/usr/local/bin"
     .. " nvim --headless --clean -u NONE -l /repos/filetree.nvim/TESTS/container/trash_linux.lua /repos",
-}, { mounts = { [repos] = "/repos" } })
+}, { mounts = mounts })
 check(
   no_gio.code == 0,
   "trash-put backend: exit " .. no_gio.code .. "\n" .. no_gio.stdout .. no_gio.stderr
