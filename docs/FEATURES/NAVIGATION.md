@@ -138,6 +138,16 @@ and mini.files there is nothing to collapse and the toggle runs as before.
 - **Usercmds:** `:Filetree toggle [left|right|float|current]`
 - **Config:** `opts.features.tree_toggle.enabled` (default **false**), `reveal` (true), `reveal_force_cwd` (true), `collapse_on_toggle` (false)
 
+## Sort Cycle
+
+`<leader>so` cycles the tree's sort criterion (name, size, modified), `<leader>sO`
+reverses it; `:Filetree sort` and `:Filetree sort reverse` do the same. The cursor
+stays on its entry. neo-tree only (it needs the adapter methods `set_sort` and
+`get_sort`); the other adapters report that they cannot sort. Off by default.
+
+- **Module:** `lua/filetree/features/nav/sort_cycle/`
+- **Keymaps:** `<leader>so`, `<leader>sO`
+
 ## Collapse All
 
 `W` in the tree folds every open folder back to the root in one redraw;

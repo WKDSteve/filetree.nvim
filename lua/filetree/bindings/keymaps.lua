@@ -29,6 +29,18 @@ return {
       scope = "tree",
     },
     {
+      lhs = "<leader>so",
+      desc = "Next sort criterion (name, size, modified)",
+      feature = "sort_cycle",
+      scope = "tree",
+    },
+    {
+      lhs = "<leader>sO",
+      desc = "Reverse the sort",
+      feature = "sort_cycle",
+      scope = "tree",
+    },
+    {
       lhs = "+",
       desc = "Set dir under cursor as root",
       feature = "tree_traverse",

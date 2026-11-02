@@ -122,6 +122,7 @@ local MUST_BE_EXERCISED = {
   "live_search",
   "lua_require_copy",
   "spotlight_node",
+  "sort_cycle",
   "markdown_links",
   "marks",
   "move",

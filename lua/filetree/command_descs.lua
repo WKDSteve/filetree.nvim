@@ -107,6 +107,8 @@ return {
   ["source prev"] = "Switch to the previous neo-tree source (wrapping)",
   ["symlink"] = "Prompt for a target path, create a symlink/hardlink to it in the current tree directory",
   ["symlink check"] = "Report whether the node/path is a symlink, and whether it's broken",
+  ["sort"] = "Next sort criterion (name, size, modified); the cursor stays on its entry",
+  ["sort reverse"] = "Reverse the current sort",
   ["symlink checkall"] = "Report symlink state of every marked node (else the node under the cursor)",
   ["symlink delete"] = "Remove marked symlinks (else the node under the cursor) via trash — never a non-symlink",
   ["symlink mark"] = "Mark a link source (node/buffer/explicit path), no prompt",

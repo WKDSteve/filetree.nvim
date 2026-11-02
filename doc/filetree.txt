@@ -1113,6 +1113,7 @@ NAV
   Auto Resize (opt-in) .................................|filetree-auto-resize|
   Buffer Cycle ........................................|filetree-buffer-cycle|
   Collapse All ........................................|filetree-collapse-all|
+  Sort Cycle (neo-tree) ................................|filetree-sort-cycle|
   Quickpick (opt-in) .....................................|filetree-quickpick|
   Reveal Alt ............................................|filetree-reveal-alt|
   Sidebar Guard ......................................|filetree-sidebar-guard|
@@ -1812,6 +1813,28 @@ Config: `opts.features.collapse_all.enabled` (default true)
 Usercmds: `:Filetree collapse`
 
 Module: lua/filetree/features/nav/collapse_all/
+
+------------------------------------------------------------------------------
+SORT CYCLE                                                 *filetree-sort-cycle*
+
+`<leader>so` switches the tree to the next sort criterion (name, size, modified),
+`<leader>sO` flips the direction of the current one. Name runs A to Z, size and
+modified start with the largest / newest. The cursor stays on the entry it was on
+(remembered by path, found again once the tree re-rendered).
+
+It drives the optional adapter methods `set_sort(kind, descending)` and
+`get_sort()`. Only the neo-tree adapter implements them (through its own
+`state.sort` / `sort_field_provider`, what its `order_by_*` commands set); on
+nvim-tree, oil, mini.files and netrw one message says the adapter cannot sort.
+Off by default (`features.sort_cycle.enabled`).
+
+Keymaps: <leader>so, <leader>sO
+
+Config: `opts.features.sort_cycle.keymap_cycle`, `keymap_reverse`
+
+Usercmds: `:Filetree sort`, `:Filetree sort reverse`
+
+Module: lua/filetree/features/nav/sort_cycle/
 
 ------------------------------------------------------------------------------
 QUICKPICK                                                 *filetree-quickpick*

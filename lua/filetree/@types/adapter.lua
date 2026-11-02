@@ -64,6 +64,8 @@
 ---@field unsign_node? fun(path: string): boolean  Remove a previously placed sign marker.
 ---@field get_node_at_line? fun(bufnr: integer, linenr: integer): FiletreeNode?  Node rendered on a 0-based buffer line (nil for a line that renders no node, e.g. a root label or a message). `bufnr` must be the adapter's own tree buffer; a mismatch returns nil. Implemented by the neotree and nvimtree adapters.
 ---@field collapse_all? fun(keep_path?: string): boolean, string?  Collapse every expanded folder in one redraw; `keep_path` keeps the folders on the way to that path open. Returns false plus a reason when it does not apply (the flat netrw/oil/mini.files listings: "not applicable: …") or failed. neo-tree and nvim-tree implement it (`features.nav.collapse_all`, `tree_toggle.collapse_on_toggle`).
+---@field set_sort? fun(kind: "name"|"size"|"mtime", descending?: boolean): boolean, string?  Sort the tree by a criterion and keep the cursor on the same entry. Returns false plus a reason when the backend cannot be driven. Only the neo-tree adapter implements it (`features.nav.sort_cycle`).
+---@field get_sort? fun(): { kind: "name"|"size"|"mtime", descending: boolean }?  The sort criterion in force. Implemented together with `set_sort`.
 ---@field get_expanded_paths? fun(): string[]|nil  Absolute paths of the currently expanded directories. Implemented by no backend yet.
 ---@field expand_paths? fun(paths: string[]): boolean  Re-expand the given directories. Implemented by no backend yet.
 ---@field get_state? fun(bufnr?: integer): table?  Backend state of the tree showing `bufnr` (or of the ambient tree), never created on demand. Only the neo-tree adapter implements it; the filter uses it to drive neo-tree's own search on the tree that is actually live.

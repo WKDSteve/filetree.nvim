@@ -883,6 +883,80 @@ local function current_tab_state()
 end
 
 ---@internal
+---Sort criteria neo-tree's `state.sort` knows, by the neutral names the adapter interface uses.
+local SORT_LABELS = { name = "Name", size = "Size", mtime = "Last Modified" }
+
+---@internal
+---@param kind string
+---@return fun(node: table): any
+local function sort_field(kind)
+  local utils = require("neo-tree.utils")
+  if kind == "size" then
+    return function(node)
+      return utils.get_stat(node).size or 0
+    end
+  elseif kind == "mtime" then
+    return function(node)
+      local stat = utils.get_stat(node)
+      return stat.mtime and stat.mtime.sec or 0
+    end
+  end
+  return function(node)
+    return node.path:lower()
+  end
+end
+
+---Sort this tab's tree by `kind` (`"name"|"size"|"mtime"`), ascending or `descending`.
+---Drives neo-tree's own `state.sort` / `sort_field_provider` (what its `order_by_*`
+---commands set) and refreshes, then puts the cursor back on the entry it was on.
+---@param kind "name"|"size"|"mtime"
+---@param descending? boolean
+---@return boolean ok
+---@return string? reason
+function M.set_sort(kind, descending)
+  local label = SORT_LABELS[kind]
+  if not label then return false, "unknown sort criterion: " .. tostring(kind) end
+  local state = current_tab_state()
+  local manager = get_manager()
+  if not state or not manager then return false, "the tree has not been shown yet" end
+  local ok_u = pcall(require, "neo-tree.utils")
+  if not ok_u then return false, "neo-tree utils unavailable" end
+
+  local node = M.get_current_node()
+  local keep = node and node.path or nil
+
+  state.sort = { label = label, direction = descending and -1 or 1 }
+  state.sort_field_provider = sort_field(kind)
+  if not pcall(manager.refresh, state.name or "filesystem") then
+    return false, "refresh failed"
+  end
+
+  if keep then
+    -- The refresh is asynchronous: the entry has a line again once the tree re-rendered.
+    local unsubscribe
+    unsubscribe = M.on_render(function()
+      if unsubscribe then unsubscribe() end
+      local line = M.get_node_line(keep)
+      if line then M.scroll_to_line(line) end
+    end)
+  end
+  return true, nil
+end
+
+---The sort criterion in force on this tab's tree (neo-tree's default is name, ascending).
+---@return { kind: "name"|"size"|"mtime", descending: boolean }?
+function M.get_sort()
+  local state = current_tab_state()
+  if not state then return nil end
+  local sort = state.sort
+  local kind = "name"
+  for k, label in pairs(SORT_LABELS) do
+    if sort and sort.label == label then kind = k end
+  end
+  return { kind = kind, descending = sort ~= nil and sort.direction == -1 }
+end
+
+---@internal
 ---The top-level entry (direct child of the root) the node `id` lives under,
 ---or nil for the root itself / an unknown id.
 ---@param state neotree.State

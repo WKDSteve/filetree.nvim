@@ -386,6 +386,20 @@ local TREE = {
     f.run()
   end,
 
+  -- ── sort_cycle ──────────────────────────────────────────────────────────────
+  -- :Filetree sort            next sort criterion (name, size, modified)
+  -- :Filetree sort reverse    flip the direction
+  sort = {
+    [""] = function(_)
+      local f = ft("sort_cycle")
+      if f then f.cycle() end
+    end,
+    reverse = function(_)
+      local f = ft("sort_cycle")
+      if f then f.reverse() end
+    end,
+  },
+
   -- ── tree_toggle (opt-in) ────────────────────────────────────────────────────
   -- :Filetree toggle [left|right|float|current]   (default: left)
   toggle = function(args)

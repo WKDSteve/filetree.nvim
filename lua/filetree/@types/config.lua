@@ -154,6 +154,7 @@
 ---@field tree_traverse           FiletreeTreeTraverseConfig?
 ---@field lua_require_copy        FiletreeLuaRequireCopyConfig?
 ---@field spotlight_node          FiletreeSpotlightNodeConfig?
+---@field sort_cycle              FiletreeSortCycleConfig?
 ---@field copy_file_list          FiletreeCopyFileListConfig?
 ---@field markdown_links          FiletreeMarkdownLinksConfig?
 ---@field smart_create            FiletreeSmartCreateConfig?
@@ -820,6 +821,13 @@
 ---@class FiletreeLuaRequireCopyConfig
 ---@field enabled   boolean
 ---@field keymap    string?   Key inside tree (default "rq").
+
+-- ── sort_cycle ───────────────────────────────────────────────────────────────
+
+---@class FiletreeSortCycleConfig
+---@field enabled          boolean
+---@field keymap_cycle     string?   Next sort criterion: name, size, modified (default "<leader>so").
+---@field keymap_reverse   string?   Reverse the current criterion (default "<leader>sO").
 
 -- ── spotlight_node ───────────────────────────────────────────────────────────
 

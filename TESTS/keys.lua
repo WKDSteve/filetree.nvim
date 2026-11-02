@@ -94,6 +94,7 @@ local KEY_FEATURES = {
   "copy_file_list",
   "lua_require_copy",
   "spotlight_node",
+  "sort_cycle",
   "markdown_links",
   "path_copy",
   "filter",
