@@ -3865,6 +3865,16 @@ do
     platform.is_windows = function()
       return true
     end
+    -- lib.nvim's cross.open_default asks its own platform modules, not filetree's
+    local lib_platform = { "is_windows", "is_wsl", "is_macos" }
+    local lib_saved = {}
+    for _, name in ipairs(lib_platform) do
+      local key = "lib.nvim.cross.platform." .. name
+      lib_saved[key] = package.loaded[key]
+      package.loaded[key] = function()
+        return name == "is_windows"
+      end
+    end
     ---@diagnostic disable-next-line: duplicate-set-field
     vim.fn.jobstart = function(args)
       jobs[#jobs + 1] = args
@@ -3879,6 +3889,9 @@ do
     preview.toggle_or_open()
     platform.is_windows = orig_is_windows
     vim.fn.jobstart = orig_jobstart
+    for key, mod in pairs(lib_saved) do
+      package.loaded[key] = mod
+    end
 
     local argv = jobs[1] or {}
     eq("preview system-open [windows]: one process is started", #jobs, 1)
@@ -3999,6 +4012,16 @@ do
     platform.is_windows = function()
       return true
     end
+    -- lib.nvim's cross.open_default asks its own platform modules, not filetree's
+    local lib_platform = { "is_windows", "is_wsl", "is_macos" }
+    local lib_saved = {}
+    for _, name in ipairs(lib_platform) do
+      local key = "lib.nvim.cross.platform." .. name
+      lib_saved[key] = package.loaded[key]
+      package.loaded[key] = function()
+        return name == "is_windows"
+      end
+    end
     ---@diagnostic disable-next-line: duplicate-set-field
     vim.fn.jobstart = function(args)
       jobs[#jobs + 1] = args
@@ -4066,6 +4089,9 @@ do
 
     platform.is_windows = orig_is_windows
     vim.fn.jobstart = orig_jobstart
+    for key, mod in pairs(lib_saved) do
+      package.loaded[key] = mod
+    end
     preview.setup({ enabled = true, mode = "buffer", system_exts = { "msg", "eml", "oft" } }, stub)
   end
 
