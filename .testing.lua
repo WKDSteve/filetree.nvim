@@ -35,7 +35,7 @@ return {
   },
   -- Dependencies (directory names) put on the runtimepath: $<NAME>_DIR, .deps/<name>, ../<name>,
   -- stdpath('data')/lazy/<name>.
-  deps = { "lib.nvim", "ui.nvim" },
+  deps = { "lib.nvim", "ui.nvim", "testing.nvim" },
   -- Guards (fs / state / scheduled_error / prompt / deprecation / process_net) are left at their
   -- defaults. They DO apply to the "script" dialect: testing.nvim's child boot opens ONE guard
   -- window around the whole script file (child/boot.lua, `script_guards` record), so a script spec's
@@ -63,6 +63,8 @@ return {
       "bsdtar",
       "sh",
       "powershell",
+      -- TESTS/trash_linux_container_spec.lua runs the Linux trash backend in a container (n/a without podman/image).
+      "podman",
       "ft-definitely-missing-tool-xyz",
     },
   },
@@ -78,6 +80,7 @@ return {
     "FILETREE_REFS_TEST_*",
     "FILETREE_TEST_REAL_CLIPBOARD",
     "FILETREE_UI_NVIM",
+    "TESTING_CONTAINER_*",
     -- TESTS/minimal_init_sheet_neotree.lua: where the child editor of a neo-tree test sheet finds
     -- neo-tree and what it needs (else .deps/, ../, the real editor's lazy.nvim directory).
     "NEO_TREE_NVIM_DIR",
