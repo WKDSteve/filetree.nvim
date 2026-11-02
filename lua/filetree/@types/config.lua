@@ -851,6 +851,7 @@
 ---@field keymap_files_rel string?   Copy relative file paths (default "]f").
 ---@field keymap_dirs_abs  string?   Copy absolute dir paths  (default "[F").
 ---@field keymap_dirs_rel  string?   Copy relative dir paths  (default "]F").
+---@field keymap_save      string|false?  Save the relative file list to a file you name (default false, off).
 ---@field preview_limit?   integer   Max lines shown in notification (default 5).
 ---@field separator?       string    Separator between paths (default "\\n").
 

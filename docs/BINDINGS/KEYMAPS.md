@@ -72,6 +72,7 @@ at runtime with `:lua vim.print(require("filetree.bindings").live())` —
 | `]f` | copy_file_list | `keymap_files_rel` | Copy recursive file list, relative (or all marked) |
 | `[F` | copy_file_list | `keymap_dirs_abs` | Copy recursive dir list, absolute (or all marked) |
 | `]F` | copy_file_list | `keymap_dirs_rel` | Copy recursive dir list, relative (or all marked) |
+| _(none)_ | copy_file_list | `keymap_save` | Save the relative file list to a file you name (opt-in; also `:Filetree filelist save`) |
 | `ML` | markdown_links | `keymap` | Copy `[name](path)` markdown link for the current node (or all marked) |
 | `MR` | markdown_links | `keymap_recursive` | Copy markdown links recursively |
 | `MM` | markdown_links | `keymap_from_marked` | Copy markdown links from all marked nodes |

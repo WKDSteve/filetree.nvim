@@ -778,6 +778,10 @@ local TREE = {
         if f then f.copy_dirs_rel() end
       end,
     },
+    save = function(_)
+      local f = ft("copy_file_list")
+      if f then f.save_files() end
+    end,
   },
 
   -- ── lua_require_copy ─────────────────────────────────────────────────────────

@@ -169,6 +169,70 @@ function M.copy_dirs_rel()
   copy_to_reg(collect_dirs_multi(targets, true))
 end
 
+---Write `lines` to `path` (one per line), creating missing parent directories.
+---@param path string
+---@param lines string[]
+---@return boolean ok
+---@return string? err
+function M.write_list(path, lines)
+  local dir = vim.fs.dirname(path)
+  if dir and dir ~= "" and vim.fn.isdirectory(dir) == 0 then
+    local made = pcall(vim.fn.mkdir, dir, "p")
+    if not made then return false, "cannot create " .. dir end
+  end
+  local wrote, rc = pcall(vim.fn.writefile, lines, path)
+  if not wrote or rc ~= 0 then return false, "cannot write " .. path end
+  return true
+end
+
+---The file list of `targets` (what `]f`/`[f` copy), for the specs and other callers.
+---@param targets string[]
+---@param relative boolean
+---@return string[]
+function M.files_for(targets, relative)
+  return collect_files_multi(targets, relative)
+end
+
+---Save the relative file list of the marked nodes (else the node under the cursor) to a file.
+---Asks for the target path (default `file-list.txt` in the cwd) and confirms before it overwrites.
+function M.save_files()
+  local targets = get_targets()
+  if #targets == 0 then
+    notify.warn("No current node")
+    return
+  end
+  local lines = collect_files_multi(targets, true)
+  if #lines == 0 then
+    notify.warn("No entries found")
+    return
+  end
+  local default = (vim.fn.getcwd():gsub("\\", "/"):gsub("/$", "")) .. "/file-list.txt"
+  vim.ui.input(
+    { prompt = "Save file list to: ", default = default, completion = "file" },
+    function(input)
+      if not input or input == "" then return end
+      local path = vim.fs.normalize(input)
+      local function write()
+        local ok, err = M.write_list(path, lines)
+        if ok then
+          notify.info(("Saved %d path(s) to %s"):format(#lines, path))
+        else
+          notify.error(err or "write failed")
+        end
+      end
+      if vim.fn.filereadable(path) == 0 then return write() end
+      require("filetree.util.confirm")({
+        title = " Overwrite ",
+        body = { "  " .. path },
+        question = "File exists. Overwrite?",
+        on_choice = function(yes)
+          if yes then write() end
+        end,
+      })
+    end
+  )
+end
+
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
 ---@type FiletreeCopyFileListConfig
@@ -177,6 +241,7 @@ local DEFAULTS = {
   keymap_files_rel = "]f",
   keymap_dirs_abs = "[F",
   keymap_dirs_rel = "]F",
+  keymap_save = false,
 }
 
 ---Option schema (see `filetree.config.schema`): exactly what
@@ -188,6 +253,7 @@ M.SCHEMA = {
   keymap_files_rel = "keymap",
   keymap_dirs_abs = "keymap",
   keymap_dirs_rel = "keymap",
+  keymap_save = "keymap",
   preview_limit = { "number", min = 0 },
   separator = "string",
 }
@@ -223,6 +289,12 @@ function M.setup(cfg, adapter)
       field = "keymap_dirs_rel",
       rhs = M.copy_dirs_rel,
       desc = "copy dir list (rel)",
+    },
+    {
+      name = "save",
+      field = "keymap_save",
+      rhs = M.save_files,
+      desc = "save file list to a file",
     },
   })
 end

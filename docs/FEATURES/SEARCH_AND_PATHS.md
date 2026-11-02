@@ -188,6 +188,11 @@ combined relative file listing across all three.
 - **Module:** `lua/filetree/features/paths/copy_file_list/`
 - **Keymaps:** `[f`, `]f`, `[F`, `]F`
 
+To keep the list instead of pasting it, `:Filetree filelist save` (or the opt-in key `keymap_save`,
+off by default) writes the relative file list of the marked nodes, else of the node under the
+cursor, to a file you name (default `file-list.txt` in the cwd) and asks before it overwrites an
+existing file. Folders on the ignore list (`.git`, `node_modules`, ...) stay out of every list.
+
 ## Markdown Links
 
 Copies the current node, a recursive listing, or every marked node as

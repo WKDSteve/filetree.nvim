@@ -46,6 +46,7 @@ return {
   ["filelist dirs rel"] = "Copy recursive dir list (relative)",
   ["filelist files abs"] = "Copy recursive file list (absolute)",
   ["filelist files rel"] = "Copy recursive file list (relative)",
+  ["filelist save"] = "Save the recursive file list (relative) to a file",
   ["filter"] = "Open the filter input, or apply a query directly",
   ["filter clear"] = "Clear current filter",
   ["git refresh"] = "Refresh git status",
