@@ -6,7 +6,7 @@
 ---
 --- mdview's `open()` previews the *current buffer*, so the file is loaded into a buffer first
 --- (without showing it in a window) and `open()` runs with that buffer made current for the call.
---- A buffer that was not loaded before is unlisted, so the preview does not leave an entry in
+--- A buffer that did not exist before is unlisted, so the preview does not leave an entry in
 --- the buffer list. mdview needs a running session (`:MDView start`); without one it says so
 --- itself, this module does not start a server.
 ---
@@ -75,10 +75,10 @@ function M.open()
     return
   end
 
-  local was_known = vim.fn.bufexists(path) == 1 and vim.fn.bufloaded(path) == 1
+  local existed = vim.fn.bufexists(path) == 1
   local bufnr = vim.fn.bufadd(path)
   vim.fn.bufload(bufnr)
-  if not was_known then vim.bo[bufnr].buflisted = false end
+  if not existed then vim.bo[bufnr].buflisted = false end
 
   vim.api.nvim_buf_call(bufnr, function()
     mdview.open()
