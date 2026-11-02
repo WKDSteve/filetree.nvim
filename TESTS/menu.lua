@@ -192,10 +192,10 @@ do
     if path:match("%.pdf$") then return "pdf" end
   end
 
-  local function menu_for(path, menu_cfg)
+  local function menu_for(path, menu_cfg, node_type)
     return install_stub(menu_cfg or { enable = true }, features, {
       get_current_node = function()
-        return path and { path = path } or nil
+        return path and { path = path, type = node_type or "file" } or nil
       end,
     })
   end
@@ -242,6 +242,8 @@ do
     "media: text node gets no media group",
     not has(txt, "Preview image") and not has(txt, "Preview PDF")
   )
+  local folder = names(menu_for("/x/shots.png", nil, "directory").items())
+  check("media: a folder named like an image gets no media group", not has(folder, "Preview image"))
   local none = names(menu_for(nil).items())
   check("media: no node under the cursor -> no media group", not has(none, "Open externally"))
   local off = names(menu_for("/x/book.pdf", { enable = true, media = false }).items())

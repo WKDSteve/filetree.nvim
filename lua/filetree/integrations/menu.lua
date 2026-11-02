@@ -137,7 +137,8 @@ local function media_node()
   if not (adapter and type(adapter.get_current_node) == "function") then return nil end
   if not (preview and type(preview.media_kind) == "function") then return nil end
   local ok, node = pcall(adapter.get_current_node)
-  local path = ok and type(node) == "table" and node.path or nil
+  -- A folder named `shots.png` is not an image.
+  local path = ok and type(node) == "table" and node.type ~= "directory" and node.path or nil
   local kind = preview.media_kind(path)
   return kind, kind and path or nil
 end
