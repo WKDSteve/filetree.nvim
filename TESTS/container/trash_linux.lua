@@ -25,9 +25,12 @@ local function wait_for(fn)
   fn(function(r)
     result = r
   end)
-  assert(vim.wait(15000, function()
-    return result ~= nil
-  end, 50), "the trash callback never ran")
+  assert(
+    vim.wait(15000, function()
+      return result ~= nil
+    end, 50),
+    "the trash callback never ran"
+  )
   return result
 end
 
@@ -60,8 +63,14 @@ vim.fn.writefile({ "two" }, second)
 local results = wait_for(function(cb)
   platform.send_batch({ work .. "/folder", second }, cb)
 end)
-assert(#results == 2 and results[1].ok and results[2].ok, "the batch failed: " .. vim.inspect(results))
-assert(vim.uv.fs_stat(work .. "/folder") == nil and vim.uv.fs_stat(second) == nil, "batch entries are still in place")
+assert(
+  #results == 2 and results[1].ok and results[2].ok,
+  "the batch failed: " .. vim.inspect(results)
+)
+assert(
+  vim.uv.fs_stat(work .. "/folder") == nil and vim.uv.fs_stat(second) == nil,
+  "batch entries are still in place"
+)
 local trashed = entries("files")
 assert(trashed["folder"] and trashed["second.txt"], "the batch entries are not in the trash")
 assert(vim.uv.fs_stat(trash .. "/files/folder/inner.txt"), "the directory lost its content")

@@ -369,6 +369,13 @@ local function trash_wsl(path, cb)
   -- to "file").
   local is_dir = vim.fn.isdirectory(path) == 1
 
+  -- is_wsl() reads the kernel release, so a plain Linux userland on a WSL2 kernel (a container on the
+  -- podman machine, a distro without interop) lands here without wslpath; vim.system would throw ENOENT.
+  if vim.fn.executable("wslpath") ~= 1 then
+    cb({ ok = false, err = "wslpath not found (WSL detected, but no WSL interop)" })
+    return
+  end
+
   -- Convert to Windows path and use PowerShell Recycle Bin. Two chained
   -- spawns; both used to block.
   if not vim.system then

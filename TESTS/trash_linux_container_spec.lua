@@ -48,26 +48,50 @@ end
 
 local function in_container(script, extra_env)
   return container.run(
-    { "nvim", "--headless", "--clean", "-u", "NONE", "-l", "/repos/filetree.nvim/TESTS/container/" .. script, "/repos" },
+    {
+      "nvim",
+      "--headless",
+      "--clean",
+      "-u",
+      "NONE",
+      "-l",
+      "/repos/filetree.nvim/TESTS/container/" .. script,
+      "/repos",
+    },
     { mounts = { [repos] = "/repos" }, env = extra_env }
   )
 end
 
 local res = in_container("trash_linux.lua")
 check(res.code == 0, "gio backend: exit " .. res.code .. "\n" .. res.stdout .. res.stderr)
-check((res.stdout .. res.stderr):find("TRASH_OK gio", 1, true) ~= nil, "gio is the backend while present: " .. res.stdout .. res.stderr)
+check(
+  (res.stdout .. res.stderr):find("TRASH_OK gio", 1, true) ~= nil,
+  "gio is the backend while present: " .. res.stdout .. res.stderr
+)
 
 -- Without gio the same script must go through trash-put: PATH is cut down to a directory that has no gio.
 local no_gio = container.run({
-  "sh", "-c",
+  "sh",
+  "-c",
   "mkdir -p /home/tester/bin && ln -s /usr/bin/trash-put /home/tester/bin/trash-put && ln -s /usr/bin/nvim /home/tester/bin/nvim"
     .. " && ln -s /usr/bin/python3 /home/tester/bin/python3 && PATH=/home/tester/bin:/usr/local/bin"
     .. " nvim --headless --clean -u NONE -l /repos/filetree.nvim/TESTS/container/trash_linux.lua /repos",
 }, { mounts = { [repos] = "/repos" } })
-check(no_gio.code == 0, "trash-put backend: exit " .. no_gio.code .. "\n" .. no_gio.stdout .. no_gio.stderr)
-check((no_gio.stdout .. no_gio.stderr):find("TRASH_OK trash-cli", 1, true) ~= nil, "trash-cli is the backend without gio: " .. no_gio.stdout .. no_gio.stderr)
+check(
+  no_gio.code == 0,
+  "trash-put backend: exit " .. no_gio.code .. "\n" .. no_gio.stdout .. no_gio.stderr
+)
+check(
+  (no_gio.stdout .. no_gio.stderr):find("TRASH_OK trash-cli", 1, true) ~= nil,
+  "trash-cli is the backend without gio: " .. no_gio.stdout .. no_gio.stderr
+)
+
+local wsl = in_container("trash_wsl_no_wslpath.lua")
+check(wsl.code == 0, "wsl without wslpath: exit " .. wsl.code .. "\n" .. wsl.stdout .. wsl.stderr)
+check(
+  (wsl.stdout .. wsl.stderr):find("WSL_NO_WSLPATH_OK", 1, true) ~= nil,
+  "a missing wslpath is a reported failure: " .. wsl.stdout .. wsl.stderr
+)
 
 print(("%d passed, %d failed"):format(passed, failed))
-if failed > 0 then
-  os.exit(1)
-end
+if failed > 0 then os.exit(1) end
