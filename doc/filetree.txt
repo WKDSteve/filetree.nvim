@@ -1113,10 +1113,10 @@ NAV
   Auto Resize (opt-in) .................................|filetree-auto-resize|
   Buffer Cycle ........................................|filetree-buffer-cycle|
   Collapse All ........................................|filetree-collapse-all|
-  Sort Cycle (neo-tree) ................................|filetree-sort-cycle|
   Quickpick (opt-in) .....................................|filetree-quickpick|
   Reveal Alt ............................................|filetree-reveal-alt|
   Sidebar Guard ......................................|filetree-sidebar-guard|
+  Sort Cycle ............................................|filetree-sort-cycle|
   Source Switcher (neo-tree) .......................|filetree-source-switcher|
   Tree Toggle (opt-in) .................................|filetree-tree-toggle|
   Tree Traverse ......................................|filetree-tree-traverse|
@@ -1136,6 +1136,7 @@ SEARCH
   Find Files ............................................|filetree-find-files|
   Grep In Directory ....................................|filetree-grep-in-dir|
   Live Search ..........................................|filetree-live-search|
+  Spotlight Node ....................................|filetree-spotlight-node|
 
 SYSTEM
   Compress ................................................|filetree-compress|
@@ -1488,10 +1489,6 @@ is picked up by the reference engine.
 
 Keymaps: r
 
-Option `cursor`: `"before_ext"` (default) parks the prompt cursor before the last
-extension (`init|.lua`; directories, dotfiles and extension-less names keep it at
-the end), `"end"` always puts it at the end.
-
 Module: lua/filetree/features/fileops/smart_rename/
 
 ------------------------------------------------------------------------------
@@ -1815,28 +1812,6 @@ Usercmds: `:Filetree collapse`
 Module: lua/filetree/features/nav/collapse_all/
 
 ------------------------------------------------------------------------------
-SORT CYCLE                                                 *filetree-sort-cycle*
-
-`<leader>so` switches the tree to the next sort criterion (name, size, modified),
-`<leader>sO` flips the direction of the current one. Name runs A to Z, size and
-modified start with the largest / newest. The cursor stays on the entry it was on
-(remembered by path, found again once the tree re-rendered).
-
-It drives the optional adapter methods `set_sort(kind, descending)` and
-`get_sort()`. Only the neo-tree adapter implements them (through its own
-`state.sort` / `sort_field_provider`, what its `order_by_*` commands set); on
-nvim-tree, oil, mini.files and netrw one message says the adapter cannot sort.
-Off by default (`features.sort_cycle.enabled`).
-
-Keymaps: <leader>so, <leader>sO
-
-Config: `opts.features.sort_cycle.keymap_cycle`, `keymap_reverse`
-
-Usercmds: `:Filetree sort`, `:Filetree sort reverse`
-
-Module: lua/filetree/features/nav/sort_cycle/
-
-------------------------------------------------------------------------------
 QUICKPICK                                                 *filetree-quickpick*
 
 A temporary *numbered quick-pick mode* over the tree. `<leader>;` puts a
@@ -1974,6 +1949,19 @@ Config: `opts.features.sidebar_guard.enabled` (default `true`),
         instead)
 
 Module: lua/filetree/features/nav/sidebar_guard/
+
+------------------------------------------------------------------------------
+SORT CYCLE                                               *filetree-sort-cycle*
+
+`<leader>so` cycles the tree's sort criterion (name, size, modified),
+`<leader>sO` reverses it; `:Filetree sort` and `:Filetree sort reverse` do the
+same. The cursor stays on its entry. neo-tree only (it needs the adapter
+methods `set_sort` and `get_sort`); the other adapters report that they cannot
+sort. Off by default.
+
+Keymaps: <leader>so <leader>sO
+
+Module: lua/filetree/features/nav/sort_cycle/
 
 ------------------------------------------------------------------------------
 SOURCE SWITCHER                                     *filetree-source-switcher*
@@ -2196,18 +2184,6 @@ Keymaps: rq
 Module: lua/filetree/features/paths/lua_require_copy/
 
 ------------------------------------------------------------------------------
-SPOTLIGHT NODE                                       *filetree-spotlight-node*
-
-`<leader>sp` turns the basename of the node under the cursor into a spotlight
-token (`require("spotlight").add(name)`), so the open logs and buffers that
-mention the file light up. Soft dependency: without spotlight.nvim it only
-warns. Off by default (`features.spotlight_node.enabled`).
-
-Keymaps: <leader>sp
-
-Module: lua/filetree/features/search/spotlight_node/
-
-------------------------------------------------------------------------------
 MARKDOWN LINKS                                       *filetree-markdown-links*
 
 Copies the current node, a recursive listing, or every marked node as Markdown
@@ -2385,6 +2361,17 @@ filtering the listing down, complementing `filter` rather than duplicating it.
 Keymaps: gs
 
 Module: lua/filetree/features/search/live_search/
+
+------------------------------------------------------------------------------
+SPOTLIGHT NODE                                       *filetree-spotlight-node*
+
+`<leader>sp` turns the basename of the node under the cursor into a
+`spotlight.nvim` token, so open logs and buffers that mention the file light
+up. Soft dependency (a warning when spotlight.nvim is absent), off by default.
+
+Keymaps: <leader>sp
+
+Module: lua/filetree/features/search/spotlight_node/
 
 ------------------------------------------------------------------------------
 COMPRESS                                                   *filetree-compress*
