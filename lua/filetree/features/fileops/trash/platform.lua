@@ -20,7 +20,8 @@ local M = {}
 ---@param argv string[]
 ---@param err_msg string  message for a non-zero exit
 ---@param cb fun(result: TrashResult)
-local function run(argv, err_msg, cb)
+---@param timeout_ms integer?  Kill the process after this long (a non-zero exit like any other).
+local function run(argv, err_msg, cb, timeout_ms)
   if not vim.system then
     -- Neovim < 0.10: no async process API. Keep the old blocking behaviour
     -- rather than failing outright.
@@ -29,7 +30,7 @@ local function run(argv, err_msg, cb)
     return
   end
 
-  vim.system(argv, { text = true }, function(res)
+  vim.system(argv, { text = true, timeout = timeout_ms }, function(res)
     -- vim.system callbacks run off the main loop; every caller of `cb` goes on
     -- to touch buffers, notify and the tree adapter.
     vim.schedule(function()
@@ -204,6 +205,40 @@ end
 
 -- ── macOS ─────────────────────────────────────────────────────────────────────
 
+---@internal
+---How long Finder gets for one item. Without a limit a read-only parent folder left the batch
+---without an answer (over 60 s on a CI runner, run 41897486830), and the same "nobody can answer"
+---stall is what the Windows batch was fixed for. Why Finder stalls there is unverified.
+local FINDER_ITEM_TIMEOUT_S = 30
+
+---@internal
+---The outer limit for `count` items, should Finder not honour its own: osascript is killed then.
+---@param count integer
+---@return integer ms
+local function finder_kill_ms(count)
+  return (count * FINDER_ITEM_TIMEOUT_S + 10) * 1000
+end
+
+---@internal
+---osascript's arguments for a script of `body` lines inside Finder's tell block.
+---@param body string[]
+---@return string[] argv
+local function finder_argv(body)
+  local argv = {
+    "osascript",
+    "-e",
+    ("with timeout of %d seconds"):format(FINDER_ITEM_TIMEOUT_S),
+    "-e",
+    'tell application "Finder"',
+  }
+  for _, line in ipairs(body) do
+    argv[#argv + 1] = "-e"
+    argv[#argv + 1] = line
+  end
+  vim.list_extend(argv, { "-e", "end tell", "-e", "end timeout" })
+  return argv
+end
+
 ---@param path string
 ---@param cb fun(result: TrashResult)
 local function trash_mac(path, cb)
@@ -223,34 +258,34 @@ local function trash_mac(path, cb)
   -- the string early. Everything after it is then AppleScript source, and
   -- `do shell script` is one word away. Both characters are legal in a macOS
   -- filename, so a crafted name in a cloned repo is enough.
-  run({
-    "osascript",
-    "-e",
-    string.format('tell app "Finder" to delete POSIX file "%s"', applescript_string(path)),
-  }, "AppleScript trash failed", cb)
+  run(
+    finder_argv({ string.format('delete POSIX file "%s"', applescript_string(path)) }),
+    "AppleScript trash failed",
+    cb,
+    finder_kill_ms(1)
+  )
 end
 
 ---@internal
----One process for the whole batch, same idea as `run_windows_batch` but far
----simpler: both the `trash` CLI and Finder's `delete` Apple Event already
----accept a LIST of items in a single call (`delete {file1, file2, ...}` is
----the idiomatic way to trash several Finder items at once, not a loop of
----separate `tell` invocations), so there is no generated script/JSON
----round-trip to build here -- just pass every path in one invocation.
+---One process for the whole batch, same idea as `run_windows_batch`: the
+---`trash` CLI takes every path in one call and carries on past one it cannot
+---move. Finder's `delete {file1, file2, ...}` does not: a locked file aborts the
+---whole list and the others stay (run 41897486830). So its script has one
+---`delete` per item, each in its own `try`, still in a single process.
 ---
----Neither backend reports which individual path failed when the batch's
----exit code is non-zero (a locked file among otherwise-fine ones, say), so
----this checks existence afterward instead -- mirrors the pre-flight
----`conflict.exists` the caller already ran, and is the one outcome that
----means the same thing regardless of which backend (or its locale/version)
----produced it.
+---Neither backend reports which individual path failed, so this checks
+---existence afterward instead -- mirrors the pre-flight `conflict.exists` the
+---caller already ran, and is the one outcome that means the same thing
+---regardless of which backend (or its locale/version) produced it.
 ---@param paths string[]
 ---@param cb fun(results: TrashResult[])  one result per input path, same order.
 local function run_mac_batch(paths, cb)
   local function finish(err_msg)
     local results = {}
     for i, p in ipairs(paths) do
-      results[i] = path_exists(p) and { ok = false, err = err_msg } or { ok = true }
+      -- The `try`s let osascript exit 0 although an item stayed: there is no err_msg then.
+      local err = err_msg or "still there after the trash call"
+      results[i] = path_exists(p) and { ok = false, err = err } or { ok = true }
     end
     cb(results)
   end
@@ -266,21 +301,17 @@ local function run_mac_batch(paths, cb)
     return
   end
 
-  local specs = {}
+  local body = {}
   for _, p in ipairs(paths) do
-    specs[#specs + 1] = string.format('POSIX file "%s"', applescript_string(p))
+    vim.list_extend(body, {
+      "try",
+      string.format('delete POSIX file "%s"', applescript_string(p)),
+      "end try",
+    })
   end
-  run(
-    {
-      "osascript",
-      "-e",
-      string.format('tell app "Finder" to delete {%s}', table.concat(specs, ", ")),
-    },
-    "AppleScript trash failed",
-    function(result)
-      finish(result.err)
-    end
-  )
+  run(finder_argv(body), "AppleScript trash failed", function(result)
+    finish(result.err)
+  end, finder_kill_ms(#paths))
 end
 
 -- ── Linux ─────────────────────────────────────────────────────────────────────

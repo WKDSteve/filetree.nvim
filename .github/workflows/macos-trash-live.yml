@@ -49,13 +49,21 @@ jobs:
         working-directory: filetree.nvim
         run: nvim --clean --headless -u NONE -l TESTS/live/trash_macos.lua applescript
 
-      - name: Install the trash CLI
-        if: always()
-        run: |
-          brew install trash
-          command -v trash
-
-      - name: trash CLI
+      # Whatever `trash` the image has on PATH; macos-26 ships /usr/bin/trash.
+      - name: trash CLI (from the image)
         if: always()
         working-directory: filetree.nvim
         run: nvim --clean --headless -u NONE -l TESTS/live/trash_macos.lua cli
+
+      # Homebrew's formula is keg-only there, so it needs its own PATH entry to be the one that runs.
+      - name: Install the trash CLI
+        if: always()
+        run: brew install trash
+
+      - name: trash CLI (Homebrew)
+        if: always()
+        working-directory: filetree.nvim
+        run: |
+          export PATH="$(brew --prefix trash)/bin:$PATH"
+          command -v trash
+          nvim --clean --headless -u NONE -l TESTS/live/trash_macos.lua cli

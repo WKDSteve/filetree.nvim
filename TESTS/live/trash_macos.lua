@@ -39,7 +39,8 @@ local mode = arg and arg[1] or "cli"
 assert(mode == "cli" or mode == "applescript", "mode is cli or applescript, got " .. tostring(mode))
 
 local uv = vim.uv or vim.loop
-local TIMEOUT_MS = 60000
+-- Above platform.lua's own limit for the three items of a blocked batch.
+local TIMEOUT_MS = 120000
 
 local failed, unverified = 0, 0
 local function pass(name)
