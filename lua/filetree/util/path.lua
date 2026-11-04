@@ -106,9 +106,11 @@ end
 ---@param p string  Absolute path.
 ---@return string?
 function M.cwd_alias(p)
+  local q = M.slashify(p)
+  -- A relative path would climb to `.`, which resolves to the cwd: it names no alias.
+  if not (q:sub(1, 1) == "/" or q:match("^%a:/")) then return nil end
   local cwd = vim.fn.getcwd()
   local slashed_cwd = M.slashify(cwd):gsub("/+$", "")
-  local q = M.slashify(p)
   if q == slashed_cwd or q:sub(1, #slashed_cwd + 1) == slashed_cwd .. "/" then
     return slashed_cwd
   end

@@ -21,8 +21,10 @@ local ftpath = require("filetree.util.path")
 local function strip_base(p, base)
   if p == base then return "." end
   local prefix = base .. "/"
-  if p:sub(1, #prefix) == prefix then return p:sub(#prefix + 1) end
-  return p
+  if p:sub(1, #prefix) ~= prefix then return p end
+  local rest = p:sub(#prefix + 1)
+  -- `/` below a cwd of `/`, whose base is the empty string.
+  return rest ~= "" and rest or "."
 end
 
 ---The directory the paths collected under `target` are made relative to: the spelling of the cwd

@@ -65,6 +65,8 @@ eq("cwd_alias: the cwd itself", ftpath.cwd_alias(cwd), cwd)
 eq("cwd_alias: the link itself", ftpath.cwd_alias(link), link)
 eq("cwd_alias: a path outside", ftpath.cwd_alias(other .. "/o.txt"), nil)
 eq("cwd_alias: a sibling sharing the prefix", ftpath.cwd_alias(cwd .. "-not/x"), nil)
+eq("cwd_alias: a relative path names none", ftpath.cwd_alias("proj/a.txt"), nil)
+eq("in_cwd: a relative path stays", ftpath.in_cwd("proj/a.txt"), "proj/a.txt")
 eq("in_cwd: rewritten onto the cwd", ftpath.in_cwd(node_file), cwd .. "/proj/a.txt")
 eq("in_cwd: a path outside stays", ftpath.in_cwd(other .. "/o.txt"), other .. "/o.txt")
 
