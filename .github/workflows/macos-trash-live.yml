@@ -1,0 +1,61 @@
+name: macOS trash live check
+
+# The macOS trash backends against the real `trash` CLI and the real Finder (TESTS/live/trash_macos.lua).
+# Started by hand only: it trashes real files and drives Finder, which a headless runner may refuse,
+# so it must not decide whether an ordinary push is green.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  trash-live:
+    name: trash live (macos-latest)
+    runs-on: macos-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout filetree.nvim
+        uses: actions/checkout@v5
+        with:
+          path: filetree.nvim
+
+      - name: Checkout lib.nvim
+        uses: actions/checkout@v5
+        with:
+          repository: WKDSteve/lib.nvim
+          path: lib.nvim
+          ref: ci-verified
+
+      - name: Install Neovim (stable)
+        uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: stable
+
+      # Each step fails on its own: which backend broke is the information.
+      - name: What the image brings
+        run: |
+          sw_vers
+          command -v trash || echo "no trash on PATH"
+          # Can this process drive Finder at all? The reason a later failure would have.
+          osascript -e 'tell app "Finder" to get name of startup disk' || echo "Finder refused: exit $?"
+
+      - name: AppleScript fallback (no trash CLI)
+        if: always()
+        working-directory: filetree.nvim
+        run: nvim --clean --headless -u NONE -l TESTS/live/trash_macos.lua applescript
+
+      - name: Install the trash CLI
+        if: always()
+        run: |
+          brew install trash
+          command -v trash
+
+      - name: trash CLI
+        if: always()
+        working-directory: filetree.nvim
+        run: nvim --clean --headless -u NONE -l TESTS/live/trash_macos.lua cli
