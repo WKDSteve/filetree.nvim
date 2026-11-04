@@ -86,8 +86,10 @@ local start_buf = vim.api.nvim_get_current_buf()
 
 node = { type = "file", path = note }
 mod.open()
+-- A buffer name is the physical path (bufadd resolves symlinked directories: /var is /private/var
+-- on macOS), the node keeps its spelling, so only the resolved forms are comparable.
 local function eq(p)
-  return vim.fs.normalize(p)
+  return vim.fs.normalize((vim.uv or vim.loop).fs_realpath(p) or p)
 end
 check("md node: mdview.open ran once", opened_calls == 1, tostring(opened_calls))
 check(
