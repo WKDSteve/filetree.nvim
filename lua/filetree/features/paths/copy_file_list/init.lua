@@ -12,6 +12,27 @@ local notify = require("filetree.util.notify").create("[filetree.copy_file_list]
 local fs = require("filetree.util.fs")
 local ignore = require("filetree.util.ignore")
 local bind = require("filetree.util.bind")
+local ftpath = require("filetree.util.path")
+
+---`p` relative to `base`: `.` for `base` itself, `p` unchanged when it is not below `base`.
+---@param p string
+---@param base string  Forward slashes, no trailing one.
+---@return string
+local function strip_base(p, base)
+  if p == base then return "." end
+  local prefix = base .. "/"
+  if p:sub(1, #prefix) == prefix then return p:sub(#prefix + 1) end
+  return p
+end
+
+---The directory the paths collected under `target` are made relative to: the spelling of the cwd
+---`target` uses (a symlink to it counts, see `filetree.util.path.cwd_alias`), else the cwd itself.
+---Asked once per target, not per collected path.
+---@param target string
+---@return string
+local function relative_base(target)
+  return ftpath.cwd_alias(target) or (ftpath.slashify(vim.fn.getcwd()):gsub("/+$", ""))
+end
 
 ---Recursively collect all file paths under a path. Skips `.git`,
 ---`node_modules`, etc. per the ignore_list feature (see filetree.util.ignore).
@@ -25,10 +46,9 @@ local function collect_files(path, relative)
       return p:gsub("\\", "/")
     end, raw)
   end
-  local cwd = vim.fn.getcwd():gsub("\\", "/"):gsub("/?$", "/")
+  local base = relative_base(path)
   return vim.tbl_map(function(p)
-    p = p:gsub("\\", "/")
-    return p:gsub("^" .. vim.pesc(cwd), "")
+    return strip_base((p:gsub("\\", "/")), base)
   end, raw)
 end
 
@@ -44,11 +64,9 @@ local function collect_dirs(path, relative)
       return p:gsub("\\", "/")
     end, raw)
   end
-  local cwd = vim.fn.getcwd():gsub("\\", "/"):gsub("/?$", "/")
+  local base = relative_base(path)
   return vim.tbl_map(function(p)
-    p = p:gsub("\\", "/")
-    p = p:gsub("^" .. vim.pesc(cwd), "")
-    return p == "" and "." or p
+    return strip_base((p:gsub("\\", "/")), base)
   end, raw)
 end
 
@@ -116,11 +134,7 @@ local function collect_dirs_multi(targets, relative)
     else
       -- File node: contribute just its parent directory.
       local dir = vim.fn.fnamemodify(path, ":h"):gsub("\\", "/")
-      if relative then
-        local cwd = vim.fn.getcwd():gsub("\\", "/"):gsub("/?$", "/")
-        dir = dir:gsub("^" .. vim.pesc(cwd), "")
-        if dir == "" then dir = "." end
-      end
+      if relative then dir = strip_base(dir, relative_base(path)) end
       items = { dir }
     end
     for _, d in ipairs(items) do

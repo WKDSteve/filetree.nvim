@@ -73,7 +73,7 @@ end
 ---@param path string
 ---@return string  markdown link "[name](relative/path)"
 local function to_link(path)
-  local rel = vim.fn.fnamemodify(path, ":."):gsub("\\", "/")
+  local rel = vim.fn.fnamemodify(path_util.in_cwd(path), ":."):gsub("\\", "/")
   local name = link_name(path)
   return string.format("[%s](%s)", name, rel)
 end
@@ -155,11 +155,13 @@ local function insert_target(path, buf)
     if name then return rooted end
   end
 
-  if mode == "cwd" then return path_util.slashify(vim.fn.fnamemodify(path, ":.")) end
+  if mode == "cwd" then
+    return path_util.slashify(vim.fn.fnamemodify(path_util.in_cwd(path), ":."))
+  end
 
   -- "buffer" (and the "env" fallback): relative to where the link will live.
   local name = vim.api.nvim_buf_get_name(buf)
-  if name == "" then return path_util.slashify(vim.fn.fnamemodify(path, ":.")) end
+  if name == "" then return path_util.slashify(vim.fn.fnamemodify(path_util.in_cwd(path), ":.")) end
   return path_util.dot_relative(path, vim.fn.fnamemodify(name, ":p:h"))
 end
 

@@ -181,7 +181,7 @@ local FORMATS = {
   -- Older name of the same, from when `absolute` was folded.
   absolute_raw = absolute,
   relative = function(path)
-    return vim.fn.fnamemodify(path, ":.")
+    return vim.fn.fnamemodify(ftpath.in_cwd(path), ":.")
   end,
   name = function(path)
     return vim.fn.fnamemodify(path, ":t")
@@ -203,7 +203,7 @@ local FORMATS = {
     -- isn't currently rendered (e.g. inside a collapsed directory).
     local ln = _adapter and _adapter.get_node_line and _adapter.get_node_line(path)
     if not ln then ln = cursor_line() end
-    local rel = vim.fn.fnamemodify(path, ":.")
+    local rel = vim.fn.fnamemodify(ftpath.in_cwd(path), ":.")
     return ln and (rel .. ":" .. ln) or rel
   end,
   -- Absolute path of the detected project root ([R). cwd-independent.

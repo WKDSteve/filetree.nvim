@@ -97,6 +97,54 @@ function M.ensure_dir(p)
   return parent
 end
 
+---The leading part of `p` that names the cwd, or nil when `p` is not under it.
+---
+---`getcwd()` reports the physical directory while a node keeps the spelling the tree was rooted
+---with, so `/tmp/x` and a cwd of `/private/tmp/x` (macOS), or any project reached through a symlink,
+---do not share a prefix although the one is inside the other. A plain prefix check is tried first;
+---only a path that fails it pays for the `fs_realpath` walk up its ancestors. Forward slashes.
+---@param p string  Absolute path.
+---@return string?
+function M.cwd_alias(p)
+  local cwd = vim.fn.getcwd()
+  local slashed_cwd = M.slashify(cwd):gsub("/+$", "")
+  local q = M.slashify(p)
+  if q == slashed_cwd or q:sub(1, #slashed_cwd + 1) == slashed_cwd .. "/" then
+    return slashed_cwd
+  end
+
+  local uv = vim.uv or vim.loop
+  local real_cwd = uv.fs_realpath(cwd)
+  if not real_cwd then return nil end
+  local function canon(real)
+    real = M.slashify(real)
+    return platform.is_windows() and real:lower() or real
+  end
+  real_cwd = canon(real_cwd)
+
+  local dir = q:gsub("/+$", "")
+  while dir ~= "" do
+    local real = uv.fs_realpath(dir)
+    if real and canon(real) == real_cwd then return dir end
+    local parent = vim.fs.dirname(dir)
+    if not parent or parent == dir then return nil end
+    dir = parent
+  end
+  return nil
+end
+
+---`p` with a symlinked spelling of the cwd replaced by the cwd itself, so that `fnamemodify(":.")`
+---can strip it; every other path comes back untouched. See `M.cwd_alias`.
+---@param p string  Absolute path.
+---@return string
+function M.in_cwd(p)
+  local alias = M.cwd_alias(p)
+  if not alias then return p end
+  local cwd = M.slashify(vim.fn.getcwd()):gsub("/+$", "")
+  if alias == cwd then return p end
+  return cwd .. M.slashify(p):sub(#alias + 1)
+end
+
 ---Return `p` relative to `base` (default: cwd). Falls back to `:~:.` form when
 ---`p` is not under `base`. Purely argument-driven — no project-root lookup.
 ---@param p    string
