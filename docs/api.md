@@ -77,6 +77,28 @@ end)
 `unregister(id)` removes a provider, `suggest(dir)` asks them. Registering works
 before or after `filetree.setup()`; a provider that raises is skipped.
 
+## Root providers
+
+A plugin can say which directory is the root for the files it knows, ahead of
+the `.git` walk: a case folder inside a larger repository, say. `cwd_mode` asks
+the providers first in every mode (so `project` holds that folder), and
+`util.target_dir` asks them too, so they apply with cwd_mode off as well; the
+cwd cwd_sync moves to and the root the tree is shown at follow from that. A
+pinned root (`lock`, `manual`) still wins.
+
+```lua
+require("filetree.roots").register("casedesk.case", function(path)
+  -- path: a file or a directory; return a directory, or nil to stay out of it
+  local case = require("casedesk.registry").owning(path)
+  return case and case.dir or nil
+end)
+```
+
+The first provider with an answer wins, in registration order; a provider that
+raises, or answers with something that is not an existing directory, is
+skipped. `unregister(id)` removes one, `resolve(path)` asks them, `any()` says
+whether one is registered. Registering works before or after `filetree.setup()`.
+
 ## Custom adapters
 
 ```lua

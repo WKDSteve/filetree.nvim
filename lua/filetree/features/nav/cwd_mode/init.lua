@@ -199,11 +199,21 @@ end
 ---versus package boundaries — which is exactly why they are two modes rather
 ---than one option: in a monorepo you want to switch between "the repository"
 ---and "the package I am editing" at runtime, not at config time.
+---
+---A root provider (`filetree.roots`) answers first, in every mode: a plugin
+---that knows a folder is its own root (a case folder inside a repository)
+---says so, and `project` then holds that folder instead of the repository
+---around it.
 ---@param file string
 ---@param mode FiletreeCwdModeName
 ---@return string?
 ---@internal
 local function root_of(file, mode)
+  local roots = require("filetree.roots")
+  if roots.any() then
+    local provided = canon(roots.resolve(file))
+    if provided then return provided end
+  end
   local finder = (mode == "nearest") and _finder_nearest or _finder
   if not finder then return nil end
   local ok, root = pcall(finder.find, file)

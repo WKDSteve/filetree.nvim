@@ -10,6 +10,9 @@
 --- same buffer switch is redundant at worst, never conflicting.
 ---
 --- Resolution order, first hit wins:
+---   0. A root provider registered with `filetree.roots` (a plugin that knows
+---      a folder is its own root). cwd_mode asks the same providers first, so
+---      this step only matters while cwd_mode is off.
 ---   1. cwd_mode's marker walk (shared with `util.root`, find_files, grep,
 ---      git_status, so nothing that is "the project" can disagree). Skipped
 ---      when cwd_mode is disabled or torn down.
@@ -42,6 +45,11 @@ function M.new(opts)
   ---@param file string
   ---@return string
   return function(file)
+    local roots = require("filetree.roots")
+    if roots.any() then
+      local provided = roots.resolve(file)
+      if provided then return path.normalize(provided) end
+    end
     local mode = require("filetree.features").require("cwd_mode")
     if mode and type(mode.resolve) == "function" then
       local ok, root = pcall(mode.resolve, file)
