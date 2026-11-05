@@ -91,6 +91,26 @@ roots.unregister("broken")
 roots.unregister("missing")
 roots.unregister("never-registered")
 
+-- A libuv callback is a fast-event context, where vim.fn raises (E5560).
+do
+  local got, err = nil, nil
+  local timer = (vim.uv or vim.loop).new_timer()
+  timer:start(0, 0, function()
+    local ok, res = pcall(roots.resolve, in_case)
+    if ok then
+      got = res or false
+    else
+      err = res
+    end
+    timer:close()
+  end)
+  vim.wait(1000, function()
+    return got ~= nil or err ~= nil
+  end)
+  eq("resolve works in a fast-event context (no vim.fn)", err, nil)
+  eq("and answers there too", got and normkey(got), case)
+end
+
 -- ── util.target_dir (cwd_mode off) ──────────────────────────────────────────
 
 local target = require("filetree.util.target_dir").new({ root_markers = { ".git" } })

@@ -21,6 +21,8 @@
 --- end)
 --- ```
 
+local uv = vim.uv or vim.loop
+
 local M = {}
 
 ---@alias FiletreeRootProvider fun(path: string): string|nil
@@ -72,8 +74,12 @@ function M.resolve(path)
   if type(path) ~= "string" or path == "" then return nil end
   for _, p in ipairs(providers) do
     local ok, dir = pcall(p.fn, path)
-    if ok and type(dir) == "string" and dir ~= "" and vim.fn.isdirectory(dir) == 1 then
-      return dir
+    -- uv.fs_stat, not vim.fn.isdirectory: callable from a fast-event context
+    -- (a libuv callback), where vim.fn raises E5560 and would take the whole
+    -- root resolution of cwd_mode and target_dir down with it.
+    if ok and type(dir) == "string" and dir ~= "" then
+      local stat = uv.fs_stat(dir)
+      if stat and stat.type == "directory" then return dir end
     end
   end
   return nil
