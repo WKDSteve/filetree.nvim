@@ -88,6 +88,7 @@ local KEY_FEATURES = {
   "reveal_alt",
   "source_switcher",
   "tree_toggle",
+  "close_on_open",
   "quickpick",
   "tree_traverse",
   "marks",

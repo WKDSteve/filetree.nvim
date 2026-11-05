@@ -99,6 +99,7 @@
 ---@field reveal_alt          FiletreeRevealAltConfig?
 ---@field source_switcher     FiletreeSourceSwitcherConfig?
 ---@field tree_toggle         FiletreeTreeToggleConfig?
+---@field close_on_open       FiletreeCloseOnOpenConfig?
 ---@field collapse_all        FiletreeCollapseAllConfig?
 ---@field quickpick           FiletreeQuickpickConfig?
 ---@field buffer_save         FiletreeBufferSaveConfig?
@@ -970,7 +971,7 @@
 ---@class FiletreeOpenReplaceConfig
 ---@field enabled?         boolean
 ---@field keymap           string?   Replace key in tree buffer (default "O"): opens over the editor window, the previous buffer stays listed.
----@field keymap_swap      string?   Swap key (default "<M-CR>"): also closes the focused buffer and takes its bufferline slot.
+---@field keymap_swap      string?   Swap key (default "<C-M-CR>"; `<M-CR>` belongs to `close_on_open`): also closes the focused buffer and takes its bufferline slot.
 ---@field keymap_swap_alt  string?   Second swap key (default "<C-CR>"), for terminals that deliver it distinctly from <CR>.
 ---@field close_tree?      boolean   Close the tree after the replace key (default true).
 ---@field swap_close_tree? boolean   Close the tree after a swap (default false).
@@ -1018,6 +1019,13 @@
 ---@field keymap_left?      string|string[]|false  Global key: toggle on the left (default "<M-l>").
 ---@field keymap_right?     string|string[]|false  Global key: toggle on the right (default "<M-r>").
 ---@field collapse_on_toggle? boolean  Opening the tree through these keys or `:Filetree toggle` first collapses every folder except the chain to the current file (default false; needs an adapter with `collapse_all`).
+---@field use_root_providers? boolean  Opening the tree roots it at the folder a root provider (`filetree.roots`, e.g. casedesk.nvim's case folder) names for the current file, instead of the cwd (default true; without a provider or an answer nothing changes).
+
+-- ── close_on_open (opt-in) ────────────────────────────────────────────────────
+
+---@class FiletreeCloseOnOpenConfig
+---@field enabled?     boolean  Default false: close the tree after a file was opened from it.
+---@field keymap_keep? string|string[]|false  Tree-buffer key (default "<M-CR>"): open like `<CR>` and keep the tree open; false turns it off.
 
 -- ── collapse_all ──────────────────────────────────────────────────────────────
 

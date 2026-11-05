@@ -218,9 +218,15 @@ return {
     },
     { lhs = "O", desc = "Open (replace buffer)", feature = "open_replace", scope = "tree" },
     {
-      lhs = "<M-CR>",
+      lhs = "<C-M-CR>",
       desc = "Open (swap: close focused buffer, keep its slot)",
       feature = "open_replace",
+      scope = "tree",
+    },
+    {
+      lhs = "<M-CR>",
+      desc = "Open and keep the tree open",
+      feature = "close_on_open",
       scope = "tree",
     },
     {

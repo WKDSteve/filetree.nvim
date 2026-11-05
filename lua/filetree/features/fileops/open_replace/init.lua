@@ -5,7 +5,7 @@
 ---   `O`                 Replace: `:edit` over the editor window. The previous
 ---                       buffer stays in the buffer list, it just is not on
 ---                       screen any more.
----   `<M-CR>`/`<C-CR>`   Swap: the previous buffer is closed as well, and the
+---   `<C-M-CR>`/`<C-CR>` Swap: the previous buffer is closed as well, and the
 ---                       new file takes over the slot it held in the bufferline.
 ---
 --- Swap is the one to reach for when the buffer list is a working set rather
@@ -36,7 +36,8 @@
 --- Config:
 ---   enabled          boolean
 ---   keymap           string?   Replace key (default "O").
----   keymap_swap      string?   Swap key (default "<M-CR>").
+---   keymap_swap      string?   Swap key (default "<C-M-CR>"; `<M-CR>` is the keep-open key of
+---                              `close_on_open`).
 ---   keymap_swap_alt  string?   Second swap key (default "<C-CR>").
 ---   close_tree       boolean   Close the tree after `keymap` (default true).
 ---   swap_close_tree  boolean   Close the tree after a swap (default false).
@@ -57,8 +58,9 @@ local DEFAULTS = {
   -- delivers is not ours to decide. Many terminals send plain <CR> for
   -- Ctrl+Enter, in which case <C-CR> simply never fires and the tree's own <CR>
   -- runs as always -- binding it costs nothing and wins wherever the terminal
-  -- (or GUI) does distinguish them. Alt+Enter travels further, so it is first.
-  keymap_swap = "<M-CR>",
+  -- (or GUI) does distinguish them. Ctrl+Alt+Enter is first: plain Alt+Enter is
+  -- the keep-open key of `close_on_open`.
+  keymap_swap = "<C-M-CR>",
   keymap_swap_alt = "<C-CR>",
   close_tree = true,
   swap_close_tree = false,
@@ -193,6 +195,16 @@ local function edit_in(win, path)
 end
 
 ---@internal
+---Tell `close_on_open` (when it is on) that the tree stays open for this open.
+---Called BEFORE the file is shown, because that is when `close_on_open` decides.
+---@param keep boolean
+local function hold_tree(keep)
+  if not keep then return end
+  local mod = require("filetree.features").require("close_on_open")
+  if mod and type(mod.hold) == "function" then mod.hold() end
+end
+
+---@internal
 ---@param close boolean
 local function maybe_close_tree(close)
   local adapter = _adapter
@@ -206,6 +218,8 @@ end
 function M.open_replace()
   local path = current_file_path()
   if not path then return end
+
+  hold_tree(_cfg.close_tree == false)
 
   -- No editor window yet: fall through and let the edit below create one.
   local win = editor_target()
@@ -235,6 +249,7 @@ function M.open_swap()
   end
 
   local old = vim.api.nvim_win_get_buf(win)
+  hold_tree(_cfg.swap_close_tree ~= true)
 
   -- Already the file in question: focus it and stop, rather than reload it and
   -- delete the buffer we just opened.

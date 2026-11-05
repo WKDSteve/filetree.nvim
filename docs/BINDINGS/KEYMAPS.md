@@ -109,8 +109,9 @@ at runtime with `:lua vim.print(require("filetree.bindings").live())` —
 | `gb` | open_variants | `keymap_badd` | Add current node to buffer list (no focus switch) |
 | `<S-CR>` | open_variants | `keymap_badd_alt` | On a directory: collapse it. Otherwise same as `gb` |
 | `O` | open_replace | `keymap` | Open current node over the editor window; the buffer that was there stays listed |
-| `<M-CR>` | open_replace | `keymap_swap` | Open current node in place of the focused buffer: closes it and takes its bufferline slot |
-| `<C-CR>` | open_replace | `keymap_swap_alt` | Same as `<M-CR>`, for terminals that deliver `<C-CR>` distinctly from `<CR>` |
+| `<M-CR>` | close_on_open | `keymap_keep` | Open current node like `<CR>` and keep the tree open (with `close_on_open`, `<CR>` closes it) |
+| `<C-M-CR>` | open_replace | `keymap_swap` | Open current node in place of the focused buffer: closes it and takes its bufferline slot |
+| `<C-CR>` | open_replace | `keymap_swap_alt` | Same as `<C-M-CR>`, for terminals that deliver `<C-CR>` distinctly from `<CR>` |
 | `<C-s>` | buffer_save | `keymap_adjacent` | Force-save the adjacent editor buffer |
 | `<M-s>` | buffer_save | `keymap_node` | Force-save buffer matching node under cursor |
 | `w` | window_size_cycler | `keymap` | Cycle tree width through presets (normal → large → small → …). With a count N (`3w`), jumps directly to preset N instead of stepping. |

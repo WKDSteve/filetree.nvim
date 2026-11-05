@@ -513,6 +513,65 @@ do
   os.remove(file)
 end
 
+-- ── tree_toggle.use_root_providers ────────────────────────────────────────────
+
+do
+  local roots = require("filetree.roots")
+  local case_dir = vim.fn.tempname()
+  vim.fn.mkdir(case_dir .. "/assets", "p")
+  local inside = case_dir .. "/assets/note.md"
+  vim.fn.writefile({ "x" }, inside)
+  local outside = vim.fn.tempname() .. ".lua"
+  vim.fn.writefile({ "x" }, outside)
+
+  local is_open = false
+  ---@type table[]
+  local calls = {}
+  local adapter = {
+    name = "neotree",
+    is_open = function()
+      return is_open
+    end,
+    toggle_at = function(position, opts)
+      calls[#calls + 1] = { position = position, opts = opts }
+      return true
+    end,
+  }
+  -- A casedesk-like provider: answers for files under `case_dir` only.
+  roots.register("spec.case", function(path)
+    if path:gsub("\\", "/"):find(case_dir:gsub("\\", "/"), 1, true) then return case_dir end
+    return nil
+  end)
+
+  tt.setup({ enabled = true }, adapter)
+  vim.cmd("edit " .. vim.fn.fnameescape(inside))
+  tt.toggle("left")
+  eq("inside a case: the provider's folder becomes the tree root", calls[1].opts.dir, case_dir)
+
+  vim.cmd("edit " .. vim.fn.fnameescape(outside))
+  tt.toggle("left")
+  eq("outside a case: no dir, the old root", calls[2].opts.dir, nil)
+
+  vim.cmd("edit " .. vim.fn.fnameescape(inside))
+  is_open = true
+  tt.toggle("left")
+  eq("a toggle that closes the tree passes no dir", calls[3].opts.dir, nil)
+  is_open = false
+
+  tt.setup({ enabled = true, use_root_providers = false }, adapter)
+  tt.toggle("left")
+  eq("use_root_providers = false: no dir even inside a case", calls[4].opts.dir, nil)
+
+  roots.unregister("spec.case")
+  tt.setup({ enabled = true }, adapter)
+  tt.toggle("left")
+  eq("no provider registered: no dir", calls[5].opts.dir, nil)
+
+  tt.teardown()
+  os.remove(outside)
+  vim.fn.delete(case_dir, "rf")
+end
+
 -- ── tree_toggle.collapse_on_toggle ────────────────────────────────────────────
 
 do

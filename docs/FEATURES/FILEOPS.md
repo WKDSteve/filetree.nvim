@@ -588,7 +588,7 @@ buffer already sitting there.
 `O` **replaces**: `:edit` over the editor window. The previous buffer
 stays in the buffer list, it just isn't on screen any more.
 
-`<M-CR>` (and `<C-CR>`) **swaps**: the previous buffer is closed as well,
+`<C-M-CR>` (and `<C-CR>`) **swaps**: the previous buffer is closed as well,
 and the new file takes over the slot it held in the bufferline. Reach for
 it when the buffer list is a working set rather than a history — opening
 five files to find the one you wanted otherwise leaves four behind to
@@ -613,12 +613,13 @@ configure for it — the list is either there or it isn't.
 Two keys for one action because which of them the terminal delivers
 isn't ours to decide: many terminals send plain `<CR>` for Ctrl+Enter, in
 which case `<C-CR>` never fires and the tree's own `<CR>` behaves as
-always. Alt+Enter travels further, so it's the primary.
+always. Ctrl+Alt+Enter is the primary because plain `<M-CR>` is the keep-open key of
+`close_on_open`. **Breaking change (2026-11-05):** the swap used to be `<M-CR>`.
 
 ```lua
 open_replace = {
   keymap          = "O",        -- replace; previous buffer stays listed
-  keymap_swap     = "<M-CR>",   -- swap; previous buffer closed
+  keymap_swap     = "<C-M-CR>", -- swap; previous buffer closed
   keymap_swap_alt = "<C-CR>",   -- same, where the terminal distinguishes it
   close_tree      = true,       -- close the tree after `keymap`
   swap_close_tree = false,      -- ... and after a swap
@@ -627,7 +628,7 @@ open_replace = {
 ```
 
 - **Module:** `lua/filetree/features/fileops/open_replace/`
-- **Keymaps:** `O`, `<M-CR>`, `<C-CR>`
+- **Keymaps:** `O`, `<C-M-CR>`, `<C-CR>`
 
 ## Open Variants
 

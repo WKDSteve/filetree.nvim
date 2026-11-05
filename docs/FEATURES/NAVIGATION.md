@@ -133,10 +133,42 @@ redraw. A toggle that closes the tree leaves its state alone. Uses the
 adapter's `collapse_all` (see [Collapse All](#collapse-all)); on netrw, oil
 and mini.files there is nothing to collapse and the toggle runs as before.
 
+**`use_root_providers`** (default **true**): when a key opens the tree and a
+root provider ([`filetree.roots`](../../lua/filetree/roots.lua)) names a folder
+for the current file, the tree is rooted there instead of at the cwd.
+casedesk.nvim registers the case folder, so inside a case the tree shows that
+case and not every sibling case. Without a provider, or outside a case, nothing
+changes; a toggle that closes the tree is untouched.
+
 - **Module:** [`features/nav/tree_toggle/init.lua`](../../lua/filetree/features/nav/tree_toggle/init.lua)
 - **Keymaps:** `<M-c>`, `<M-f>`, `<M-l>`, `<M-r>` (global; config fields `keymap_current`, `keymap_float`, `keymap_left`, `keymap_right`)
 - **Usercmds:** `:Filetree toggle [left|right|float|current]`
-- **Config:** `opts.features.tree_toggle.enabled` (default **false**), `reveal` (true), `reveal_force_cwd` (true), `collapse_on_toggle` (false)
+- **Config:** `opts.features.tree_toggle.enabled` (default **false**), `reveal` (true), `reveal_force_cwd` (true), `collapse_on_toggle` (false), `use_root_providers` (true)
+
+## Close On Open (opt-in)
+
+Opening a file from the tree (`<CR>`, double-click, `O`, the `open_variants`
+keys) leaves the tree on screen, so it has to be closed by hand after every
+open. With `close_on_open` the tree closes itself once the file is shown;
+`<M-CR>` (Alt+Enter) opens the node exactly like `<CR>` and keeps the tree
+open, for browsing several files in a row. Focus is in the editor window in
+both cases.
+
+An open from the tree is recognised without a backend hook: the tree window
+loses focus and, within 400 ms, a normal file buffer is shown in a non-floating
+window. A folder toggle never shows a buffer, previews live in a float, and a
+`<C-w>l` into the editor followed later by `:edit` is outside the time window,
+so none of them closes the tree. `open_replace` keeps the tree open for its own
+keys when its `close_tree` / `swap_close_tree` say so. Backends that open in
+their own window (oil, netrw, mini.files) are not affected.
+
+**Breaking change (2026-11-05):** `open_replace`'s swap key moved from `<M-CR>`
+to `<C-M-CR>` (`<C-CR>` stays as the second key); `<M-CR>` is the keep-open key
+here. Check that your terminal delivers `<C-M-CR>`.
+
+- **Module:** [`features/nav/close_on_open/init.lua`](../../lua/filetree/features/nav/close_on_open/init.lua)
+- **Keymaps:** `<M-CR>` (tree buffer; config field `keymap_keep`, `false` turns it off)
+- **Config:** `opts.features.close_on_open.enabled` (default **false**), `keymap_keep` (`"<M-CR>"`)
 
 ## Sort Cycle
 

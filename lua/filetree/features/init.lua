@@ -30,6 +30,7 @@ M.FEATURES = {
   buffer_cycle = { mod = "filetree.features.nav.buffer_cycle", category = "nav" },
   source_switcher = { mod = "filetree.features.nav.source_switcher", category = "nav" },
   tree_toggle = { mod = "filetree.features.nav.tree_toggle", category = "nav" },
+  close_on_open = { mod = "filetree.features.nav.close_on_open", category = "nav" },
   sort_cycle = { mod = "filetree.features.nav.sort_cycle", category = "nav" },
   collapse_all = { mod = "filetree.features.nav.collapse_all", category = "nav" },
   quickpick = { mod = "filetree.features.nav.quickpick", category = "nav" },

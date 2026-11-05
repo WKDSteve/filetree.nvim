@@ -22,6 +22,11 @@
 ---   collapse_on_toggle boolean  Opening the tree first collapses every folder
 ---                               except the chain to the current file
 ---                               (default false; see `collapse_for_open`).
+---   use_root_providers boolean  Opening the tree roots it at the folder a root
+---                               provider (`filetree.roots`) names for the current
+---                               file -- a case folder of casedesk.nvim, say --
+---                               instead of the cwd (default true; no provider or
+---                               no answer: nothing changes).
 
 local notify = require("filetree.util.notify").create("[filetree.tree_toggle]")
 local bind = require("filetree.util.bind")
@@ -38,6 +43,7 @@ local DEFAULTS = {
   keymap_left = "<M-l>",
   keymap_right = "<M-r>",
   collapse_on_toggle = false,
+  use_root_providers = true,
 }
 
 ---Option schema (see `filetree.config.schema`): exactly what
@@ -52,6 +58,7 @@ M.SCHEMA = {
   keymap_left = "keymap",
   keymap_right = "keymap",
   collapse_on_toggle = "boolean",
+  use_root_providers = "boolean",
 }
 
 ---@type FiletreeTreeToggleConfig
@@ -82,9 +89,26 @@ function M.toggle(position)
     reveal = reveal,
     file = reveal and file or nil,
     reveal_force_cwd = reveal and _cfg.reveal_force_cwd == true,
+    dir = M.provided_root(adapter, file),
   })
   if not ok then return false, "toggle failed" end
   return true, nil
+end
+
+---The root a registered provider (`filetree.roots`) names for `file`, when this
+---toggle is about to OPEN the tree: inside a case folder the tree then shows
+---that case and not every sibling case. nil closes nothing and changes nothing:
+---the option off, no file, an open tree (the toggle closes it), no provider, or
+---no answer for this file.
+---@param adapter FiletreeAdapter
+---@param file string  The current buffer's name ("" for none).
+---@return string|nil
+function M.provided_root(adapter, file)
+  if _cfg.use_root_providers ~= true or file == "" then return nil end
+  if type(adapter.is_open) == "function" and adapter.is_open() == true then return nil end
+  local roots = require("filetree.roots")
+  if not roots.any() then return nil end
+  return roots.resolve(file)
 end
 
 ---The `collapse_on_toggle` step, run before every toggle: when the toggle is
