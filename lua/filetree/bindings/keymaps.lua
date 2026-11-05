@@ -224,15 +224,9 @@ return {
       scope = "tree",
     },
     {
-      lhs = "<M-CR>",
-      desc = "Open and keep the tree open",
-      feature = "close_on_open",
-      scope = "tree",
-    },
-    {
       lhs = "<C-CR>",
-      desc = "Open (swap) — only in terminals that send <C-CR>",
-      feature = "open_replace",
+      desc = "Open and keep the tree open (close_on_open) — only in terminals that send <C-CR>",
+      feature = "close_on_open",
       scope = "tree",
     },
     { lhs = "sg", desc = "Open in vertical split", feature = "open_variants", scope = "tree" },

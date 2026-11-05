@@ -1,10 +1,10 @@
 ---@module 'filetree.features.nav.close_on_open'
----@brief Close the tree after a file was opened from it; `<M-CR>` opens and keeps it open.
+---@brief Close the tree after a file was opened from it; `<C-CR>` opens and keeps it open.
 ---@description
 --- Opening a file from the tree (`<CR>`, double-click, `O`, the `open_variants`
 --- keys) leaves the tree on screen on every backend, so it has to be closed by
 --- hand after each open. With this feature the tree closes itself once the file
---- is shown; `<M-CR>` (Alt+Enter) opens the node exactly like `<CR>` and leaves
+--- is shown; `<C-CR>` (Ctrl+Enter) opens the node exactly like `<CR>` and leaves
 --- the tree open, for browsing several files in a row. Focus is in the editor
 --- window in both cases (as with a plain `<CR>`).
 ---
@@ -20,17 +20,27 @@
 ---
 --- ### The keep-open key
 ---
---- `<M-CR>` sets a one-shot "keep" mark and feeds the tree's own `<CR>`, so the
+--- `<C-CR>` sets a one-shot "keep" mark and feeds the tree's own `<CR>`, so the
 --- backend does the opening; the mark makes the next open leave the tree alone.
---- It expires on its own (a folder never shows a buffer), so a `<M-CR>` on a
+--- It expires on its own (a folder never shows a buffer), so a `<C-CR>` on a
 --- folder does not keep the following `<CR>` from closing. `open_replace` sets
 --- the same mark for its keys when its own `close_tree` / `swap_close_tree`
 --- says the tree stays (`M.hold`).
 ---
+--- ### No flicker
+---
+--- The backend may still be scanning when the tree is closed (neo-tree's
+--- follow-the-file scan, a watcher refresh) and re-create its window when that
+--- scan finishes -- the tree would close and pop back. For `GUARD_MS` after our
+--- close a tree window that appears again WITHOUT a key press in between is
+--- closed again, in the same event-loop turn (before a redraw, so it is never
+--- drawn). The first key the user types ends the guard, so reopening the tree on
+--- purpose is never fought.
+---
 --- Config:
 ---   enabled      boolean  (default false)
 ---   keymap_keep  string?  Tree-buffer key: open and keep the tree open
----                         (default "<M-CR>"; false/"" turns the key off).
+---                         (default "<C-CR>"; false/"" turns the key off).
 
 local au = require("filetree.util.autocmd")
 local bind = require("filetree.util.bind")
@@ -41,7 +51,7 @@ local M = {}
 ---@type { enabled: boolean, keymap_keep: string|string[]|false }
 local DEFAULTS = {
   enabled = false,
-  keymap_keep = "<M-CR>",
+  keymap_keep = "<C-CR>",
 }
 
 ---Option schema (see `filetree.config.schema`): exactly what
@@ -60,8 +70,15 @@ local HOLD_MS = 400
 
 ---@type { enabled: boolean, keymap_keep: string|string[]|false }
 local _cfg = vim.deepcopy(DEFAULTS)
+---How long after our close an unprompted reappearance of the tree is undone.
+local GUARD_MS = 1500
+
 ---@type FiletreeAdapter|nil
 local _adapter = nil
+---Deadline (ms) of the reopen guard, nil when it is off.
+---@type integer|nil
+local _guard_until = nil
+local _guard_ns = vim.api.nvim_create_namespace("filetree_close_on_open")
 ---@type integer|nil
 local _augroup = nil
 ---The tree window that lost focus last: { win, at }.
@@ -93,11 +110,32 @@ local function close_tree(editor_win)
   if not adapter or type(adapter.close) ~= "function" then return end
   if type(adapter.is_open) == "function" and not adapter.is_open() then return end
   pcall(adapter.close)
+  _guard_until = now_ms() + GUARD_MS
+  vim.on_key(function(_, typed)
+    if typed ~= nil and typed ~= "" then
+      _guard_until = nil
+      vim.on_key(nil, _guard_ns)
+    end
+  end, _guard_ns)
   if vim.api.nvim_win_is_valid(editor_win) then pcall(vim.api.nvim_set_current_win, editor_win) end
 end
 
 ---@param ev table  BufWinEnter autocmd args
 local function on_buf_win_enter(ev)
+  if _guard_until and ftbuf.is_tree_buffer(ev.buf) then
+    if now_ms() > _guard_until then
+      _guard_until = nil
+    else
+      -- The backend re-created the tree on its own: undo it before the redraw.
+      vim.schedule(function()
+        if _guard_until and now_ms() <= _guard_until then
+          local adapter = _adapter
+          if adapter and type(adapter.close) == "function" then pcall(adapter.close) end
+        end
+      end)
+    end
+    return
+  end
   local left = _left
   if not left or now_ms() - left.at > OPEN_WINDOW_MS then return end
   -- The window we left must still be a tree: a mark left behind by a tree that
@@ -126,7 +164,7 @@ local function on_buf_win_enter(ev)
   end)
 end
 
----`<M-CR>`: let the tree's own `<CR>` open the node, keeping the tree open.
+---`<C-CR>`: let the tree's own `<CR>` open the node, keeping the tree open.
 local function keep_open()
   M.hold()
   vim.api.nvim_feedkeys(vim.keycode("<CR>"), "m", false)
@@ -174,6 +212,8 @@ function M.teardown()
   _adapter = nil
   _left = nil
   _holding = false
+  _guard_until = nil
+  pcall(vim.on_key, nil, _guard_ns)
   _hold_gen = _hold_gen + 1
 end
 

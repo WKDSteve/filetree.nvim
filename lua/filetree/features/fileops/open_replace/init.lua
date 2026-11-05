@@ -5,7 +5,7 @@
 ---   `O`                 Replace: `:edit` over the editor window. The previous
 ---                       buffer stays in the buffer list, it just is not on
 ---                       screen any more.
----   `<C-M-CR>`/`<C-CR>` Swap: the previous buffer is closed as well, and the
+---   `<C-M-CR>`          Swap: the previous buffer is closed as well, and the
 ---                       new file takes over the slot it held in the bufferline.
 ---
 --- Swap is the one to reach for when the buffer list is a working set rather
@@ -36,9 +36,10 @@
 --- Config:
 ---   enabled          boolean
 ---   keymap           string?   Replace key (default "O").
----   keymap_swap      string?   Swap key (default "<C-M-CR>"; `<M-CR>` is the keep-open key of
+---   keymap_swap      string?   Swap key (default "<C-M-CR>"; plain `<M-CR>` is
+---                              Alt+Enter, taken by terminals for fullscreen).
+---   keymap_swap_alt  string?   Second swap key (default false; `<C-CR>` is the keep-open key of
 ---                              `close_on_open`).
----   keymap_swap_alt  string?   Second swap key (default "<C-CR>").
 ---   close_tree       boolean   Close the tree after `keymap` (default true).
 ---   swap_close_tree  boolean   Close the tree after a swap (default false).
 ---   keep_position    boolean   Give the new buffer the replaced one's slot
@@ -61,7 +62,7 @@ local DEFAULTS = {
   -- (or GUI) does distinguish them. Ctrl+Alt+Enter is first: plain Alt+Enter is
   -- the keep-open key of `close_on_open`.
   keymap_swap = "<C-M-CR>",
-  keymap_swap_alt = "<C-CR>",
+  keymap_swap_alt = false,
   close_tree = true,
   swap_close_tree = false,
   keep_position = true,

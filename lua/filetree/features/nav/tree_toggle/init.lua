@@ -26,7 +26,8 @@
 ---                               provider (`filetree.roots`) names for the current
 ---                               file -- a case folder of casedesk.nvim, say --
 ---                               instead of the cwd (default true; no provider or
----                               no answer: nothing changes).
+---                               no answer: nothing changes). A pinned root
+---                               (cwd_mode `lock`/`manual`) wins over the provider.
 
 local notify = require("filetree.util.notify").create("[filetree.tree_toggle]")
 local bind = require("filetree.util.bind")
@@ -100,6 +101,10 @@ end
 ---that case and not every sibling case. nil closes nothing and changes nothing:
 ---the option off, no file, an open tree (the toggle closes it), no provider, or
 ---no answer for this file.
+---
+---A pinned root wins over a provider: with `cwd_mode` on `lock` or `manual` the
+---tree opens at the pinned directory (`:Filetree cwd follow` hands the decision
+---back to the provider).
 ---@param adapter FiletreeAdapter
 ---@param file string  The current buffer's name ("" for none).
 ---@return string|nil
@@ -108,6 +113,14 @@ function M.provided_root(adapter, file)
   if type(adapter.is_open) == "function" and adapter.is_open() == true then return nil end
   local roots = require("filetree.roots")
   if not roots.any() then return nil end
+  local mode = require("filetree.features").require("cwd_mode")
+  if mode and type(mode.mode) == "function" then
+    local m = mode.mode()
+    if m == "lock" or m == "manual" then
+      local pinned = type(mode.pinned) == "function" and mode.pinned() or nil
+      if pinned and pinned ~= "" then return pinned end
+    end
+  end
   return roots.resolve(file)
 end
 

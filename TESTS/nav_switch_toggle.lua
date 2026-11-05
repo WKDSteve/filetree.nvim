@@ -562,10 +562,26 @@ do
   tt.toggle("left")
   eq("use_root_providers = false: no dir even inside a case", calls[4].opts.dir, nil)
 
+  -- A pinned root wins over the provider; `follow` hands the decision back.
+  local normkey = require("lib.nvim.fs.normkey")
+  local pin = vim.fn.tempname()
+  vim.fn.mkdir(pin, "p")
+  local cm = require("filetree.features.nav.cwd_mode")
+  cm.setup({ enabled = true }, adapter)
+  tt.setup({ enabled = true }, adapter)
+  cm.set_mode("lock", pin)
+  tt.toggle("left")
+  eq("cwd lock inside a case: the pinned root wins", normkey(calls[5].opts.dir), normkey(pin))
+  cm.set_mode("follow")
+  tt.toggle("left")
+  eq("...and back to follow: the case folder wins again", calls[6].opts.dir, case_dir)
+  cm.teardown()
+  vim.fn.delete(pin, "rf")
+
   roots.unregister("spec.case")
   tt.setup({ enabled = true }, adapter)
   tt.toggle("left")
-  eq("no provider registered: no dir", calls[5].opts.dir, nil)
+  eq("no provider registered: no dir", calls[7].opts.dir, nil)
 
   tt.teardown()
   os.remove(outside)

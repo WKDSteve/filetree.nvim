@@ -221,7 +221,7 @@ require("filetree").setup({
       enabled = true,             -- default: on
       keymap          = "O",      -- open over the editor window; old buffer stays listed
       keymap_swap     = "<C-M-CR>", -- ... and close the old buffer, taking its slot
-      keymap_swap_alt = "<C-CR>", -- same, for terminals that send <C-CR> distinctly
+      keymap_swap_alt = false,    -- optional second swap key
       close_tree      = true,     -- close the tree after `keymap`
       swap_close_tree = false,    -- ... and after a swap
       keep_position   = true,     -- new buffer takes the replaced one's bufferline slot

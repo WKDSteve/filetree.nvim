@@ -1,7 +1,7 @@
 -- Test code: when something here comes back nil the file must crash and name it.
 ---@diagnostic disable: need-check-nil
 -- close_on_open_spec.lua -- `features.close_on_open`: the tree closes after a file
--- was opened from it, `<M-CR>` (hold) keeps it open, and open_replace's own keys
+-- was opened from it, `<C-CR>` (hold) keeps it open, and open_replace's own keys
 -- cooperate. The tree is a scratch buffer with the neo-tree filetype in a split;
 -- "open from the tree" is what really happens: leave the tree window, show a file.
 --
@@ -86,6 +86,9 @@ local stub = {
 --- Fresh layout: an editor window on file_a and the tree split to its right,
 --- focus in the tree.
 local function layout()
+  -- A fresh setup also drops the reopen guard a previous case left behind (no
+  -- key is typed in a headless run, which is what normally ends the guard).
+  coo.setup({ enabled = true }, stub)
   vim.cmd("silent! only")
   vim.cmd("silent! %bwipeout!")
   closes = 0
@@ -168,6 +171,22 @@ end)
 eq("a preview float is not an open", tree_alive(), true)
 pcall(vim.api.nvim_win_close, float, true)
 
+-- ── the tree coming back on its own ───────────────────────────────────────────
+
+layout()
+open_from_tree(file_b)
+eq("(setup) the tree is closed after the open", tree_alive(), false)
+-- A backend finishing a scan re-creates its window: no key was typed since.
+vim.cmd("botright vsplit")
+tree_win = vim.api.nvim_get_current_win()
+tree_buf = vim.api.nvim_create_buf(false, true)
+vim.bo[tree_buf].filetype = "neo-tree"
+vim.api.nvim_win_set_buf(tree_win, tree_buf)
+vim.wait(100, function()
+  return false
+end)
+eq("a tree that reappears by itself right after the close is closed again", tree_alive(), false)
+
 -- ── open_replace cooperation ──────────────────────────────────────────────────
 
 orepl.setup({ enabled = true, close_tree = false, swap_close_tree = false }, stub)
@@ -191,8 +210,8 @@ eq("...and swap_close_tree = true closes it", tree_alive(), false)
 
 -- ── off ───────────────────────────────────────────────────────────────────────
 
-coo.setup({ enabled = false }, stub)
 layout()
+coo.setup({ enabled = false }, stub)
 open_from_tree(file_b)
 eq("disabled: opening a file leaves the tree as it was", tree_alive(), true)
 

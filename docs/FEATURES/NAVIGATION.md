@@ -150,7 +150,7 @@ changes; a toggle that closes the tree is untouched.
 Opening a file from the tree (`<CR>`, double-click, `O`, the `open_variants`
 keys) leaves the tree on screen, so it has to be closed by hand after every
 open. With `close_on_open` the tree closes itself once the file is shown;
-`<M-CR>` (Alt+Enter) opens the node exactly like `<CR>` and keeps the tree
+`<C-CR>` (Ctrl+Enter) opens the node exactly like `<CR>` and keeps the tree
 open, for browsing several files in a row. Focus is in the editor window in
 both cases.
 
@@ -163,12 +163,13 @@ keys when its `close_tree` / `swap_close_tree` say so. Backends that open in
 their own window (oil, netrw, mini.files) are not affected.
 
 **Breaking change (2026-11-05):** `open_replace`'s swap key moved from `<M-CR>`
-to `<C-M-CR>` (`<C-CR>` stays as the second key); `<M-CR>` is the keep-open key
-here. Check that your terminal delivers `<C-M-CR>`.
+(Alt+Enter is fullscreen in many terminals) to `<C-M-CR>`; its second key
+`<C-CR>` is now the keep-open key here. Check that your terminal delivers
+`<C-CR>` and `<C-M-CR>` as distinct keys.
 
 - **Module:** [`features/nav/close_on_open/init.lua`](../../lua/filetree/features/nav/close_on_open/init.lua)
-- **Keymaps:** `<M-CR>` (tree buffer; config field `keymap_keep`, `false` turns it off)
-- **Config:** `opts.features.close_on_open.enabled` (default **false**), `keymap_keep` (`"<M-CR>"`)
+- **Keymaps:** `<C-CR>` (tree buffer; config field `keymap_keep`, `false` turns it off)
+- **Config:** `opts.features.close_on_open.enabled` (default **false**), `keymap_keep` (`"<C-CR>"`)
 
 ## Sort Cycle
 
