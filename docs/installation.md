@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| Neovim | **0.10+** — `vim.system()` and `vim.uv` are used unguarded, and lib.nvim itself requires 0.10 |
+| Neovim | **0.11+** — `vim.system()` and `vim.uv` are used unguarded, and lib.nvim itself requires 0.11 |
 | [lib.nvim](https://github.com/WKDSteve/lib.nvim) | required — the `:Filetree`/`:Ft` command layer is built on `usercmd.composer`, and `require("filetree")` cannot succeed without it. Every other use (notify, `find_root`, keymaps, autocmds, …) requires it the same way; none of them has a local fallback. The yes/no and choice dialogs ask through its `ui.dialog` (`dialog.yesno`: a lib.nvim from 2026-10-28 or newer; `:checkhealth filetree` says if it is older) |
 | [ui.nvim](https://github.com/WKDSteve/ui.nvim) | required — `ui.kit` backs the select dialogs, the dialogs' buttons (through lib.nvim's `ui.dialog`), trash undo, marks, filter, live search, the cheatsheet and more; `setup()` throws if it's missing, the same way a missing `lib.nvim` does. Only the context-menu feature's own `ui.contextmenu` submodule degrades to a single notify (not an error) on its own, and only when `ui.nvim` is installed but predates that submodule — see [Integrations](integrations.md) |
 | One of [neo-tree.nvim](https://github.com/nvim-neo-tree/neo-tree.nvim) or [nvim-tree.lua](https://github.com/nvim-tree/nvim-tree.lua) | required — netrw, oil.nvim and mini.files are supported as additional adapters, not as the primary one |

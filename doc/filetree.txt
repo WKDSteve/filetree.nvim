@@ -55,7 +55,7 @@ Supported backends: neo-tree.nvim, nvim-tree.lua
 ==============================================================================
 2. REQUIREMENTS                                        *filetree-requirements*
 
-  • Neovim >= 0.10 — vim.system() and vim.uv are used unguarded, and lib.nvim
+  • Neovim >= 0.11 — vim.system() and vim.uv are used unguarded, and lib.nvim
     itself requires 0.10.
   • lib.nvim (WKDSteve/lib.nvim) — shared helpers. REQUIRED for the
     :Filetree/:Ft command layer (lib.nvim.bindings.usercmd.composer); most other
