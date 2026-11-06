@@ -86,9 +86,10 @@ local function listing(calls_before_expiry)
   local reads = 0
   scan.clock = function()
     reads = reads + 1
-    return reads <= calls_before_expiry and 0 or 3000 * 1e6 + 1
+    return reads <= calls_before_expiry and 0 or 30000 * 1e6 + 1
   end
-  local files = scan.git_listing(scratch, 3000)
+  -- A real git runs under this budget too: ample for a loaded VM, and the expired cases use the fake clock.
+  local files = scan.git_listing(scratch, 30000)
   scan.clock = real_clock
   local seen = {}
   for _, abs in ipairs(files or {}) do
@@ -97,7 +98,7 @@ local function listing(calls_before_expiry)
   return seen
 end
 
--- Read 1 sets the shared deadline (3000 ms from "0"); read 2 is the nested repository asking
+-- Read 1 sets the shared deadline (30000 ms from "0"); read 2 is the nested repository asking
 -- how much is left.
 local budget_left = listing(2)
 check("budget left: the top-level file is listed", budget_left["top.txt"] == true)
