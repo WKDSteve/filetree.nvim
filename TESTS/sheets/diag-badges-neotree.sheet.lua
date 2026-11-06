@@ -7,8 +7,7 @@
 -- tree on its own (refresh, as a git status, a watcher event or an async scan does) and the focus
 -- leaves the tree and comes back (every focus change is checked). The badges stay. Finally the
 -- diagnostics are cleared and every badge is gone. neo-tree's own diagnostics and git status are
--- off, so every badge on screen is filetree's. The screen cursor is not compared: read right after
--- a redraw it can still show the previous window's position. Left for a person: a week of normal
+-- off, so every badge on screen is filetree's. Left for a person: a week of normal
 -- work with a real language server; flicker on collapse and handle_guard/EPERM are not covered.
 return {
   id = "filetree.diag-badges-neotree",
@@ -140,7 +139,7 @@ return {
       note = "the file nodes carry their own counts, src/ and the root the sum; clean.lua and README.md none",
     },
     { settle = 300 },
-    { screen = "badges", masks = { { row = 1 } }, cursor = false },
+    { screen = "badges", masks = { { row = 1 } } },
     {
       lua = [[_G.renders = 0
       _G.adapter.on_render(function() _G.renders = _G.renders + 1 end)
@@ -181,7 +180,7 @@ return {
       expect = [[_G.has({ proj = "E:2 W:2", src = "E:2 W:2", ["a.lua"] = "W:1", ["b.lua"] = "E:2 W:1" })]],
       note = "the badges are still there after the focus change",
     },
-    { screen = "badges-after-redraw", masks = { { row = 1 } }, cursor = false },
+    { screen = "badges-after-redraw", masks = { { row = 1 } } },
     { lua = "vim.diagnostic.reset(_G.diag_ns)", note = "clear every diagnostic" },
     {
       wait = [[select(2, _G.badges()) == 0]],
@@ -189,7 +188,7 @@ return {
       note = "every badge is gone with the diagnostics",
     },
     { settle = 300 },
-    { screen = "cleared", masks = { { row = 1 } }, cursor = false },
+    { screen = "cleared", masks = { { row = 1 } } },
   },
   judge = {
     "badges: the counts sit at the end of the src/, a.lua and b.lua rows, readable, in the error / warning colour, nothing else on those rows is shifted",
