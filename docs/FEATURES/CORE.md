@@ -76,7 +76,7 @@ directory a picker last changed into. The active mode is shown as a badge
 
 - **Tab:** true
 - **Module:** [`features/nav/cwd_mode/init.lua`](../../lua/filetree/features/nav/cwd_mode/init.lua) (`M.decide`, `M.set_mode`, `M.root`, `M.cycle`, `M.lock`, `M.lock_here`, `M.unlock`, `M.status`, `M.badge`, `M.component`, `M.notify_manual_root`)
-- **Config:** `opts.features.cwd_mode` — `enabled` (default `true`, but inert at `mode = "follow"`), `mode` (`follow|project|nearest|lock|manual|tree_leads`), `scope` (`global|tab|win`), `project.markers`/`nearest.markers`, `project.sticky`, `lock.enforce`, `lock.follow_manual_root`, `reveal_outside` (`skip|reveal`), `persist` (default `false`), `indicator.*` (`enabled`, `mode`, `style`: `text|short|numeric|icon`), `cycle` (default `{"follow","project","lock"}`)
+- **Config:** `opts.features.cwd_mode` — `enabled` (default `true`, but inert at `mode = "follow"`), `mode` (`follow|project|nearest|lock|manual|tree_leads`), `scope` (`global|tab|win`), `project.markers`/`nearest.markers`, `project.sticky`, `lock.enforce`, `lock.follow_manual_root`, `reveal_outside` (`skip|reveal`), `persist` (default `false`), `indicator.*` (`enabled`, `mode` (`auto|statusline|float`), `align` (`left|center|right`, default `left`), `show_path` (`never|lock|always`: append the pinned path, default `lock`), `style`: `text|short|numeric|icon`), `cycle` (default `{"follow","project","lock"}`)
 - **Keymaps:** `L` cycle mode, `gp` lock cwd to node under cursor — see [docs/BINDINGS/KEYMAPS.md](../BINDINGS/KEYMAPS.md)
 - **Usercmds:** `:Filetree cwd mode|scope|lock|here|unlock|toggle|status|forget` — see [docs/BINDINGS/USERCOMMANDS.md](../BINDINGS/USERCOMMANDS.md)
 

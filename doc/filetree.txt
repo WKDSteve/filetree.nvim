@@ -1372,10 +1372,10 @@ already sitting there.
 `O` replaces: `:edit` over the editor window. The previous buffer stays in the
 buffer list, it just isn't on screen any more.
 
-`<C-M-CR>` swaps: the previous buffer is closed as well, and the
-new file takes over the slot it held in the bufferline. Reach for it when the
-buffer list is a working set rather than a history — opening five files to
-find the one you wanted otherwise leaves four behind to close by hand.
+`<C-M-CR>` swaps: the previous buffer is closed as well, and the new file
+takes over the slot it held in the bufferline. Reach for it when the buffer
+list is a working set rather than a history — opening five files to find the
+one you wanted otherwise leaves four behind to close by hand.
 
 A swap refuses to run when the focused buffer has unsaved changes: it says so
 and does nothing at all, rather than opening the file and quietly leaving the
@@ -1393,7 +1393,10 @@ and there is nothing to configure for it — the list is either there or it
 isn't.
 
 `keymap_swap_alt` (default off) binds a second swap key, for terminals that do
-not deliver Ctrl+Alt+Enter; `<C-CR>` belongs to close_on_open.
+not deliver Ctrl+Alt+Enter. Breaking change (2026-11-05): the swap used to be
+`<M-CR>` (plain Alt+Enter is fullscreen in many terminals) with `<C-CR>` as
+the second key; `<C-CR>` now belongs to `close_on_open` (open and keep the
+tree open).
 
 >lua
 open_replace = {
@@ -1407,9 +1410,6 @@ open_replace = {
 <
 
 Keymaps: O <C-M-CR>
-
-Breaking change (2026-11-05): the swap key was <M-CR> (with <C-CR> as the
-second key); <C-CR> now belongs to close_on_open (open and keep the tree open).
 
 Module: lua/filetree/features/fileops/open_replace/
 
@@ -1785,6 +1785,37 @@ Keymaps: <C-n> <C-p>
 Module: lua/filetree/features/nav/buffer_cycle/
 
 ------------------------------------------------------------------------------
+CLOSE ON OPEN                                         *filetree-close-on-open*
+
+Opening a file from the tree (`<CR>`, double-click, `O`, the `open_variants`
+keys) leaves the tree on screen, so it has to be closed by hand after every
+open. With `close_on_open` the tree closes itself once the file is shown;
+`<C-CR>` (Ctrl+Enter) opens the node exactly like `<CR>` and keeps the tree
+open, for browsing several files in a row. Focus is in the editor window in
+both cases.
+
+An open from the tree is recognised without a backend hook: the tree window
+loses focus and, within 400 ms, a normal file buffer is shown in a
+non-floating window. A folder toggle never shows a buffer, previews live in a
+float, and a `<C-w>l` into the editor followed later by `:edit` is outside the
+time window, so none of them closes the tree. `open_replace` keeps the tree
+open for its own keys when its `close_tree` / `swap_close_tree` say so.
+Backends that open in their own window (oil, netrw, mini.files) are not
+affected.
+
+Breaking change (2026-11-05): `open_replace`'s swap key moved from `<M-CR>`
+(Alt+Enter is fullscreen in many terminals) to `<C-M-CR>`; its second key
+`<C-CR>` is now the keep-open key here. Check that your terminal delivers
+`<C-CR>` and `<C-M-CR>` as distinct keys.
+
+Keymaps: <C-CR>
+
+Config: `opts.features.close_on_open.enabled` (default false), `keymap_keep`
+        (`"<C-CR>"`)
+
+Module: lua/filetree/features/nav/close_on_open/
+
+------------------------------------------------------------------------------
 COLLAPSE ALL                                           *filetree-collapse-all*
 
 `W` in the tree folds every open folder back to the root in one redraw; the
@@ -1957,36 +1988,6 @@ Config: `opts.features.sidebar_guard.enabled` (default `true`),
 Module: lua/filetree/features/nav/sidebar_guard/
 
 ------------------------------------------------------------------------------
-CLOSE ON OPEN (opt-in)                                  *filetree-close-on-open*
-
-Opening a file from the tree (<CR>, double-click, `O`, the open_variants keys)
-leaves the tree on screen, so it has to be closed by hand after every open.
-With `close_on_open` the tree closes itself once the file is shown; <C-CR>
-opens the node exactly like <CR> and keeps the tree open, for browsing several
-files in a row. Focus is in the editor window in both cases.
-
-An open from the tree is recognised without a backend hook: the tree window
-loses focus and, within 400 ms, a normal file buffer is shown in a
-non-floating window. A folder toggle never shows a buffer, previews live in a
-float, and a <C-w>l into the editor followed later by `:edit` is outside the
-time window, so none of them closes the tree. `open_replace` keeps the tree
-open for its own keys when its `close_tree` / `swap_close_tree` say so.
-Backends that open in their own window (oil, netrw, mini.files) are not
-affected.
-
-Breaking change (2026-11-05): `open_replace`'s swap key moved from <M-CR>
-(Alt+Enter is fullscreen in many terminals) to <C-M-CR>; its second key <C-CR>
-is now the keep-open key here. Check that your terminal delivers <C-CR> and
-<C-M-CR> as distinct keys.
-
-Keymaps: <C-CR> (tree buffer; `keymap_keep`, false turns it off)
-
-Config: `opts.features.close_on_open.enabled` (default false), `keymap_keep`
-        ("<C-CR>")
-
-Module: lua/filetree/features/nav/close_on_open/
-
-------------------------------------------------------------------------------
 SORT CYCLE                                               *filetree-sort-cycle*
 
 `<leader>so` cycles the tree's sort criterion (name, size, modified),
@@ -2074,10 +2075,10 @@ runs as before.
 
 `use_root_providers` (default true): when a key opens the tree and a root
 provider (`filetree.roots`) names a folder for the current file, the tree is
-rooted there instead of at the cwd. casedesk.nvim registers the case folder, so
-inside a case the tree shows that case and not every sibling case. Without a
-provider, or outside a case, nothing changes; a toggle that closes the tree is
-untouched.
+rooted there instead of at the cwd. casedesk.nvim registers the case folder,
+so inside a case the tree shows that case and not every sibling case. Without
+a provider, or outside a case, nothing changes; a toggle that closes the tree
+is untouched.
 
 Keymaps: <M-c> <M-f> <M-l> <M-r>
 
