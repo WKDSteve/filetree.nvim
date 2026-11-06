@@ -42,7 +42,7 @@ function M.check()
 
   -- ── Neovim version ────────────────────────────────────────────────────────
   local version = vim.version()
-  if version.major == 0 and version.minor < 10 then
+  if version.major == 0 and version.minor < 11 then
     vim.health.error(
       "Neovim >= 0.11 is required (found " .. tostring(version) .. ")",
       { "Upgrade Neovim to 0.11+" }
