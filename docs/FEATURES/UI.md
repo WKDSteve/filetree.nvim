@@ -156,6 +156,21 @@ needing to know this feature exists.
 - **Module:** `lua/filetree/features/ui/broken_link_notify/`
 - **Config:** `opts.features.broken_link_notify` — `enabled` (default **true**)
 
+## Kit Slot
+
+A `lib.nvim.ui.kit` sidebar on the left and a tree on the left stand next to each other, each unaware of the
+other. This registers the tree at `lib.nvim.ui.kit.sidebar.register_foreign`, so the two agree on one slot:
+opening a kit sidebar where the tree is takes the tree off the screen and remembers it, closing that sidebar
+brings the tree back, and a tree opened by hand moves a kit sidebar in its slot out of the way the same way.
+
+**Backend-agnostic.** Everything goes through the adapter (`get_winid`, `close`, `open_cwd`, `get_position`), so
+it works the same for neo-tree, nvim-tree and the others. A tree that is not on a side (`float`, `current`) is
+not a sidebar and takes no slot.
+
+- **Module:** `lua/filetree/features/ui/kit_slot/`
+- **Config:** `opts.features.kit_slot` — `enabled` (default **true**; set `false` to let a sidebar and the tree
+  stand side by side), `name` (default `"filetree"`)
+
 ## Breadcrumbs
 
 Shows the path from the tree root down to the current node, so a deeply

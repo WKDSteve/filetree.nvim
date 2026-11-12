@@ -17,6 +17,7 @@ return {
     "^TESTS/menu%.lua$",
     "^TESTS/cwd_mode%.lua$",
     "^TESTS/sidebar_guard%.lua$",
+    "^TESTS/kit_slot%.lua$",
     "^TESTS/gaps%.lua$",
     "^TESTS/env_roots%.lua$",
     "^TESTS/who_locks%.lua$",

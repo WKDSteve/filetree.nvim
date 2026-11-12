@@ -91,6 +91,13 @@ return {
     no_name_guard = {
       enabled = true,
     },
+    -- The tree shares a sidebar slot with `lib.nvim.ui.kit` sidebars: opening one where
+    -- the tree is takes the tree off the screen and closing it brings the tree back.
+    -- See docs/FEATURES/UI.md#kit-slot.
+    kit_slot = {
+      enabled = true,
+      name = "filetree",
+    },
     -- Marks hand their paths to every consumer (copy path incl. `[e`, file lists,
     -- fileops, ...) in the order they were marked; "tree" = sorted by full
     -- path instead. See docs/FEATURES/INTEGRATIONS.md#marks.

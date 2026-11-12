@@ -108,6 +108,7 @@
 ---@field shell_run           FiletreeShellRunConfig?
 ---@field layout_guard        FiletreeLayoutGuardConfig?
 ---@field no_name_guard       FiletreeNoNameGuardConfig?
+---@field kit_slot             FiletreeKitSlotConfig?
 ---@field sidebar_guard       FiletreeSidebarGuardConfig?
 ---@field buffer_cycle        FiletreeBufferCycleConfig?
 ---@field cwd_sync            FiletreeCwdSyncConfig?
@@ -190,6 +191,14 @@
 ---                         (all tabs) that also catches a stray buffer sitting in some OTHER window
 ---                         that never itself refires BufWinEnter. Both always skip the tree's own
 ---                         window.
+
+-- ── kit_slot ──────────────────────────────────────────────────────────────────
+
+---@class FiletreeKitSlotConfig
+---@field enabled? boolean  Register the tree with `lib.nvim.ui.kit.sidebar.register_foreign` so a kit
+---                         sidebar and the tree agree on one slot (default true). Opt out when a
+---                         sidebar and the tree should stand side by side.
+---@field name?    string   The name the tree is registered under (default "filetree").
 
 -- ── cwd_sync ──────────────────────────────────────────────────────────────────
 

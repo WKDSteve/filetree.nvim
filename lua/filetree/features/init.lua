@@ -50,6 +50,7 @@ M.FEATURES = {
   opened_sync = { mod = "filetree.features.ui.opened_sync", category = "ui" },
   cheatsheet = { mod = "filetree.features.ui.cheatsheet", category = "ui" },
   context_menu = { mod = "filetree.features.ui.context_menu", category = "ui" },
+  kit_slot = { mod = "filetree.features.ui.kit_slot", category = "ui" },
 
   -- ── fileops: create / edit / move ──────────────────────────────────────────
   smart_create = { mod = "filetree.features.fileops.smart_create", category = "fileops" },
