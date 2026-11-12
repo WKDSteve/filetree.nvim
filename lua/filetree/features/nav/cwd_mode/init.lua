@@ -45,10 +45,9 @@ local path_util = require("filetree.util.path")
 local au = require("filetree.util.autocmd")
 
 local chdir = require("lib.nvim.fs.chdir")
-local dir_guard = require("lib.nvim.fs.dir_guard")
 local find_root = require("lib.nvim.fs.find_root")
-local is_subpath = require("lib.nvim.fs.is_subpath")
 local normkey = require("lib.nvim.fs.normkey")
+local root_policy = require("lib.nvim.fs.root_policy")
 local path_shorten = require("lib.nvim.fs.path_shorten")
 local ui_statusline = require("lib.nvim.ui.statusline")
 local store_project = require("lib.nvim.store.project")
@@ -132,19 +131,11 @@ M.SCHEMA = {
 ---@type FiletreeAdapter?
 local _adapter = nil
 
----@class FiletreeCwdModeState
----@field mode      FiletreeCwdModeName
----@field pinned    string?  Normalized directory the mode is holding, if any.
----@field guard     table?   lib.nvim.fs.dir_guard handle (lock + enforce only).
----@field prev_mode FiletreeCwdModeName  Mode to return to on `unlock`.
-
----@type FiletreeCwdModeState
-local S = {
-  mode = "follow",
-  pinned = nil,
-  guard = nil,
-  prev_mode = "follow",
-}
+---The state machine itself (modes, the pin, the lock's guard, `decide`) is `lib.nvim.fs.root_policy`; this file is
+---what stays filetree's: the roots-provider and finder chain, persistence, the badge and the commands. Built in
+---`new_policy()` so a config change (sticky, enforce, reveal_outside) gets a fresh one.
+---@type Lib.Fs.RootPolicy.Handle
+local P
 
 ---@type Lib.Fs.FindRoot?  VCS-marker walk, used by `project`
 local _finder = nil
@@ -172,7 +163,7 @@ local STORE_KEY = "filetree/cwd_mode"
 
 -- ── Helpers ───────────────────────────────────────────────────────────────────
 
----Canonical form for comparisons and storage. Everything kept in `S.pinned`
+---Canonical form for comparisons and storage. Everything kept in `P.pinned()`
 ---goes through here, so a Windows path that arrives as `E:\repos` compares
 ---equal to the `E:/repos` the same directory produces elsewhere.
 ---@param dir string?
@@ -221,16 +212,6 @@ local function root_of(file, mode)
   return canon(root)
 end
 
----True when `file` lives inside `root`.
----@param file string
----@param root string?
----@return boolean
----@internal
-local function inside(file, root)
-  if not root then return false end
-  return is_subpath(normkey(file), root)
-end
-
 -- ── Decision ──────────────────────────────────────────────────────────────────
 
 ---What should happen for `file`, per the active mode.
@@ -242,119 +223,47 @@ end
 ---@param file string  Absolute path of the buffer being entered.
 ---@return FiletreeCwdDecision?
 function M.decide(file)
-  if not _cfg.enabled or type(file) ~= "string" or file == "" then return nil end
-
-  local mode = S.mode
-
-  if mode == "follow" then return nil end
-
-  if mode == "manual" then
-    -- Explicit action only: no chdir, no re-root, no reveal.
-    return { root = S.pinned, chdir = false, reveal = false }
-  end
-
-  if mode == "lock" then
-    local root = S.pinned
-    if not root then
-      return nil -- nothing pinned yet: behave like follow rather than freeze
-    end
-    if inside(file, root) then
-      -- Re-asserting the same root is a no-op for cwd_sync when the cwd
-      -- already matches; it only matters after something moved it.
-      return { root = root, chdir = true, reveal = true }
-    end
-    -- The file is outside the lock. Re-rooting the tree at it would break the
-    -- very thing the lock promises, so the tree stays put; `reveal_outside`
-    -- decides whether the file is revealed at all.
-    return { root = root, chdir = true, reveal = _cfg.reveal_outside == "reveal" }
-  end
-
-  if mode == "tree_leads" then
-    -- Direction reversal: the tree root is the truth and the cwd follows it
-    -- (see notify_manual_root), so a buffer switch must move nothing at all.
-    -- Revealing a file that already lives under that root is free and useful;
-    -- anything outside it would have to re-root the tree to be shown, which is
-    -- precisely what this mode refuses.
-    local root = S.pinned
-    if not root then return nil end
-    return { root = root, chdir = false, reveal = inside(file, root) }
-  end
-
-  if mode == "project" or mode == "nearest" then
-    if inside(file, S.pinned) then return { root = S.pinned, chdir = true, reveal = true } end
-
-    local root = root_of(file, mode)
-    if root then
-      S.pinned = root
-      M.refresh_indicator()
-      return { root = root, chdir = true, reveal = true }
-    end
-
-    -- No detectable project/package for this file.
-    if _cfg.project.sticky and S.pinned then
-      -- Stay where we are: a scratch file in /tmp should not drag a project
-      -- session out of its root. The tree keeps showing the project.
-      return { root = S.pinned, chdir = true, reveal = _cfg.reveal_outside == "reveal" }
-    end
-
-    local parent = canon(dir_of(file))
-    S.pinned = parent
-    M.refresh_indicator()
-    return { root = parent, chdir = true, reveal = true }
-  end
-
-  return nil
+  if not _cfg.enabled then return nil end
+  return P.decide(file)
 end
 
 -- ── Enforcement ───────────────────────────────────────────────────────────────
 
+---A fresh policy for the current config. `find_root` is the provider/finder chain above; `seed` is where
+---`tree_leads` takes its root from (the tree, not the buffer); `on_change` is the badge.
+---@return Lib.Fs.RootPolicy.Handle
 ---@internal
-local function drop_guard()
-  if S.guard then
-    pcall(S.guard.release)
-    S.guard = nil
-  end
-end
-
----Install (or move) the dir_guard that keeps a lock honest.
----@internal
----@param root string
-local function install_guard(root)
-  if not _cfg.lock.enforce then
-    drop_guard()
-    local ok, err = chdir(root, { scope = _cfg.scope })
-    if not ok then notify.warn(err or ("could not change cwd to " .. root)) end
-    return
-  end
-
-  if S.guard and S.guard.is_held() then
-    local ok, err = S.guard.update(root)
-    if not ok then notify.warn(err or ("could not move the lock to " .. root)) end
-    return
-  end
-
-  local handle, err = dir_guard.hold(root, {
+local function new_policy()
+  return root_policy.new({
     scope = _cfg.scope,
+    sticky = _cfg.project.sticky,
+    enforce = _cfg.lock.enforce,
+    reveal_outside = _cfg.reveal_outside,
+    find_root = function(file, kind)
+      return root_of(file, kind)
+    end,
+    seed = function(mode)
+      if mode == "tree_leads" then
+        return _adapter and _adapter.get_root_path and _adapter.get_root_path() or nil
+      end
+      return nil
+    end,
     on_error = function(e)
       notify.warn("lock could not be restored: " .. e)
     end,
+    on_change = function()
+      M.refresh_indicator()
+    end,
   })
-  if not handle then
-    notify.error(err or ("could not lock the cwd to " .. root))
-    return
-  end
-  S.guard = handle
 end
+
+P = new_policy()
 
 ---Run `fn` without the lock guard fighting it (used by deliberate moves).
 ---@internal
 ---@param fn fun()
 local function unguarded(fn)
-  if S.guard and S.guard.is_held() then
-    S.guard.bypass(fn)
-  else
-    fn()
-  end
+  P.bypass(fn)
 end
 
 -- ── Persistence ───────────────────────────────────────────────────────────────
@@ -379,11 +288,11 @@ local function persist_save()
   if not s then return end
   pcall(s.save, STORE_KEY, {
     version = 1,
-    mode = S.mode,
+    mode = P.mode(),
     scope = _cfg.scope,
     -- Only a lock's pin is worth keeping: project mode derives its root from
     -- the buffer, follow and manual hold nothing that outlives the session.
-    pinned = (S.mode == "lock") and S.pinned or nil,
+    pinned = (P.mode() == "lock") and P.pinned() or nil,
   }, { path = _persist_path })
 end
 
@@ -435,24 +344,24 @@ end
 function M.root()
   -- Every mode that holds a root answers with it; `follow` holds none and
   -- `manual` deliberately does not claim authority over anything.
+  local mode, pinned = P.mode(), P.pinned()
   if
-    S.pinned
-    and (S.mode == "lock" or S.mode == "project" or S.mode == "nearest" or S.mode == "tree_leads")
+    pinned and (mode == "lock" or mode == "project" or mode == "nearest" or mode == "tree_leads")
   then
-    return S.pinned
+    return pinned
   end
   return canon(vim.fn.getcwd()) or vim.fn.getcwd()
 end
 
 ---@return FiletreeCwdModeName
 function M.mode()
-  return S.mode
+  return P.mode()
 end
 
 ---The pinned directory, or nil when the mode holds none.
 ---@return string?
 function M.pinned()
-  return S.pinned
+  return P.pinned()
 end
 
 ---Walk up from `path` to its root, using this feature's marker set.
@@ -469,7 +378,7 @@ end
 ---@return string?
 function M.resolve(path, mode)
   if not _cfg.enabled or type(path) ~= "string" or path == "" then return nil end
-  return root_of(path, mode or S.mode)
+  return root_of(path, mode or P.mode())
 end
 
 ---The directory scope every change goes through: "global", "tab" or "win".
@@ -499,15 +408,9 @@ function M.set_scope(scope)
 
   _cfg.scope = scope
 
-  -- A guard watches the scope it was created in, so it cannot simply be told
-  -- about the new one: drop it and re-hold, which also re-applies the pin.
-  if S.mode == "lock" and S.pinned then
-    drop_guard()
-    install_guard(S.pinned)
-  elseif S.pinned then
-    local ok, err = chdir(S.pinned, { scope = scope })
-    if not ok then notify.warn(err or ("could not change cwd to " .. S.pinned)) end
-  end
+  -- The policy re-anchors a held root in the new scope (a lock's guard is dropped and held again).
+  local ok, err = P.set_scope(scope)
+  if not ok then notify.warn(err or "could not move the root to the new scope") end
 
   persist_save()
   M.refresh_indicator()
@@ -556,44 +459,13 @@ function M.set_mode(mode, dir)
     return false
   end
 
-  if S.mode ~= mode then S.prev_mode = S.mode end
-
-  if mode == "lock" then
-    local target = canon(dir) or canon(M.root())
-    if not target then
-      notify.error("cannot lock: no usable directory")
-      return false
-    end
-    S.mode = "lock"
-    S.pinned = target
-    install_guard(target)
-  else
-    drop_guard()
-    S.mode = mode
-    if mode == "project" or mode == "nearest" then
-      -- Seed the pin from the current buffer so the badge and `root()` are
-      -- meaningful immediately, not only after the next buffer switch.
-      local file = vim.api.nvim_buf_get_name(0)
-      local from = (file ~= "" and file) or vim.fn.getcwd()
-      S.pinned = root_of(from, mode) or canon(dir_of(from))
-      if S.pinned then
-        local ok, err = chdir(S.pinned, { scope = _cfg.scope })
-        if not ok then notify.warn(err or ("could not change cwd to " .. S.pinned)) end
-      end
-    elseif mode == "tree_leads" then
-      -- Seed from the tree, not the buffer — the whole point of this mode is
-      -- that the tree is the authority. Without a tree to ask there is nothing
-      -- to follow, so the cwd stands in until the first re-root.
-      local from = _adapter and _adapter.get_root_path and _adapter.get_root_path()
-      S.pinned = canon(from) or canon(vim.fn.getcwd())
-      if S.pinned then
-        local ok, err = chdir(S.pinned, { scope = _cfg.scope })
-        if not ok then notify.warn(err or ("could not change cwd to " .. S.pinned)) end
-      end
-    elseif mode == "follow" then
-      S.pinned = nil
-    end
+  -- A lock pins `dir`, else wherever the active mode currently holds the root.
+  local ok, err = P.set_mode(mode, mode == "lock" and (dir or M.root()) or nil)
+  if not ok then
+    notify.error(err or ("could not switch to cwd mode " .. mode))
+    return false
   end
+  if err then notify.warn(err) end
 
   warn_if_cwd_sync_missing(mode)
   persist_save()
@@ -627,12 +499,20 @@ end
 ---Leave lock mode, returning to whatever mode preceded it.
 ---@return boolean ok
 function M.unlock()
-  if S.mode ~= "lock" then
+  if P.mode() ~= "lock" then
     notify.info("not locked")
     return false
   end
-  local back = S.prev_mode ~= "lock" and S.prev_mode or "follow"
-  return M.set_mode(back)
+  local ok, err = P.unlock()
+  if not ok then
+    notify.error(err or "could not unlock")
+    return false
+  end
+  if err then notify.warn(err) end
+  warn_if_cwd_sync_missing(P.mode())
+  persist_save()
+  M.refresh_indicator()
+  return true
 end
 
 ---Advance to the next mode in `cycle`.
@@ -642,27 +522,28 @@ function M.cycle()
   if type(list) ~= "table" or #list == 0 then return false end
   local index = 1
   for i, name in ipairs(list) do
-    if name == S.mode then
+    if name == P.mode() then
       index = i % #list + 1
       break
     end
   end
   local ok = M.set_mode(list[index])
-  if ok then notify.info("cwd mode: " .. S.mode) end
+  if ok then notify.info("cwd mode: " .. P.mode()) end
   return ok
 end
 
 ---Report the current policy.
 function M.status()
-  local label = _cfg.indicator.labels[S.mode]
+  local mode = P.mode()
+  local label = _cfg.indicator.labels[mode]
   local lines = {
-    ("mode:   %s%s"):format(S.mode, (label and label ~= "") and (" (" .. label .. ")") or ""),
+    ("mode:   %s%s"):format(mode, (label and label ~= "") and (" (" .. label .. ")") or ""),
     ("scope:  %s"):format(M.scope()),
     ("root:   %s"):format(M.root()),
     ("cwd:    %s"):format(vim.fn.getcwd()),
   }
-  if S.mode == "lock" then
-    lines[#lines + 1] = ("enforce: %s"):format(S.guard and S.guard.is_held() and "on" or "off")
+  if mode == "lock" then
+    lines[#lines + 1] = ("enforce: %s"):format(P.enforced() and "on" or "off")
     lines[#lines + 1] = ("outside: %s"):format(_cfg.reveal_outside)
   end
   notify.info(table.concat(lines, "\n"))
@@ -679,17 +560,18 @@ function M.notify_manual_root(dir)
   local target = canon(dir_of(dir))
   if not target then return end
 
-  if S.mode == "lock" then
+  local mode = P.mode()
+  if mode == "lock" then
     if not _cfg.lock.follow_manual_root then return end
-    S.pinned = target
-    install_guard(target)
+    local ok, err = P.repin(target)
+    if not ok then notify.warn(err or ("could not move the lock to " .. target)) end
     persist_save()
     M.refresh_indicator()
-  elseif S.mode ~= "follow" then
+  elseif mode ~= "follow" then
     -- project / nearest / manual / tree_leads: a deliberate re-root becomes the
     -- new root. For tree_leads this is not a concession but the whole contract
     -- — the tree leads, the cwd follows.
-    S.pinned = target
+    P.repin(target)
     unguarded(function()
       local ok, err = chdir(target, { scope = _cfg.scope })
       if not ok then notify.warn(err or ("could not change cwd to " .. target)) end
@@ -759,8 +641,8 @@ local function badge_text()
   local width = badge_width()
   if
     _cache_valid
-    and S.mode == _cache_mode
-    and S.pinned == _cache_pinned
+    and P.mode() == _cache_mode
+    and P.pinned() == _cache_pinned
     and width == _cache_width
   then
     return _cache_text, _cache_hl
@@ -768,24 +650,24 @@ local function badge_text()
 
   local cfg = _cfg.indicator
   local label_set = cfg[LABEL_SET_BY_STYLE[cfg.style]] or cfg.labels
-  local label = (label_set and label_set[S.mode]) or ""
+  local label = (label_set and label_set[P.mode()]) or ""
 
   local text, hl
   if label == "" then
     text, hl = "", nil
   else
     text = label
-    hl = cfg.hl[S.mode]
+    hl = cfg.hl[P.mode()]
     local show = cfg.show_path
-    if S.pinned and (show == "always" or (show == "lock" and S.mode == "lock")) then
+    if P.pinned() and (show == "always" or (show == "lock" and P.mode() == "lock")) then
       -- The tree width is the budget: a badge that wraps is worse than one
       -- that elides, and the trailing segments are the informative ones.
       local budget = width - #label - 3
-      if budget > 6 then text = label .. "  " .. path_shorten(S.pinned, budget) end
+      if budget > 6 then text = label .. "  " .. path_shorten(P.pinned(), budget) end
     end
   end
 
-  _cache_mode, _cache_pinned, _cache_width = S.mode, S.pinned, width
+  _cache_mode, _cache_pinned, _cache_width = P.mode(), P.pinned(), width
   _cache_text, _cache_hl = text, hl
   _cache_valid = true
   return text, hl
@@ -897,7 +779,7 @@ end
 ---@return { text: string, hl: string?, mode: FiletreeCwdModeName, root: string? }
 function M.badge()
   local text, hl = badge_text()
-  return { text = text, hl = hl, mode = S.mode, root = S.pinned }
+  return { text = text, hl = hl, mode = P.mode(), root = P.pinned() }
 end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
@@ -925,11 +807,9 @@ function M.setup(config, adapter)
     cache_chain = true,
   })
 
-  drop_guard()
+  P.release()
+  P = new_policy()
   detach_badge()
-  S.mode = "follow"
-  S.prev_mode = "follow"
-  S.pinned = nil
   _last_text = nil
   _last_hl = nil
   _cache_valid = false
@@ -990,15 +870,13 @@ function M.setup(config, adapter)
 end
 
 function M.teardown()
-  drop_guard()
+  P.release()
   detach_badge()
   _finder = nil
   _finder_nearest = nil
   _adapter = nil
   _persist_path = nil
-  S.mode = "follow"
-  S.prev_mode = "follow"
-  S.pinned = nil
+  P = root_policy.new()
   _cache_valid = false
   _cache_mode = nil
   _cache_pinned = nil
