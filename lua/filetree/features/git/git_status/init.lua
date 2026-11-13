@@ -16,6 +16,10 @@
 ---   !  ignored                    ·
 ---   C  conflict                   ✗
 ---
+--- On the own tree (`adapter = "native"`) nothing is written into the buffer: the status is handed to
+--- the tree as a decorator (`filetree.registry`), which draws it with the line and also shows on a
+--- folder the worst status below it.
+---
 --- Updates on: BufEnter (tree buffer), BufWritePost (any buffer),
 --- FocusGained, and gitsuite.nvim's `User GitsuiteBranchSwitched`/
 --- `GitsuiteConflictsResolved` events (optional, no dependency either way).
@@ -145,8 +149,36 @@ local _sign_map = {
   C = "conflict",
 }
 
+---The badges of the own tree's decorator: normalized path -> badge. Rebuilt from `_status_map`.
+---@type table<string, { text: string, hl: string, status: string }>
+local _badges = {}
+---Tells the own tree that `_badges` changed; set while the decorator is subscribed.
+---@type fun()|nil
+local _emit = nil
+---@type fun()|nil
+local _unregister = nil
+
+--- Worst first: what a folder shows when several states lie below it.
+local SEVERITY = { "conflict", "deleted", "modified", "renamed", "added", "untracked", "ignored" }
+
+local function rebuild_badges()
+  local norm = require("filetree.native.fs.list").norm
+  local out = {}
+  for abs, code in pairs(_status_map) do
+    local key = _sign_map[code]
+    local sign = key and _cfg.signs[key]
+    if sign then out[norm(abs)] = { text = sign.text, hl = sign.hl, status = key } end
+  end
+  _badges = out
+  if _emit then _emit() end
+end
+
 function M._render()
   if not _adapter then return end
+  if _adapter.name == "native" then
+    rebuild_badges()
+    return
+  end
   local bufnr = _adapter.get_bufnr and _adapter.get_bufnr() or -1
   if not bufnr or bufnr < 0 or not vim.api.nvim_buf_is_valid(bufnr) then return end
 
@@ -204,6 +236,7 @@ function M.clear()
     vim.api.nvim_buf_clear_namespace(bufnr, _ns, 0, -1)
   end
   _status_map = {}
+  if _adapter.name == "native" then rebuild_badges() end
 end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
@@ -233,6 +266,30 @@ function M.setup(config, adapter)
 
   if _render_debounce then _render_debounce.cancel() end
   _render_debounce = lib_debounce.new(M._render, 50)
+
+  if _unregister then _unregister() end
+  _unregister = nil
+  if adapter.name == "native" then
+    _unregister = require("filetree.registry").decorator({
+      name = "git",
+      slot = "badge",
+      priority = 50,
+      roll_up = "worst",
+      severity = SEVERITY,
+      get = function(path)
+        return _badges[path]
+      end,
+      all = function()
+        return _badges
+      end,
+      subscribe = function(emit)
+        _emit = emit
+        return function()
+          _emit = nil
+        end
+      end,
+    })
+  end
 
   if _augroup then au.del_group(_augroup) end
   _augroup = au.group("filetree_git_status", true)
@@ -281,6 +338,9 @@ end
 
 function M.teardown()
   M.clear()
+  if _unregister then _unregister() end
+  _unregister = nil
+  _badges = {}
   _adapter = nil
   if _pending_query then
     _pending_query.stop()

@@ -95,6 +95,7 @@ local set_up = pcall(filetree.setup, {
     tree_toggle = { enabled = true },
     auto_reveal = { enabled = true, debounce_ms = 10 },
     session = { enabled = false }, -- writes into the user's data directory
+    git_status = { enabled = true, debounce_ms = 10 },
   },
 })
 ok("setup with adapter = native", set_up)
@@ -218,24 +219,72 @@ ok("the mark is drawn again after a refresh", marks_in_tree() > before_marks)
 marks.clear_all()
 
 -- ── lsp_diagnostics: a file's diagnostics show on its line and on its folders ──
+-- On the own tree the feature is a decorator: nothing is written into the buffer, the badge is drawn
+-- with the line. What is drawn is read by recording the calls that place the (ephemeral) marks.
+local view_mod = require("filetree.native.view")
+local function right_of(path)
+  local line = adapter.get_node_line(path)
+  if not line then return nil end
+  local out = {}
+  local real = vim.api.nvim_buf_set_extmark
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.api.nvim_buf_set_extmark = function(_, _, _, _, opts)
+    for _, chunk in ipairs(opts.virt_text or {}) do
+      out[#out + 1] = vim.trim(chunk[1])
+    end
+    return 0
+  end
+  pcall(view_mod.decorate_line, adapter.get_bufnr(), line - 1, adapter.get_winid())
+  vim.api.nvim_buf_set_extmark = real
+  return table.concat(out, " ")
+end
+
 local diag_ns = vim.api.nvim_create_namespace("ft_feat_spec")
 local a_buf = vim.fn.bufadd(dir .. "/lua/mod/a.lua")
 vim.fn.bufload(a_buf)
-local before_diag = marks_in_tree()
+local marks_before_diag = marks_in_tree()
+eq("no diagnostics yet: nothing on the file", right_of(dir .. "/lua/mod/a.lua"), "")
 vim.diagnostic.set(diag_ns, a_buf, {
   { lnum = 0, col = 0, message = "boom", severity = vim.diagnostic.severity.ERROR },
+  { lnum = 0, col = 0, message = "hm", severity = vim.diagnostic.severity.WARN },
 })
 vim.wait(1500, function()
-  return marks_in_tree() > before_diag
+  return (right_of(dir .. "/lua/mod/a.lua") or "") ~= ""
 end)
-local with_diag = marks_in_tree()
-ok("diagnostics are drawn in the tree", with_diag > before_diag)
-ok("... on more than the file's own line (its folders too)", with_diag - before_diag >= 2)
+local on_file = right_of(dir .. "/lua/mod/a.lua")
+ok("diagnostics are drawn on the file: " .. tostring(on_file), on_file:find("1") ~= nil)
+eq("... the same counts on its folder", right_of(dir .. "/lua/mod"), on_file)
+eq("... and on the folder above", right_of(dir .. "/lua"), on_file)
+eq("... a sibling file stays clean", right_of(dir .. "/lua/mod/b.lua"), "")
+eq("nothing was written into the tree buffer for it", marks_in_tree(), marks_before_diag)
 vim.diagnostic.reset(diag_ns, a_buf)
 vim.wait(1500, function()
-  return marks_in_tree() <= before_diag
+  return right_of(dir .. "/lua/mod/a.lua") == ""
 end)
-eq("... and gone with the diagnostics", marks_in_tree() <= before_diag, true)
+eq(
+  "gone with the diagnostics",
+  { right_of(dir .. "/lua/mod/a.lua"), right_of(dir .. "/lua") },
+  { "", "" }
+)
+
+-- ── git_status: the state of a file on its line, the worst below on its folders ─
+if vim.fn.executable("git") == 1 then
+  vim.fn.system({ "git", "-C", dir, "init", "-q" })
+  vim.fn.system({ "git", "-C", dir, "add", "README.md" })
+  filetree.feature("git_status").refresh()
+  vim.wait(5000, function()
+    return (right_of(dir .. "/README.md") or "") ~= ""
+  end)
+  eq("an added file shows the sign for added", right_of(dir .. "/README.md"), "+")
+  eq("an untracked file shows the sign for untracked", right_of(dir .. "/lua/mod/a.lua"), "?")
+  eq("a folder shows the worst state below it", right_of(dir .. "/lua"), "?")
+  adapter.collapse_node({ path = dir .. "/lua" })
+  eq("... also when it is closed", right_of(dir .. "/lua"), "?")
+  adapter.expand_node({ path = dir .. "/lua" })
+  vim.fn.delete(dir .. "/.git", "rf")
+else
+  say("  n/a  git_status: no git on this machine")
+end
 
 -- ── collapse_all: W ────────────────────────────────────────────────────────────
 vim.api.nvim_set_current_win(win)

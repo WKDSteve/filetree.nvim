@@ -257,8 +257,58 @@ end
 ---another tab is never decorated by mistake. Omitted, the ambient lookup applies.
 ---@internal
 ---@param bufnr? integer
+---The badges of the own tree's decorator: normalized path (file or folder) -> badge.
+---@type table<string, { text: string, hl: string }>
+local _badges = {}
+---@type fun()|nil
+local _emit = nil
+---@type fun()|nil
+local _unregister = nil
+
+---What a set of counts is drawn as, after the `show_*` switches: text and highlight, or nil.
+---@param c DiagCounts
+---@return string|nil text
+---@return string|nil hl
+local function badge_of(c)
+  local filtered = {
+    error = _cfg.show_errors and c.error or 0,
+    warning = _cfg.show_warnings and c.warning or 0,
+    hint = _cfg.show_hints and c.hint or 0,
+    info = _cfg.show_info and c.info or 0,
+  }
+  if filtered.error + filtered.warning + filtered.hint + filtered.info == 0 then return nil, nil end
+  local format = type(_cfg.format) == "function" and _cfg.format or default_format
+  _labels = format == default_format and resolve_labels(_cfg.icons) or nil
+  local ok, text = pcall(format, filtered)
+  if ok and type(text) == "string" and text ~= "" then return text, sev_hl(filtered) end
+  if not ok and not _format_warned then
+    _format_warned = true
+    notify.warn("`format` raised an error, badges are not drawn: " .. tostring(text))
+  end
+  return nil, nil
+end
+
+---On the own tree: hand the counts to the tree as badges, files and folders alike (the folder sums
+---are this module's own, so the decorator asks for no roll-up).
+local function rebuild_badges()
+  local norm = require("filetree.native.fs.list").norm
+  local out = {}
+  for _, counts in ipairs({ _dir_counts, _counts }) do
+    for path, c in pairs(counts) do
+      local text, hl = badge_of(c)
+      if text then out[norm(path)] = { text = text, hl = hl } end
+    end
+  end
+  _badges = out
+  if _emit then _emit() end
+end
+
 function M._render(bufnr)
   if not _adapter then return end
+  if _adapter.name == "native" then
+    rebuild_badges()
+    return
+  end
   bufnr = bufnr or (_adapter.get_bufnr and _adapter.get_bufnr()) or -1
   if bufnr < 0 or not vim.api.nvim_buf_is_valid(bufnr) then return end
 
@@ -368,9 +418,32 @@ function M.setup(config, adapter)
   -- a full content replace does not carry extmarks over, so without this the
   -- badges appear on focus and are gone after the next redraw. Counts are not
   -- recomputed here -- only the decoration is redrawn.
+  if _unregister then _unregister() end
+  _unregister = nil
+  if adapter.name == "native" then
+    _unregister = require("filetree.registry").decorator({
+      name = "diagnostics",
+      slot = "badge",
+      priority = 60,
+      get = function(path)
+        return _badges[path]
+      end,
+      all = function()
+        return _badges
+      end,
+      subscribe = function(emit)
+        _emit = emit
+        return function()
+          _emit = nil
+        end
+      end,
+    })
+  end
+
   if _unsubscribe_render then pcall(_unsubscribe_render) end
   _unsubscribe_render = nil
-  if type(adapter.on_render) == "function" then
+  -- the own tree draws the decorator with every line: there is nothing to draw again after a render
+  if adapter.name ~= "native" and type(adapter.on_render) == "function" then
     _unsubscribe_render = adapter.on_render(M._render)
   end
 
@@ -383,6 +456,9 @@ end
 
 function M.teardown()
   bufevents.unregister("lsp_diagnostics")
+  if _unregister then _unregister() end
+  _unregister = nil
+  _badges = {}
   if _unsubscribe_render then
     pcall(_unsubscribe_render)
     _unsubscribe_render = nil
