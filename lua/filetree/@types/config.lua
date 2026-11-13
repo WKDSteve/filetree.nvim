@@ -52,6 +52,7 @@
 ---@field refs              FiletreeRefsConfig               Reference engine: what happens to markdown links and require()/import statements when a file is renamed, moved or deleted. See @types/refs.lua.
 ---@field progress_style    Lib.Progress.Style               Style for batch-operation progress indicators (trash, paste, ...): "auto" (default) | "notify" | "statusline" | "fidget" | "float" | "kit". Needs lib.nvim.progress -- a no-op without it.
 ---@field max_visible_nodes integer                          Cap on nodes collected from the rendered tree in one walk (default 5000). Only a guard against a pathologically large expanded directory; raise it if a picker or a marks operation ever reports being capped.
+---@field native            Filetree.Native.Opts?           The own tree (`adapter = "native"`): position, width, group_empty_dirs, icons. See docs/FEATURES/BACKENDS.md.
 ---@field sources           Filetree.Source[]?              Sources registered with this `setup()` (the own tree; see docs/api.md). A later `setup()` replaces them.
 ---@field decorators        Filetree.Decorator[]?           Decorators registered with this `setup()`.
 ---@field actions           Filetree.Action[]?              Actions registered with this `setup()`.
@@ -86,6 +87,7 @@
 ---@field refs              FiletreeRefsConfig?              Reference engine: what happens to markdown links and require()/import statements when a file is renamed, moved or deleted. See @types/refs.lua.
 ---@field progress_style    Lib.Progress.Style?              Style for batch-operation progress indicators (trash, paste, …): "auto" (default) | "notify" | "statusline" | "fidget" | "float" | "kit". Needs lib.nvim.progress — a no-op without it.
 ---@field max_visible_nodes integer?                        Cap on nodes collected from the rendered tree in one walk (default 5000). Only a guard against a pathologically large expanded directory; raise it if a picker or a marks operation ever reports being capped.
+---@field native            Filetree.Native.Opts?           The own tree (`adapter = "native"`): position, width, group_empty_dirs, icons. See docs/FEATURES/BACKENDS.md.
 ---@field sources           Filetree.Source[]?              Sources to register (the own tree; see docs/api.md). A later `setup()` replaces them.
 ---@field decorators        Filetree.Decorator[]?           Decorators to register.
 ---@field actions           Filetree.Action[]?              Actions to register.

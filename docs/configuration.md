@@ -58,6 +58,14 @@ require("filetree").setup({
   -- "Progress indicators" below.
   progress_style = "auto",  -- "auto" | "notify" | "statusline" | "fidget" | "float" | "kit"
 
+  -- The own tree, used with adapter = "native" (see docs/FEATURES/BACKENDS.md).
+  -- native = {
+  --   position = "left",        -- "left" | "right" | "float" | "current"
+  --   width = 32,
+  --   group_empty_dirs = true,  -- a/b/c/ as one line
+  --   icons = true,
+  -- },
+
   -- Sources, decorators and actions for the own tree (being built; see
   -- docs/api.md, "Sources, decorators and actions"). Lists of entries; a later
   -- setup() replaces what an earlier one listed. Same as calling

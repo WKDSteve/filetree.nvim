@@ -117,6 +117,7 @@ function M.setup(user_config)
   -- running, not the unresolvable name that was asked for and silently
   -- fell back from above.
   cfg.adapter = adapter.name
+  if adapter.name == "native" then require("filetree.native").setup(cfg.native) end
 
   -- Apply the global debug switch so notifier.debug(...) becomes visible.
   require("filetree.util.notify").set_debug(cfg.debug == true)
@@ -249,7 +250,14 @@ function M.setup(user_config)
           end
         end
       end)
-    end, { group = _adapter_keymaps_augroup, pattern = { "neo-tree", "NvimTree" } })
+    end, {
+      group = _adapter_keymaps_augroup,
+      -- the active backend's own filetypes: with a fixed neo-tree/nvim-tree pair the overrides
+      -- never reached another backend's tree buffer
+      pattern = (type(adapter.filetypes) == "table" and #adapter.filetypes > 0)
+          and adapter.filetypes
+        or { "neo-tree", "NvimTree" },
+    })
   end
 
   if adapter.name == "neotree" then

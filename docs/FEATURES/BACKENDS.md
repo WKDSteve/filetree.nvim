@@ -1,9 +1,116 @@
 # Backends
 
-The five tree plugins filetree.nvim can drive through the
+filetree.nvim's own tree and the five tree plugins it can drive through the
 [adapter abstraction](CORE.md#backend-adapter-abstraction), plus the
 plumbing that exists specifically because one of them (neo-tree, on
 Windows/WSL) leaks OS-level file handles.
+
+## native adapter (the own tree)
+
+`adapter = "native"`. filetree.nvim's own tree: no tree plugin behind it, only
+[lib.nvim](https://github.com/WKDSteve/lib.nvim). It is new and chosen by name;
+`adapter = "auto"` never picks it, so nothing changes for an existing setup.
+
+> **Status.** The tree, its window and the whole adapter contract are there, and
+> the features run on it. Still to come: a watcher of its own (the
+> `file_watcher` feature refreshes it meanwhile), search as an overlay, badges
+> drawn by the tree instead of by each feature, more sources than files, and the
+> action table. Until then treat it as a trial backend.
+
+```lua
+require("filetree").setup({
+  adapter = "native",
+  native = {
+    position = "left",        -- "left" | "right" | "float" | "current"
+    width = 32,               -- of a side tree
+    group_empty_dirs = true,  -- a chain of folders holding one folder each is one line: a/b/c/
+    icons = true,             -- file and folder icons; drawn only with a Nerd Font declared
+  },
+})
+```
+
+### How it is built
+
+```mermaid
+flowchart TB
+  subgraph LIB["lib.nvim"]
+    CORE["lib.nvim.tree<br/>nodes, folding, rows, splices"]
+  end
+  subgraph NATIVE["lua/filetree/native/"]
+    LIST["fs/list<br/>one read per folder,<br/>shared by all views"]
+    FILES["source/files<br/>sort, hide, merge a/b/c"]
+    VIEW["view<br/>buffer, cursor, window"]
+    LINE["render/line<br/>row to text + spans (pure)"]
+    KEYS["keys<br/>open, fold, close"]
+  end
+  ADAPTER["adapter/native<br/>FiletreeAdapter, every method"]
+  FEATURES["features<br/>trash, marks, preview, refs ..."]
+
+  LIST --> FILES --> CORE
+  CORE -->|"splices"| VIEW
+  LINE --> VIEW
+  KEYS --> VIEW
+  VIEW --> ADAPTER --> FEATURES
+```
+
+- **Lazy.** A folder is read when it is opened (`uv.fs_scandir`), once, into a
+  cache every tree view shares: a second tab with a tree reads nothing again.
+- **Changes are splices.** Opening a folder, a refresh, a new file: the model
+  answers which rows changed, and exactly those buffer lines are written. A
+  refresh keeps every open folder open.
+- **The cursor belongs to a node.** Lines that come and go above it move it
+  along; it does not jump.
+- **The buffer line is indent, expander, icon and name.** Highlights are drawn
+  for the lines on screen only (a decoration provider with ephemeral extmarks),
+  nothing is stored in the buffer for them.
+- **State per tab.** What is open, the cursor, the sort order and the position
+  belong to the view of a tab and survive closing its window.
+
+### The tree buffer
+
+Filetype `filetree`, `buftype=nofile`, unlisted; `b:filetree_view` (`"files"`)
+is set before the `FileType` event. A side tree's window has `winfixbuf`,
+`winfixwidth`, `foldmethod=manual` and `nofoldenable` (a tree has nothing to
+fold, and an inherited `foldexpr` would be evaluated once per line and change).
+The first line is the root folder; it is the label of the tree, not an entry
+(`get_visible_nodes` leaves it out, the cursor on it still answers the root as
+the current node).
+
+### Its own keys
+
+Only what makes a tree a tree; every other key is a feature's and is bound on
+the same buffer. A feature key on the same left-hand side wins.
+
+| Key | Action |
+| --- | --- |
+| `<CR>`, `o`, `<2-LeftMouse>` | open the file in an editor window, or open/close the folder |
+| `l` | open the folder or file; on an open folder, go to its first entry |
+| `h` | close the folder, or go to the parent folder |
+| `C` | close the folder the entry lies in |
+| `z` | close every folder |
+| `R` | read the folders again |
+| `H` | show or hide the names of the ignore list |
+| `q` | close the tree |
+
+A file never opens in the tree's own window: it goes to the window you came
+from, else to another editor window, else to a new one beside the tree. Closing
+the tree when it is the only window of its tab leaves the window with an empty
+buffer instead of closing the tab.
+
+### What it does that the other backends do not
+
+- `get_expanded_paths` / `expand_paths`: the first backend with them, so
+  [session](INTEGRATIONS.md) restores open folders here.
+- No handles to guard: `handle_guard`, `tree_integrity`, `sidebar_guard` and the
+  neo-tree patch of `watcher_quarantine` do not apply and stay inert.
+
+### Measured
+
+On the development machine (Windows 11, NVMe), by `TESTS/native_view_spec.lua`:
+opening a folder with 10 000 entries (read, sort, model, 10 000 buffer lines)
+about 50 ms; closing and opening it again from the model about 30 ms; drawing
+the highlights of 50 visible lines about 0.5 ms. The read is not sliced yet, so
+a folder of that size blocks for those 50 ms once.
 
 ## neo-tree adapter
 

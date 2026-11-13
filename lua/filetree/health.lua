@@ -142,12 +142,13 @@ function M.check()
     { name = "netrw", plugin = "netrw (builtin)" },
     { name = "oil", plugin = "oil.nvim" },
     { name = "mini_files", plugin = "mini.files" },
+    { name = "native", plugin = "the own tree (built in)" },
   }
 
   local found_any = false
   for _, a in ipairs(adapters) do
     -- netrw is always available as it is built in to Neovim
-    local avail = a.name == "netrw" or pcall(require, a.plugin)
+    local avail = a.name == "netrw" or a.name == "native" or pcall(require, a.plugin)
     if avail then
       vim.health.ok(a.name .. " (" .. a.plugin .. ") — available")
       found_any = true

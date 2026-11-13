@@ -38,6 +38,7 @@ local KNOWN_TOP = {
   progress_style = true,
   max_visible_nodes = true,
   env_roots = true,
+  native = true,
   sources = true,
   decorators = true,
   actions = true,
