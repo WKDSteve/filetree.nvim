@@ -197,7 +197,7 @@ On the development machine (Windows 11, NVMe), by `TESTS/native_view_spec.lua`:
 | close and open that folder again from the model | about 30 ms |
 | draw the highlights of 50 visible lines | under 1 ms |
 | a status change of one node with 10 000 lines in the tree (`native_perf_spec.lua`) | about 0.05 ms, no buffer write |
-| five new files a second in a folder of 2000 entries, 6 s | one read of it at a time, the loop held up 50 ms at most |
+| five new files a second in a folder of 2000 entries, 6 s | one read of it at a time, each answer (merge, write) 20 to 35 ms |
 
 A folder is read and written in one piece, not in slices: the 10 000 entries
 above block once for those 50 to 80 ms. Measured by hand for the decision: 50 000

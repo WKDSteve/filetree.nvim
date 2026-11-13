@@ -133,7 +133,8 @@ settle(300)
 
 -- count the reads of the busy folder that run at the same time
 local busy = dir .. "/busy"
-local in_flight, max_in_flight, reads = 0, 0, 0
+-- and how long the tree works on each answer (merge the entries, write the changed lines)
+local in_flight, max_in_flight, reads, work_max = 0, 0, 0, 0
 local real_list = list.list
 ---@diagnostic disable-next-line: duplicate-set-field
 list.list = function(path, cb, ...)
@@ -143,11 +144,16 @@ list.list = function(path, cb, ...)
   max_in_flight = math.max(max_in_flight, in_flight)
   return real_list(path, function(...)
     in_flight = in_flight - 1
-    return cb(...)
+    local t0 = vim.uv.hrtime()
+    local result = cb(...)
+    work_max = math.max(work_max, vim.uv.hrtime() - t0)
+    return result
   end, ...)
 end
 
--- how long the loop is held up: a 10 ms timer, and the longest gap between its calls
+-- how long the loop is held up, for the record: a 10 ms timer and the longest gap between its calls.
+-- Only printed: it also measures whatever else the machine runs (a parallel test run held it up
+-- 335 ms once), so the budget is checked on the tree's own work above.
 local gap_max, last = 0, vim.uv.hrtime()
 local ticker = vim.uv.new_timer()
 ticker:start(10, 10, function()
@@ -174,20 +180,18 @@ ticker:close()
 list.list = real_list
 
 say(
-  ("  info %d s, %d files written, %d reads of the folder, longest gap in the loop %.1f ms"):format(
+  ("  info %d s, %d files written, %d reads, longest answer %.1f ms, longest gap in the loop %.1f ms"):format(
     seconds,
     written,
     reads,
+    ms(work_max),
     ms(gap_max)
   )
 )
 eq("at most one read of the folder runs at a time", max_in_flight, 1)
 ok("not more reads than changes", reads <= written)
 ok("the tree followed: the last file shows", adapter.get_node_line(last_file) ~= nil)
-ok(
-  ("the loop was never held up for more than %d ms"):format(100 * SLACK),
-  ms(gap_max) < 100 * SLACK
-)
+ok(("no answer held the loop for more than %d ms"):format(50 * SLACK), ms(work_max) < 50 * SLACK)
 
 require("filetree.native").reset()
 vim.fn.delete(dir, "rf")
