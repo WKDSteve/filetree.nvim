@@ -191,6 +191,29 @@ settle(600)
 mkfile("after_release.lua")
 ok("... and the tree follows again", shown(dir .. "/after_release.lua"))
 
+-- the file operations go through filetree.util.release, which knows both kinds of handle
+local release = require("filetree.util.release")
+local held_now = watch.count()
+local released, resume_both = release.path(dir)
+eq("util.release counts the own tree's handles on the path", released, held_now)
+eq("... and closes them", watch.count(), 0)
+resume_both()
+resume_both()
+eq("resume opens them again, once however often it is called", watch.count(), held_now)
+local none = release.paths({ dir .. "/no_such_folder" })
+eq("a path no handle holds releases nothing", none, 0)
+
+mkfile("movable/inside.lua")
+ok("a folder to move shows", shown(dir .. "/movable"))
+local moved_ok, moved_err = require("filetree.util.mutate").move(dir .. "/movable", dir .. "/moved")
+eq(
+  "util.mutate moves a folder while the tree watches its parent",
+  { moved_ok, moved_err },
+  { true }
+)
+ok("... the tree shows the new name", shown(dir .. "/moved"))
+eq("... and the handles are back", watch.count(), held_now)
+
 vim.api.nvim_set_current_win(win)
 adapter.close()
 eq("closing the tree closes its handles", watch.count(), 0)

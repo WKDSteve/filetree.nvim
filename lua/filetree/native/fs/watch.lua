@@ -265,6 +265,7 @@ end
 ---deletes it (an open handle on a folder keeps Windows from letting go of it).
 ---@param path string  Normalized.
 ---@return fun() resume  Opens the handles again, with the references they had; folders that are gone stay closed.
+---@return integer count  Handles closed.
 function M.release(path)
   local mine = {}
   for dir, entry in pairs(watchers) do
@@ -276,7 +277,8 @@ function M.release(path)
   for _, dir in ipairs(mine) do
     close(dir)
   end
-  return function()
+  local count = #mine
+  local function resume()
     for _, dir in ipairs(mine) do
       local refs = released[dir]
       released[dir] = nil
@@ -290,6 +292,7 @@ function M.release(path)
     end
     mine = {}
   end
+  return resume, count
 end
 
 ---Close every handle and forget what was pending. Subscribers stay.

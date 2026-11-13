@@ -14,6 +14,34 @@ local function note(msg)
   vim.health.info("ℹ️ INFO " .. msg)
 end
 
+---The own tree (adapter "native"): its watcher handles and how a search lists files.
+---@private
+function M._native_lines()
+  local watch = require("filetree.native.fs.watch")
+  local opts = require("filetree.native").options()
+  if opts.watch == false then
+    note("native: watching the disk is off (native.watch = false); R reads the folders again")
+  else
+    local kind = watch.recursive and "one recursive handle per root"
+      or "one handle per folder read (no recursive handles on this system)"
+    vim.health.ok(("native: %d watcher handle(s) open, %s"):format(watch.count(), kind))
+    local stats = watch.stats
+    vim.health.info(
+      ("native: %d event(s) seen, %d folder report(s), %d storm(s) held back"):format(
+        stats.events,
+        stats.reports,
+        stats.quarantined
+      )
+    )
+  end
+  local tier, exe = require("filetree.native.fs.deep").tier()
+  if tier == "lua" then
+    note("native: search lists files with a Lua walk (install fd or ripgrep for faster searches)")
+  else
+    vim.health.ok(("native: search lists files with %s"):format(exe or tier))
+  end
+end
+
 ---Run all :checkhealth filetree checks (lib.nvim, Neovim version, config,
 ---adapters, active adapter, features, optional dependencies, composer routes).
 function M.check()
@@ -171,6 +199,7 @@ function M.check()
     if active then
       local is_open = active.is_open()
       vim.health.ok("Active adapter: " .. active.name .. (is_open and " (open)" or " (closed)"))
+      if active.name == "native" then M._native_lines() end
     else
       vim.health.info("No adapter resolved yet (call setup() first)")
     end

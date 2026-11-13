@@ -61,9 +61,9 @@ local refs = require("filetree.refs")
 -- otherwise while several files are sent to trash one after another).
 -- No-op (returns nil) when lib.nvim isn't installed.
 local progress = require("filetree.util.progress")
--- Release neo-tree's directory-watcher handle before the external trash command
--- touches the path. No-op unless the handle_guard feature installed the registry.
-local watch = require("lib.nvim.neotree.watch")
+-- Release the directory-watcher handles (neo-tree's and the own tree's) before
+-- the external trash command touches the path.
+local release = require("filetree.util.release")
 local bind = require("filetree.util.bind")
 local hooks = require("filetree.util.hooks")
 
@@ -280,8 +280,11 @@ local function do_trash_impl(path, cb, require_symlink)
     return
   end
 
+  local released, resume = release.path(path)
+
   local function spawn()
     trash_platform.send(path, function(result)
+      resume() -- the own tree watches again whatever is still there
       if not result.ok then
         notify.error("Trash failed: " .. (result.err or "unknown error"))
         cb(false)
@@ -296,14 +299,14 @@ local function do_trash_impl(path, cb, require_symlink)
 
   -- The trash command runs in a SEPARATE process (mv / trash / gio), so unlike
   -- cross.fs.mutate it has no on_retry retry seam. Instead, proactively release
-  -- any neo-tree watcher holding `path` (or a subpath) open before spawning it —
+  -- any watcher holding `path` (or a subpath) open (above) before spawning it —
   -- otherwise our own libuv handle causes the very Windows sharing violation the
   -- external move would then fail on. libuv closes handles asynchronously, so
   -- give the close a moment to land before the external process runs. This used
   -- to be a blocking `vim.wait(20)`; vim.defer_fn yields to the loop for the
   -- same 20ms without freezing the editor, which is what actually lets the
   -- close callbacks run.
-  if watch.release(path) > 0 then
+  if released > 0 then
     vim.defer_fn(spawn, 20)
   else
     spawn()
@@ -686,11 +689,14 @@ local function run_all_batched(paths, require_symlink)
     hooks.emit("before_delete", { path = p })
   end
 
+  local released, resume = release.paths(existing)
+
   local function spawn()
     if prog then
       prog:update({ text = string.format("%d item(s)", #existing), current = 0, total = #existing })
     end
     trash_platform.send_batch(existing, function(results)
+      resume() -- the own tree watches again whatever is still there
       local ok_count = 0
       for i, p in ipairs(existing) do
         local result = results[i]
@@ -714,11 +720,7 @@ local function run_all_batched(paths, require_symlink)
   -- Release every watcher up front rather than per path -- do_trash's own
   -- 20ms defer-before-spawn dance, just paid once for the whole batch
   -- instead of once per path.
-  local any_released = false
-  for _, p in ipairs(existing) do
-    if watch.release(p) > 0 then any_released = true end
-  end
-  if any_released then
+  if released > 0 then
     vim.defer_fn(spawn, 20)
   else
     spawn()

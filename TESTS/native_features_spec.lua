@@ -478,6 +478,8 @@ vim.health = real_health
 ok("the health check runs with the native adapter: " .. tostring(health_err), health_ok)
 local health_text = table.concat(reported, " | ")
 ok("... and names the adapter", health_text:find("native", 1, true) ~= nil)
+ok("... says how many watcher handles are open", health_text:find("watcher handle", 1, true) ~= nil)
+ok("... and how a search lists files", health_text:find("search lists files with", 1, true) ~= nil)
 eq(
   "... without an error line",
   vim.tbl_filter(function(line)
