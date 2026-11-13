@@ -26,6 +26,16 @@ local function check(name, ok, detail)
   end
 end
 
+---The directory on this editor's runtimepath that holds `lua/<mod>`.
+---@param mod string
+---@return string?
+local function rtp_dir(mod)
+  for _, dir in ipairs(vim.api.nvim_list_runtime_paths()) do
+    if vim.fn.isdirectory(dir .. "/lua/" .. mod) == 1 then return dir end
+  end
+  return nil
+end
+
 ---Run the plaintext case of run.lua with the given extra environment.
 ---@param env table<string, string>
 ---@return integer code, string out
@@ -37,6 +47,15 @@ local function run(env)
     { FILETREE_REFS_TEST_ONLY = "plaintext", FILETREE_REFS_TEST_WAIT_MS = "" },
     env
   )
+  -- run.lua finds lib.nvim and ui.nvim through these variables, a sibling
+  -- checkout or the lazy.nvim directory. testing.nvim puts them on THIS
+  -- editor's runtimepath, and in a checkout without siblings (the snapshot of
+  -- `scripts/test.sh ci commit`, under the temp dir) nothing else finds them:
+  -- the child died on `require("ui.kit")` within a second, and every full run
+  -- through `ci commit` reported this spec red ("run.lua exits 0 -- exit 1").
+  for var, mod in pairs({ FILETREE_LIB_NVIM = "lib", FILETREE_UI_NVIM = "ui" }) do
+    if (vim.env[var] or "") == "" and env[var] == nil then env[var] = rtp_dir(mod) end
+  end
   local res = vim
     .system({ vim.v.progpath, "--clean", "--headless", "-u", "NONE", "-l", run_lua }, {
       env = env,
