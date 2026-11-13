@@ -106,6 +106,7 @@ function M.reset()
   end
   views = {}
   list.invalidate()
+  require("filetree.native.decor").stop()
 end
 
 ---A window a file can be opened in: not the tree, not a float, not a special buffer.

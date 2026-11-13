@@ -35,6 +35,7 @@
 ---Badges on nodes. `get` runs while the tree draws: a table lookup, never I/O.
 ---@class Filetree.Decorator : Lib.Tree.Registry.Decorator
 ---@field get fun(key: string): Filetree.Badge|nil
+---@field all? fun(): table<string, Filetree.Badge> every key with a badge; needed for a folder to show what lies below it
 
 ---@class Filetree.ActionArg : Lib.Tree.Registry.ActionArg
 

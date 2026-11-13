@@ -19,6 +19,8 @@ local tree_core = require("lib.nvim.tree")
 local list = require("filetree.native.fs.list")
 local files = require("filetree.native.source.files")
 local render = require("filetree.native.render.line")
+local columns = require("filetree.native.render.columns")
+local decor = require("filetree.native.decor")
 
 local api = vim.api
 
@@ -47,6 +49,8 @@ local by_buf = {}
 local icon_groups = {}
 ---@type (fun(bufnr: integer?))[]
 local render_listeners = {}
+---@type fun()  Defined with the drawing code below.
+local redraw_views
 
 ---@class Filetree.View
 ---@field root string  Normalized root directory.
@@ -436,6 +440,7 @@ function View:open(position, focus)
     self:close()
   end
   define_highlights()
+  decor.start(redraw_views)
   local buf = self:_ensure_buf()
   local origin = api.nvim_get_current_win()
   local win
@@ -771,25 +776,79 @@ function M.on_render(fn)
   end
 end
 
----Draw the highlights of one buffer line as ephemeral extmarks. Called by the decoration provider for
----each line on screen; nothing is stored in the buffer.
+---Ask every open tree window to draw again (its lines are untouched, only what is drawn on them).
+redraw_views = function()
+  for _, view in pairs(by_buf) do
+    local win = view.win
+    if win and api.nvim_win_is_valid(win) and api.nvim_win_get_buf(win) == view.buf then
+      -- `valid = false` re-runs the decoration provider for the window without touching the buffer
+      if not pcall(api.nvim__redraw, { win = win, valid = false }) then vim.cmd("redraw") end
+    end
+  end
+end
+
+---Draw the highlights and badges of one buffer line as ephemeral extmarks. Called by the decoration
+---provider for each line on screen; nothing is stored in the buffer.
 ---@param buf integer
 ---@param lnum integer  0-based.
----@return integer spans  How many ranges were highlighted (0 for a buffer that is no tree).
-function M.decorate_line(buf, lnum)
+---@param win? integer  The window being drawn; its width decides which badges fit.
+---@return integer drawn  How many highlights and badges were placed (0 for a buffer that is no tree).
+function M.decorate_line(buf, lnum, win)
   local view = by_buf[buf]
   local row = view and view.tree:row(lnum + 1)
   if not view or not row then return 0 end
-  local spans = line_of_row(view, row).spans
-  for _, span in ipairs(spans) do
-    pcall(api.nvim_buf_set_extmark, buf, NS, lnum, span.col_start, {
-      end_col = span.col_end,
-      hl_group = span.hl,
-      ephemeral = true,
-      priority = 90,
-    })
+  local line = line_of_row(view, row)
+  local drawn = 0
+  local function mark(col, opts)
+    opts.ephemeral = true
+    -- counted whether or not it could be placed: outside a redraw an ephemeral mark is refused
+    drawn = drawn + 1
+    pcall(api.nvim_buf_set_extmark, buf, NS, lnum, col, opts)
   end
-  return #spans
+  for _, span in ipairs(line.spans) do
+    mark(span.col_start, { end_col = span.col_end, hl_group = span.hl, priority = 90 })
+  end
+
+  local node = row.node
+  if node.kind == "more" then return drawn end
+  local badges = decor.badges(node, row.expandable or node.kind == "dir")
+  if #badges == 0 then return drawn end
+
+  local right = {}
+  for _, badge in ipairs(badges) do
+    if badge.slot == "name" then
+      if badge.hl then
+        mark(line.name_start, { end_col = line.name_end, hl_group = badge.hl, priority = 95 })
+      end
+    elseif badge.slot == "line" then
+      if badge.hl then mark(0, { line_hl_group = badge.hl, priority = 80 }) end
+    elseif badge.text and badge.text ~= "" then
+      right[#right + 1] = {
+        text = badge.text,
+        hl = badge.hl,
+        width = vim.fn.strdisplaywidth(badge.text),
+        -- a sign has no column of its own in this tree: it stands with the badges
+        slot = badge.slot == "column" and "column" or "badge",
+        priority = badge.priority,
+      }
+    end
+  end
+  if #right == 0 then return drawn end
+
+  local width = 80
+  if win and api.nvim_win_is_valid(win) then
+    local info = vim.fn.getwininfo(win)[1]
+    width = api.nvim_win_get_width(win) - (info and info.textoff or 0)
+  end
+  local layout = columns.layout(width, vim.fn.strdisplaywidth(line.text), right)
+  if #layout.items > 0 then
+    local chunks = {}
+    for _, item in ipairs(layout.items) do
+      chunks[#chunks + 1] = { " " .. item.text, item.hl }
+    end
+    mark(0, { virt_text = chunks, virt_text_pos = "right_align", priority = 100 })
+  end
+  return drawn
 end
 
 -- Highlights for the lines on screen only: a status change or a scroll costs the visible rows, never
@@ -798,8 +857,8 @@ api.nvim_set_decoration_provider(NS, {
   on_win = function(_, _, buf)
     return by_buf[buf] ~= nil
   end,
-  on_line = function(_, _, buf, lnum)
-    M.decorate_line(buf, lnum)
+  on_line = function(_, win, buf, lnum)
+    M.decorate_line(buf, lnum, win)
   end,
 })
 

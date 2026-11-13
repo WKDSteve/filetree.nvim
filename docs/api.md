@@ -226,6 +226,7 @@ filetree.decorator({
   roll_up = "worst",   -- how it shows on a folder: "worst" | "count" | "any" | false
   severity = { "failed", "running", "passed" },
   get = function(path) return cache[path] end,               -- { text?, hl?, status?, count? }
+  all = function() return cache end,                          -- optional: every key that has a badge
   subscribe = function(emit) return store.on_change(emit) end, -- emit({ path, ... }) or emit() for all
 })
 ```
@@ -233,6 +234,17 @@ filetree.decorator({
 `get` runs while the tree draws. It has to be a table lookup: no file access,
 no process. Do the work when your data changes and tell the tree through
 `emit` which keys to redraw.
+
+With `roll_up` set, a folder shows what lies below it: the worst status (in the
+order of `severity`), how many paths carry a badge (`"count"`), or any of them.
+The tree adds that up from the keys you emit and from `all()`; give it `all()`
+and a folder that was never opened shows its badge too. A decorator that raises
+is switched off for the session and named once.
+
+Slots: `badge` and `column` stand right of the name (a column gives way first
+when the window is narrow, then the badge with the lowest `priority`), `name`
+lays `hl` over the name, `line` over the whole line. `sign` stands with the
+badges for now.
 
 ### An action
 
