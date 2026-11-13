@@ -90,9 +90,10 @@ View.__index = View
 
 ---@class Filetree.View.Search
 ---@field query string
----@field hits string[]
+---@field hits string[]  The hits that are shown, `max` at most.
+---@field total integer  Every hit, shown or not.
 ---@field dirs table<string, true>
----@field seen table<string, true>
+---@field known table<string, true>  The hits from what the view had read; the listing does not count them twice.
 ---@field max integer
 ---@field done boolean
 ---@field pending boolean
@@ -931,17 +932,15 @@ function View:_search_draw()
   local search = self._search
   if not search then return end
   search.pending = false
-  local shown = math.min(#search.hits, search.max)
-  local hits = shown < #search.hits and vim.list_slice(search.hits, 1, shown) or search.hits
   local state = search.done and "" or " …"
   local label = ("%s  /%s  %d%s"):format(
     list.basename(self.root),
     search.query,
-    #search.hits,
+    search.total,
     state
   )
   local root_node, expanded =
-    overlay_nodes(self.root, label, hits, search.dirs, #search.hits - shown)
+    overlay_nodes(self.root, label, search.hits, search.dirs, search.total - #search.hits)
   self.tree = tree_core.new({ root = root_node, expanded = expanded })
   -- the cursor goes to the first hit unless it is on one that is still there
   if not (self.cursor_id and self.tree:row_of(self.cursor_id) and self.cursor_id ~= self.root) then
@@ -982,31 +981,46 @@ function View:search(query)
   local search = {
     query = query,
     hits = {},
+    total = 0,
     dirs = {},
-    seen = {},
+    known = {},
     max = self._opts.search_max or 1000,
     done = false,
     pending = false,
   }
   self._search = search
-  local function add(paths, is_dir)
+  ---@param paths string[]
+  ---@param from_view boolean  Paths the view has read (else: from the listing).
+  local function add(paths, from_view)
     for _, path in ipairs(paths) do
-      if not search.seen[path] and matches(path:sub(prefix + 1)) then
-        search.seen[path] = true
-        search.hits[#search.hits + 1] = path
-        if is_dir and is_dir[path] then search.dirs[path] = true end
+      if (from_view or not search.known[path]) and matches(path:sub(prefix + 1)) then
+        if from_view then search.known[path] = true end
+        search.total = search.total + 1
+        -- beyond the limit a hit is only counted: a one-letter query in a huge tree keeps no list
+        if #search.hits < search.max then
+          search.hits[#search.hits + 1] = path
+          if from_view and self._known_dirs[path] then search.dirs[path] = true end
+        end
       end
     end
   end
-  local known = vim.tbl_keys(self._known)
+  -- what the view has read and is still in the tree (a file deleted since is no hit)
+  local known = {}
+  for path in pairs(self._known) do
+    if self.main:node(self:id_of(path)) then
+      known[#known + 1] = path
+    else
+      self._known[path], self._known_dirs[path] = nil, nil
+    end
+  end
   table.sort(known)
-  add(known, self._known_dirs)
+  add(known, true)
   search.cancel = require("filetree.native.fs.deep").files(self.root, function(batch)
     -- an answer of a search that was replaced or cleared never reaches the screen
     if gen ~= self._search_gen or self._search ~= search then return end
-    local before = #search.hits
-    add(batch)
-    if #search.hits ~= before and not search.pending then
+    local before = search.total
+    add(batch, false)
+    if search.total ~= before and not search.pending then
       search.pending = true
       vim.defer_fn(function()
         if gen == self._search_gen and self._search == search then self:_search_draw() end
@@ -1041,7 +1055,7 @@ end
 function View:searching()
   local search = self._search
   if not search then return nil end
-  return { query = search.query, hits = #search.hits, done = search.done }
+  return { query = search.query, hits = search.total, done = search.done }
 end
 
 -- ── whole-tree changes ─────────────────────────────────────────────────────────

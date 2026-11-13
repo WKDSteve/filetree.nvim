@@ -265,6 +265,18 @@ ok(
   adapter.get_node_line(dir .. "/src/added_meanwhile.lua") ~= nil
 )
 
+-- ── a file the tree had read and that is gone since is no hit ──────────────────
+ok("alpha.lua is a row of the tree", adapter.get_node_line(dir .. "/src/alpha.lua") ~= nil)
+vim.fn.delete(dir .. "/src/alpha.lua")
+vim.wait(4000, function()
+  return adapter.get_node_line(dir .. "/src/alpha.lua") == nil
+end, 25)
+view:search("alpha")
+eq("a deleted file the tree had read is no hit, not even at once", names(), {})
+finished(view)
+eq("... nor once the listing is done", names(), {})
+view:clear_search()
+
 -- ── more hits than are shown ───────────────────────────────────────────────────
 view._opts.search_max = 2
 view:search("lua")
@@ -274,6 +286,8 @@ ok(
   lines()[#lines()]:find("more hits") ~= nil
 )
 eq("... and shows as many as the limit", #adapter.get_visible_nodes("files"), 2)
+ok("... counts every hit: " .. view:searching().hits, view:searching().hits > 2)
+eq("... but keeps only the ones it shows", #view._search.hits, 2)
 view._opts.search_max = nil
 view:clear_search()
 
