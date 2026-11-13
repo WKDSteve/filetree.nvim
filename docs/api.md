@@ -241,10 +241,15 @@ The tree adds that up from the keys you emit and from `all()`; give it `all()`
 and a folder that was never opened shows its badge too. A decorator that raises
 is switched off for the session and named once.
 
+`get` is also handed the node of the row being drawn (`get(key, node)`), for what is a
+property of the node and not of its path, a symlink for one. It is not handed
+one when a key you emitted is read again.
+
 Slots: `badge` and `column` stand right of the name (a column gives way first
 when the window is narrow, then the badge with the lowest `priority`), `name`
-lays `hl` over the name, `line` over the whole line. `sign` stands with the
-badges for now.
+lays `hl` over the name, `line` over the whole line, `sign` puts `text` in the
+first cell of the line (the tree has no sign column; the root line shows none).
+Badges stand next to the name, columns at the far right.
 
 ### An action
 

@@ -102,8 +102,16 @@ local _unsubscribe_render = nil
 ---BufEnter/CursorMoved-driven calls below), the ambient lookup is already
 ---correct -- those only ever fire while actually on the tree's own tab.
 ---@param bufnr? integer
+---The own tree's decorators for a link and for its target; nil on every other backend.
+---@type Filetree.Decorate.Nodes|nil
+local _decor = nil
+---@type Filetree.Decorate.Nodes|nil
+local _decor_target = nil
+
 function M._render(bufnr)
   if not _adapter then return end
+  -- the own tree asks the decorators with every line it draws
+  if _decor then return end
   bufnr = bufnr or (_adapter.get_bufnr and _adapter.get_bufnr()) or -1
   if bufnr < 0 or not vim.api.nvim_buf_is_valid(bufnr) then return end
 
@@ -163,6 +171,29 @@ function M.setup(config, adapter)
   _cfg = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS), config or {})
   _adapter = adapter
   _ns = vim.api.nvim_create_namespace("filetree_link_marker")
+  local decorate = require("filetree.util.decorate")
+  if _decor then _decor.remove() end
+  if _decor_target then _decor_target.remove() end
+  _decor = decorate.by_node(
+    adapter,
+    { name = "link", slot = "badge", priority = 45 },
+    function(node)
+      local data = node.data
+      if not data or not data.is_link then return nil end
+      local sign = (data.link_broken and _cfg.signs.broken) or _cfg.signs.symlink
+      return sign and { text = sign.text, hl = sign.hl } or nil
+    end
+  )
+  _decor_target = decorate.by_node(
+    adapter,
+    { name = "link_target", slot = "column", priority = 5 },
+    function(node)
+      local data = node.data
+      if not _cfg.show_target or not data or not data.is_link then return nil end
+      if type(data.link_to) ~= "string" or data.link_to == "" then return nil end
+      return { text = "-> " .. data.link_to, hl = _cfg.target_hl }
+    end
+  )
 
   if _render_debounce then _render_debounce.cancel() end
   _render_debounce = lib_debounce.new(M._render, 50)
@@ -217,6 +248,9 @@ end
 
 function M.teardown()
   bufevents.unregister("link_marker")
+  if _decor then _decor.remove() end
+  if _decor_target then _decor_target.remove() end
+  _decor, _decor_target = nil, nil
   M.clear()
   _adapter = nil
   if _unsubscribe_render then

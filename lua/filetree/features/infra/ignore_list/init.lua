@@ -158,6 +158,10 @@ end
 local _ns = vim.api.nvim_create_namespace("filetree_ignore_list")
 
 ---@param names string[]
+---The own tree's decorator for ignored names; nil on every other backend.
+---@type Filetree.Decorate.Nodes|nil
+local _decor = nil
+
 local function apply_dim(names)
   local set = {}
   for _, n in ipairs(names) do
@@ -206,8 +210,23 @@ function M.setup(config, adapter)
   end
   _patterns = resolve_patterns()
 
+  if _decor then _decor.remove() end
+  _decor = nil
   if adapter.name == "neotree" then
     apply_neotree(names, adapter)
+  elseif adapter.name == "native" then
+    -- by the node's own name: the dimming below reads the name off the end of the line, where the
+    -- own tree writes `/` behind a folder
+    local ignored = M.predicate()
+    _decor = require("filetree.util.decorate").by_node(
+      adapter,
+      { name = "ignored", slot = "name", priority = 10 },
+      function(node)
+        local name = node.path and node.path:match("([^/]+)$") or nil
+        if name and ignored(name) then return { hl = "Comment" } end
+        return nil
+      end
+    )
   else
     apply_dim(names)
   end
@@ -237,6 +256,8 @@ end
 
 function M.teardown()
   bufevents.unregister("ignore_list")
+  if _decor then _decor.remove() end
+  _decor = nil
   _names_set = nil
   _patterns = {}
 end

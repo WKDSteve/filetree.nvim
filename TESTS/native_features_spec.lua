@@ -96,6 +96,8 @@ local set_up = pcall(filetree.setup, {
     auto_reveal = { enabled = true, debounce_ms = 10 },
     session = { enabled = false }, -- writes into the user's data directory
     git_status = { enabled = true, debounce_ms = 10 },
+    current_hl = { enabled = true, debounce_ms = 10 },
+    opened_sync = { enabled = true, debounce_ms = 10 },
     file_watcher = { enabled = true }, -- stands down on the own tree, which watches itself
   },
 })
@@ -202,9 +204,41 @@ eq(
 )
 eq("... without taking the focus", vim.api.nvim_get_current_win(), editor_win)
 
--- ── marks: `m` marks the node and draws on its line ────────────────────────────
+-- On the own tree the features draw nothing into the buffer: they hand their marks to the tree as
+-- decorators, and the tree places them with each line as ephemeral marks. Those cannot be read back,
+-- so the calls that place them are recorded.
+local view_mod = require("filetree.native.view")
+---@return { right: string, name_hl: string?, line_hl: string? }|nil
+local function drawn_on(path)
+  local line = adapter.get_node_line(path)
+  if not line then return nil end
+  local out = { right = {}, name_hl = nil, line_hl = nil }
+  local real = vim.api.nvim_buf_set_extmark
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.api.nvim_buf_set_extmark = function(_, _, _, _, opts)
+    for _, chunk in ipairs(opts.virt_text or {}) do
+      out.right[#out.right + 1] = vim.trim(chunk[1])
+    end
+    if opts.line_hl_group then
+      out.line_hl = opts.line_hl_group
+    elseif opts.priority == 95 then
+      out.name_hl = opts.hl_group
+    end
+    return 0
+  end
+  pcall(view_mod.decorate_line, adapter.get_bufnr(), line - 1, adapter.get_winid())
+  vim.api.nvim_buf_set_extmark = real
+  out.right = table.concat(out.right, " ")
+  return out
+end
+local function right_of(path)
+  local d = drawn_on(path)
+  return d and d.right or nil
+end
+
+-- ── marks: `m` marks the node; the tree draws the indicator in front of the line ─
 local marks = filetree.feature("marks")
-local before_marks = marks_in_tree()
+local buffer_marks = marks_in_tree()
 goto_path(dir .. "/lua/mod/a.lua")
 feed("m")
 settle()
@@ -213,33 +247,72 @@ eq(
   vim.tbl_map(list.norm, marks.get_marked()),
   { dir .. "/lua/mod/a.lua" }
 )
-ok("the mark is drawn in the tree", marks_in_tree() > before_marks)
+ok("the mark is drawn on its line", right_of(dir .. "/lua/mod/a.lua") ~= "")
+eq("... and on no other", right_of(dir .. "/lua/mod/b.lua"), "")
+eq("nothing was written into the buffer for it", marks_in_tree(), buffer_marks)
 adapter.refresh()
 settle()
-ok("the mark is drawn again after a refresh", marks_in_tree() > before_marks)
+ok("the mark is still drawn after a refresh", right_of(dir .. "/lua/mod/a.lua") ~= "")
 marks.clear_all()
+settle()
+eq("cleared marks are gone from the tree", right_of(dir .. "/lua/mod/a.lua"), "")
+
+-- ── copy_move: a staged node carries C or X ────────────────────────────────────
+goto_path(dir .. "/lua/mod/b.lua")
+feed("c")
+settle()
+eq("c stages the node for a copy: C on its line", right_of(dir .. "/lua/mod/b.lua"), "C")
+feed("X")
+settle()
+eq("X clears the clipboard and the mark", right_of(dir .. "/lua/mod/b.lua"), "")
+
+-- ── current_hl and opened_sync: the file in the editor window ──────────────────
+vim.api.nvim_set_current_win(editor_win)
+-- close_on_open takes a file opened within 400 ms of leaving the tree for one opened from it
+settle(500)
+vim.cmd("edit " .. vim.fn.fnameescape(dir .. "/lua/mod/b.lua"))
+vim.wait(1500, function()
+  local d = drawn_on(dir .. "/lua/mod/b.lua")
+  return d ~= nil and d.line_hl ~= nil and d.name_hl ~= nil
+end)
+local current = drawn_on(dir .. "/lua/mod/b.lua")
+eq(
+  "current_hl: the line of the current file is highlighted",
+  current.line_hl,
+  "FiletreeCurrentFile"
+)
+eq("opened_sync: the name of an open file is highlighted", current.name_hl, "FiletreeOpened")
+eq(
+  "current_hl: the folder of the current file too",
+  drawn_on(dir .. "/lua/mod").line_hl,
+  "FiletreeCurrentParent"
+)
+eq(
+  "a file that is not open has neither",
+  { drawn_on(dir .. "/docs").line_hl, drawn_on(dir .. "/README.md").line_hl },
+  {}
+)
+vim.api.nvim_buf_set_lines(0, 0, 0, false, { "-- unsaved" })
+vim.wait(1500, function()
+  return right_of(dir .. "/lua/mod/b.lua") == "[+]"
+end)
+eq("opened_sync: an unsaved buffer shows [+]", right_of(dir .. "/lua/mod/b.lua"), "[+]")
+vim.cmd("silent write")
+vim.wait(1500, function()
+  return right_of(dir .. "/lua/mod/b.lua") == ""
+end)
+eq("... gone once it is written", right_of(dir .. "/lua/mod/b.lua"), "")
+
+-- ── ignore_list: an ignored name is dimmed, a folder too ───────────────────────
+vim.fn.mkdir(dir .. "/node_modules", "p")
+vim.wait(3000, function()
+  return adapter.get_node_line(dir .. "/node_modules") ~= nil
+end)
+eq("ignore_list dims an ignored folder", drawn_on(dir .. "/node_modules").name_hl, "Comment")
+ok("... and leaves the others alone", drawn_on(dir .. "/docs").name_hl ~= "Comment")
+vim.fn.delete(dir .. "/node_modules", "d")
 
 -- ── lsp_diagnostics: a file's diagnostics show on its line and on its folders ──
--- On the own tree the feature is a decorator: nothing is written into the buffer, the badge is drawn
--- with the line. What is drawn is read by recording the calls that place the (ephemeral) marks.
-local view_mod = require("filetree.native.view")
-local function right_of(path)
-  local line = adapter.get_node_line(path)
-  if not line then return nil end
-  local out = {}
-  local real = vim.api.nvim_buf_set_extmark
-  ---@diagnostic disable-next-line: duplicate-set-field
-  vim.api.nvim_buf_set_extmark = function(_, _, _, _, opts)
-    for _, chunk in ipairs(opts.virt_text or {}) do
-      out[#out + 1] = vim.trim(chunk[1])
-    end
-    return 0
-  end
-  pcall(view_mod.decorate_line, adapter.get_bufnr(), line - 1, adapter.get_winid())
-  vim.api.nvim_buf_set_extmark = real
-  return table.concat(out, " ")
-end
-
 local diag_ns = vim.api.nvim_create_namespace("ft_feat_spec")
 local a_buf = vim.fn.bufadd(dir .. "/lua/mod/a.lua")
 vim.fn.bufload(a_buf)
@@ -270,6 +343,10 @@ eq(
 
 -- ── git_status: the state of a file on its line, the worst below on its folders ─
 if vim.fn.executable("git") == 1 then
+  -- git_status asks for the root of the current buffer: a file of the project's top folder
+  vim.api.nvim_set_current_win(editor_win)
+  settle(500)
+  vim.cmd("edit " .. vim.fn.fnameescape(dir .. "/README.md"))
   vim.fn.system({ "git", "-C", dir, "init", "-q" })
   vim.fn.system({ "git", "-C", dir, "add", "README.md" })
   filetree.feature("git_status").refresh()
@@ -361,6 +438,27 @@ eq(
   "an editor buffer is not",
   require("filetree.util.buffer").is_tree_buffer(vim.api.nvim_win_get_buf(editor_win)),
   false
+)
+
+-- ── size_info (off by default): a second setup() switches it on ────────────────
+filetree.setup({
+  adapter = "native",
+  deps_popup = false,
+  features = {
+    tree_toggle = { enabled = true },
+    session = { enabled = false },
+    size_info = { enabled = true },
+  },
+})
+adapter = filetree.adapter()
+if not adapter.is_open() then adapter.toggle_at("left") end
+settle()
+vim.wait(1500, function()
+  return (right_of(dir .. "/README.md") or "") ~= ""
+end)
+ok(
+  "size_info: the size shows once it was read: " .. tostring(right_of(dir .. "/README.md")),
+  right_of(dir .. "/README.md"):match("%d") ~= nil
 )
 
 -- ── health ─────────────────────────────────────────────────────────────────────

@@ -191,8 +191,37 @@ end
 
 -- ── Rendering ─────────────────────────────────────────────────────────────────
 
+---The own tree's decorator for sizes; nil on every other backend.
+---@type Filetree.Decorate.Nodes|nil
+local _decor = nil
+---Paths the tree asked for whose size is not known yet; filled outside the drawing.
+---@type table<string, "file"|"directory">
+local _wanted = {}
+local _filling = false
+
+---Read the sizes the tree asked for and tell it. Never called while a line is drawn.
+local function fill_wanted()
+  _filling = false
+  local wanted = _wanted
+  _wanted = {}
+  local known = {}
+  for path, kind in pairs(wanted) do
+    if kind == "file" then
+      if get_file_size(path) then known[#known + 1] = path end
+    elseif _cfg.dir_async then
+      query_dir_size(path, function() end)
+    end
+  end
+  if _decor and #known > 0 then _decor.changed(known) end
+end
+
 function M._render()
   if not _adapter then return end
+  if _decor then
+    -- a size that arrived (a folder's, asynchronously): the tree asks again with the next redraw
+    _decor.changed()
+    return
+  end
   local bufnr = _adapter.get_bufnr and _adapter.get_bufnr() or -1
   if bufnr < 0 or not vim.api.nvim_buf_is_valid(bufnr) then return end
 
@@ -246,6 +275,24 @@ function M.setup(config, adapter)
   _cfg = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS), config)
   _adapter = adapter
   _ns = vim.api.nvim_create_namespace("filetree_size_info")
+  if _decor then _decor.remove() end
+  _decor = require("filetree.util.decorate").by_node(
+    adapter,
+    { name = "size", slot = "column", priority = 15 },
+    function(node, path)
+      local is_dir = node.kind == "dir"
+      if (is_dir and not _cfg.show_dirs) or (not is_dir and not _cfg.show_files) then return nil end
+      local text = cache_get(path, is_dir and DIR_CACHE_TTL or FILE_CACHE_TTL)
+      if text then return { text = text, hl = _cfg.hl_group } end
+      -- not known yet: no stat while a line is drawn, it is read right after this redraw
+      _wanted[path] = is_dir and "directory" or "file"
+      if not _filling then
+        _filling = true
+        vim.schedule(fill_wanted)
+      end
+      return nil
+    end
+  )
 
   if _augroup then au.del_group(_augroup) end
   _augroup = au.group("filetree_size_info", true)
@@ -275,6 +322,9 @@ end
 
 function M.teardown()
   bufevents.unregister("size_info")
+  if _decor then _decor.remove() end
+  _decor = nil
+  _wanted = {}
   if _adapter then
     local bufnr = _adapter.get_bufnr and _adapter.get_bufnr() or -1
     if bufnr >= 0 and vim.api.nvim_buf_is_valid(bufnr) then

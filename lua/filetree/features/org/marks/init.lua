@@ -151,8 +151,20 @@ end
 ---driven caller of `redraw()` elsewhere in this file), the ambient lookup is
 ---already correct -- those only ever run while actually on the tree's own tab.
 ---@param bufnr? integer
+---The own tree's decorator for the marks; nil on every other backend.
+---@type Filetree.Decorate.Paths|nil
+local _decor = nil
+
 local function redraw(bufnr)
   if not _adapter then return end
+  if _decor then
+    local map = {}
+    for path in pairs(_marks) do
+      map[path] = { text = _cfg.indicator, hl = _cfg.hl_group }
+    end
+    _decor.set(map)
+    return
+  end
   if not bufnr then
     local is_open, ambient_bufnr = _adapter.is_open()
     if not is_open then return end
@@ -462,6 +474,11 @@ function M.setup(config, adapter)
   if not config.enabled then return end
   _cfg = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS), config)
   _adapter = adapter
+  if _decor then _decor.remove() end
+  _decor = require("filetree.util.decorate").by_path(
+    adapter,
+    { name = "marks", slot = "sign", priority = 100 }
+  )
 
   -- Cancel any handle from a previous setup() before replacing it -- same
   -- guard every other lib.nvim.debounce owner in this codebase takes (see
@@ -602,6 +619,8 @@ end
 
 function M.teardown()
   bufevents.unregister("marks")
+  if _decor then _decor.remove() end
+  _decor = nil
   if _unsubscribe_render then
     _unsubscribe_render()
     _unsubscribe_render = nil

@@ -143,9 +143,22 @@ local function get_targets()
   return node and { node.path } or {}
 end
 
+---The own tree's decorator for the staged clipboard; nil on every other backend.
+---@type Filetree.Decorate.Paths|nil
+local _decor = nil
+
 ---@internal
 local function render_clipboard()
   if not _adapter then return end
+  if _decor then
+    local map = {}
+    for _, e in ipairs(_clipboard) do
+      map[e.path] = e.op == "copy" and { text = "C", hl = "DiagnosticHint" }
+        or { text = "X", hl = "DiagnosticWarn" }
+    end
+    _decor.set(map)
+    return
+  end
   local bufnr = _adapter.get_bufnr and _adapter.get_bufnr() or -1
   if bufnr < 0 or not vim.api.nvim_buf_is_valid(bufnr) then return end
 
@@ -730,6 +743,11 @@ function M.setup(config, adapter)
   _cfg = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS), config)
   _adapter = adapter
   _ns = vim.api.nvim_create_namespace("filetree_copy_move")
+  if _decor then _decor.remove() end
+  _decor = require("filetree.util.decorate").by_path(
+    adapter,
+    { name = "clipboard", slot = "badge", priority = 80 }
+  )
 
   local km = _cfg.keymaps or {}
 
@@ -793,6 +811,8 @@ end
 
 function M.teardown()
   bufevents.unregister("copy_move")
+  if _decor then _decor.remove() end
+  _decor = nil
   _clipboard = {}
   _adapter = nil
 end

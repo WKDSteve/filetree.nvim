@@ -42,6 +42,8 @@ M.HL = {
   FiletreeRoot = "Title",
   FiletreeFolderIcon = "Directory",
   FiletreeMore = "Comment",
+  FiletreeOpened = "Special",
+  FiletreeModified = "DiagnosticWarn",
 }
 
 ---@type table<integer, Filetree.View>  buffer -> view
@@ -981,6 +983,13 @@ function M.decorate_line(buf, lnum, win)
       end
     elseif badge.slot == "line" then
       if badge.hl then mark(0, { line_hl_group = badge.hl, priority = 80 }) end
+    elseif badge.slot == "sign" and row.depth > 0 and badge.text and badge.text ~= "" then
+      -- over the first cell of the indent: the tree has no sign column, and a row below the root
+      -- starts with blanks
+      mark(
+        0,
+        { virt_text = { { badge.text, badge.hl } }, virt_text_pos = "overlay", priority = 100 }
+      )
     elseif badge.text and badge.text ~= "" then
       right[#right + 1] = {
         text = badge.text,
@@ -993,6 +1002,14 @@ function M.decorate_line(buf, lnum, win)
     end
   end
   if #right == 0 then return drawn end
+  -- badges stand next to the name, columns at the far right, each kind in registration order
+  local ordered = {}
+  for _, slot in ipairs({ "badge", "column" }) do
+    for _, item in ipairs(right) do
+      if item.slot == slot then ordered[#ordered + 1] = item end
+    end
+  end
+  right = ordered
 
   local width = win and text_width[win]
   if not width then

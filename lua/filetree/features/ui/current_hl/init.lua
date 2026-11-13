@@ -78,6 +78,12 @@ end
 
 -- ── Highlight application ─────────────────────────────────────────────────────
 
+---The own tree's decorators: the line of the current file and of its folder, and the icon.
+---@type Filetree.Decorate.Paths|nil
+local _decor_line = nil
+---@type Filetree.Decorate.Paths|nil
+local _decor_icon = nil
+
 local function clear_old()
   if _last_file and _adapter then
     _adapter.unhighlight_node(_last_file)
@@ -97,6 +103,16 @@ local function apply()
   if path == "" or vim.fn.filereadable(path) == 0 then return end
 
   local parent = vim.fn.fnamemodify(path, ":h")
+
+  if _decor_line then
+    setup_hl_groups()
+    _decor_line.set({ [path] = { hl = FILE_HL }, [parent] = { hl = PARENT_HL } })
+    if _decor_icon then
+      local has_icon = _cfg.icon and _cfg.icon ~= ""
+      _decor_icon.set(has_icon and { [path] = { text = _cfg.icon, hl = ICON_HL } } or {})
+    end
+    return
+  end
 
   clear_old()
   setup_hl_groups()
@@ -126,6 +142,11 @@ function M.setup(config, adapter)
   if not config.enabled then return end
   _cfg = config
   _adapter = adapter
+  local decorate = require("filetree.util.decorate")
+  if _decor_line then _decor_line.remove() end
+  if _decor_icon then _decor_icon.remove() end
+  _decor_line = decorate.by_path(adapter, { name = "current", slot = "line", priority = 20 })
+  _decor_icon = decorate.by_path(adapter, { name = "current_icon", slot = "sign", priority = 90 })
 
   if _debounce then _debounce.cancel() end
   _debounce = lib_debounce.new(apply, _cfg.debounce_ms or 100)
@@ -153,6 +174,9 @@ end
 
 function M.teardown()
   bufevents.unregister("current_hl")
+  if _decor_line then _decor_line.remove() end
+  if _decor_icon then _decor_icon.remove() end
+  _decor_line, _decor_icon = nil, nil
   clear_old()
   if _debounce then
     if _debounce then _debounce.cancel() end

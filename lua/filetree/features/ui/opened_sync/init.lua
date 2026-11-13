@@ -47,8 +47,36 @@ local _debounce = nil
 ---@type FiletreeOpenedSyncConfig
 local _cfg = {}
 
+---The own tree's decorators: the name of a file that is open in a buffer, and a mark on an unsaved one.
+---A foreign tree draws these itself and only needs the redraw below.
+---@type Filetree.Decorate.Paths|nil
+local _decor_opened = nil
+---@type Filetree.Decorate.Paths|nil
+local _decor_modified = nil
+
 local function redraw_now()
   if not _adapter then return end
+  if _decor_opened and _decor_modified then
+    local opened, modified = {}, {}
+    for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+      if
+        vim.api.nvim_buf_is_loaded(buf)
+        and vim.bo[buf].buflisted
+        and vim.bo[buf].buftype == ""
+      then
+        local name = vim.api.nvim_buf_get_name(buf)
+        if name ~= "" then
+          opened[name] = { hl = "FiletreeOpened" }
+          if vim.bo[buf].modified then
+            modified[name] = { text = "[+]", hl = "FiletreeModified" }
+          end
+        end
+      end
+    end
+    _decor_opened.set(opened)
+    _decor_modified.set(modified)
+    return
+  end
   if not _adapter.is_open() then return end
   -- Not redraw_soon(): this module's own `_debounce` already collapses a
   -- burst of Buf* events into exactly one call here, so a second debounce
@@ -70,6 +98,12 @@ function M.setup(config, adapter)
   _cfg = config
   _adapter = adapter
 
+  local decorate = require("filetree.util.decorate")
+  if _decor_opened then _decor_opened.remove() end
+  if _decor_modified then _decor_modified.remove() end
+  _decor_opened = decorate.by_path(adapter, { name = "opened", slot = "name", priority = 30 })
+  _decor_modified = decorate.by_path(adapter, { name = "modified", slot = "badge", priority = 75 })
+
   if _debounce then _debounce.cancel() end
   _debounce = lib_debounce.new(redraw_now, _cfg.debounce_ms or 60)
 
@@ -80,14 +114,21 @@ function M.setup(config, adapter)
   -- "open". Deliberately NOT BufEnter (fires on every cursor-into-buffer and is
   -- far too chatty for a redraw); the set below already covers add/remove and
   -- window (un)display of a buffer.
-  au.acmd({ "BufAdd", "BufDelete", "BufWipeout", "BufWinEnter", "BufWinLeave" }, {
+  local events = { "BufAdd", "BufDelete", "BufWipeout", "BufWinEnter", "BufWinLeave" }
+  -- the unsaved mark is this feature's on the own tree, so it has to hear of it there
+  if _decor_modified then vim.list_extend(events, { "BufModifiedSet", "BufWritePost" }) end
+  au.acmd(events, {
     group = _augroup,
     desc = "[filetree] Re-draw the tree's open-file markers when the buffer list changes",
     callback = debounced_redraw,
   })
+  if _decor_opened then debounced_redraw() end
 end
 
 function M.teardown()
+  if _decor_opened then _decor_opened.remove() end
+  if _decor_modified then _decor_modified.remove() end
+  _decor_opened, _decor_modified = nil, nil
   if _debounce then
     if _debounce then _debounce.cancel() end
     _debounce = nil

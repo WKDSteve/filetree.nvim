@@ -201,7 +201,7 @@ function M.badges(node, is_dir)
       local entry = item.entry
       local key = entry.key == "id" and node.id or node.path
       if type(key) == "string" then
-        local ok, badge = pcall(entry.get, key)
+        local ok, badge = pcall(entry.get, key, node)
         if not ok then
           fail(item, "get()", badge)
           badge = nil
