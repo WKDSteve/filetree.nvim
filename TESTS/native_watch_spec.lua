@@ -203,6 +203,36 @@ ok(
 )
 ok("the handle is back", watch.count() >= 1)
 
+-- ── found in review ────────────────────────────────────────────────────────────
+-- another root while the tree is shown: the new tree is followed, the old root's handle is gone
+if not adapter.is_open() then adapter.toggle_at("left") end
+adapter.set_root(dir .. "/open")
+settle(600)
+if watch.recursive then
+  eq("after set_root the handle is on the new root", watch.watched(), { dir .. "/open" })
+end
+mkfile("open/after_set_root.lua")
+ok("a change below the new root shows", shown(dir .. "/open/after_set_root.lua"))
+adapter.set_root(dir)
+settle(600)
+
+-- a tree window closed with :q, not through the tree's own close
+vim.api.nvim_set_current_win(adapter.get_winid())
+vim.cmd("quit")
+eq(
+  "closing the tree window with :q closes its handles",
+  { adapter.is_open(), watch.count() },
+  { false, 0 }
+)
+
+-- a tab closed with its tree in it
+vim.cmd("tabnew")
+adapter.toggle_at("left", { dir = dir })
+ok("the tree of the new tab is followed", watch.count() >= 1)
+vim.cmd("tabclose")
+adapter.get_bufnr() -- asking for the tree of this tab is when the dead tab's view is let go
+eq("the view of a closed tab holds no handle", watch.count(), 0)
+
 -- ── a folder with an event storm is held back ──────────────────────────────────
 adapter.close()
 watch.configure({ storm = 50, quiet_ms = 300, debounce_ms = 30 })

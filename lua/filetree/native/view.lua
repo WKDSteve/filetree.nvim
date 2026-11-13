@@ -52,6 +52,8 @@ local icon_groups = {}
 local render_listeners = {}
 ---@type fun()  Defined with the drawing code below.
 local redraw_views
+---@type table<integer, integer>  window -> columns its text may use, read once per redraw
+local text_width = {}
 
 ---@class Filetree.View
 ---@field root string  Normalized root directory.
@@ -230,6 +232,8 @@ end
 function View:_build()
   self._loaded, self._alias, self._reading = {}, {}, {}
   self._generation = (self._generation or 0) + 1
+  -- the handles belong to the folders of the old tree; a view that was following keeps following
+  local following = self._unsubscribe_watch ~= nil
   self:_unwatch()
   local root = self.root
   self._loader_fn = self:_loader()
@@ -253,6 +257,7 @@ function View:_build()
     end,
   })
   built = self.tree
+  if following then self:_watch() end
 end
 
 -- ── following the disk ─────────────────────────────────────────────────────────
@@ -586,6 +591,17 @@ function View:open(position, focus)
     window_options(win, true)
   end
   self.win, self.position = win, position
+  if position ~= "current" then
+    -- closed by `:q`, by a closed tab or by another plugin: the same end as close()
+    api.nvim_create_autocmd("WinClosed", {
+      group = AUGROUP,
+      pattern = tostring(win),
+      once = true,
+      callback = function()
+        if self.win == win then self:_window_gone() end
+      end,
+    })
+  end
   self:_place_cursor()
   local was_watching = self._unsubscribe_watch ~= nil
   self:_watch()
@@ -630,10 +646,24 @@ function View:close()
       end)
     end
   end
+  self:_window_gone()
+  return true
+end
+
+---The window is off the screen: stop following the disk until it is shown again.
+---@private
+function View:_window_gone()
   self.win = nil
   self._seen_closed = true
   self:_unwatch()
-  return true
+end
+
+---Give up everything this view holds: its handles and its buffer. The view is not usable afterwards.
+function View:dispose()
+  self:_window_gone()
+  local buf = self.buf
+  if buf and api.nvim_buf_is_valid(buf) then pcall(api.nvim_buf_delete, buf, { force = true }) end
+  self.buf = nil
 end
 
 -- ── nodes and lines ────────────────────────────────────────────────────────────
@@ -964,10 +994,13 @@ function M.decorate_line(buf, lnum, win)
   end
   if #right == 0 then return drawn end
 
-  local width = 80
-  if win and api.nvim_win_is_valid(win) then
-    local info = vim.fn.getwininfo(win)[1]
-    width = api.nvim_win_get_width(win) - (info and info.textoff or 0)
+  local width = win and text_width[win]
+  if not width then
+    width = 80
+    if win and api.nvim_win_is_valid(win) then
+      local info = vim.fn.getwininfo(win)[1]
+      width = api.nvim_win_get_width(win) - (info and info.textoff or 0)
+    end
   end
   local layout = columns.layout(width, vim.fn.strdisplaywidth(line.text), right)
   if #layout.items > 0 then
@@ -983,8 +1016,12 @@ end
 -- Highlights for the lines on screen only: a status change or a scroll costs the visible rows, never
 -- the whole tree.
 api.nvim_set_decoration_provider(NS, {
-  on_win = function(_, _, buf)
-    return by_buf[buf] ~= nil
+  on_win = function(_, win, buf)
+    if by_buf[buf] == nil then return false end
+    -- once per redraw of the window, not once per line
+    local info = vim.fn.getwininfo(win)[1]
+    text_width[win] = api.nvim_win_get_width(win) - (info and info.textoff or 0)
+    return true
   end,
   on_line = function(_, win, buf, lnum)
     M.decorate_line(buf, lnum, win)

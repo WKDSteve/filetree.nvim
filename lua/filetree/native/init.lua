@@ -65,8 +65,11 @@ function M.current()
   local view = views[tab]
   if view then return view end
   -- tabs that are gone give their view back
-  for known in pairs(views) do
-    if not api.nvim_tabpage_is_valid(known) then views[known] = nil end
+  for known, gone in pairs(views) do
+    if not api.nvim_tabpage_is_valid(known) then
+      views[known] = nil
+      gone:dispose()
+    end
   end
   return nil
 end
@@ -108,9 +111,7 @@ end
 function M.reset()
   for _, view in pairs(views) do
     pcall(view.close, view)
-    if view.buf and api.nvim_buf_is_valid(view.buf) then
-      pcall(api.nvim_buf_delete, view.buf, { force = true })
-    end
+    pcall(view.dispose, view)
   end
   views = {}
   list.invalidate()
