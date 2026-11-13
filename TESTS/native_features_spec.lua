@@ -89,6 +89,7 @@ local set_up = pcall(filetree.setup, {
   adapter = "native",
   deps_popup = false,
   native = { width = 36 },
+  adapter_keymaps = { H = false }, -- one of the tree's own keys, switched off
   features = {
     tree_toggle = { enabled = true },
     auto_reveal = { enabled = true, debounce_ms = 10 },
@@ -146,6 +147,10 @@ end
 for _, lhs in ipairs({ "m", "a", "d", "r", "c", "p", "W", "-", "+", "I", "?", "gr", "f" }) do
   ok("feature key bound in the tree: " .. lhs, bound[lhs] ~= nil)
 end
+-- adapter_keymaps: an override reaches the own tree's buffer (it used to be bound to the filetypes
+-- neo-tree and NvimTree only)
+local h_map = vim.fn.maparg("H", "n", false, true)
+ok("adapter_keymaps = { H = false } disables the tree's own H", h_map.rhs == "<Nop>")
 ok(
   "the tree's own keys are there too",
   bound["q"] ~= nil and bound["R"] ~= nil and bound["h"] ~= nil
@@ -284,23 +289,6 @@ eq(
   "an editor buffer is not",
   require("filetree.util.buffer").is_tree_buffer(vim.api.nvim_win_get_buf(editor_win)),
   false
-)
-
--- ── adapter_keymaps: an override reaches the own tree's buffer ─────────────────
-filetree.setup({
-  adapter = "native",
-  deps_popup = false,
-  adapter_keymaps = { q = false },
-  features = { tree_toggle = { enabled = true }, session = { enabled = false } },
-})
-adapter = filetree.adapter()
-adapter.close()
-adapter.toggle_at("left")
-settle(150)
-local q_map = vim.fn.maparg("q", "n", false, true)
-ok(
-  "adapter_keymaps = { q = false } disables the tree's own q",
-  q_map.rhs == "<Nop>" or (q_map.desc or ""):find("disabled") ~= nil
 )
 
 -- ── health ─────────────────────────────────────────────────────────────────────
