@@ -11,11 +11,10 @@ Windows/WSL) leaks OS-level file handles.
 [lib.nvim](https://github.com/WKDSteve/lib.nvim). It is new and chosen by name;
 `adapter = "auto"` never picks it, so nothing changes for an existing setup.
 
-> **Status.** The tree, its window and the whole adapter contract are there, and
-> the features run on it. Still to come: a watcher of its own (the
-> `file_watcher` feature refreshes it meanwhile), search as an overlay, badges
-> drawn by the tree instead of by each feature, more sources than files, and the
-> action table. Until then treat it as a trial backend.
+> **Status.** The tree, its window and the whole adapter contract are there, the
+> features run on it, it follows the disk by itself and draws the badges of
+> registered decorators. Still to come: search as an overlay, more sources than
+> files, and the action table. Until then treat it as a trial backend.
 
 ```lua
 require("filetree").setup({
@@ -26,6 +25,7 @@ require("filetree").setup({
     group_empty_dirs = true,  -- a chain of folders holding one folder each is one line: a/b/c/
     icons = true,             -- file and folder icons; drawn only with a Nerd Font declared
     max_entries = 20000,      -- entries shown per folder; a last line says how many more (0 = no limit)
+    watch = true,             -- follow changes on disk and read only the folders that changed
   },
 })
 ```
@@ -67,6 +67,52 @@ flowchart TB
 - **State per tab.** What is open, the cursor, the sort order and the position
   belong to the view of a tab and survive closing its window.
 
+### Following the disk
+
+While its window is shown, the tree is told which folder changed and reads
+exactly that one again. `R` and `:Filetree refresh` are for the cases a watcher
+cannot see (a network drive), not for everyday use.
+
+```mermaid
+sequenceDiagram
+  participant OS as file system
+  participant W as native/fs/watch
+  participant V as view
+  participant L as native/fs/list
+
+  OS->>W: created lua/a.lua
+  OS->>W: created lua/b.lua
+  OS->>W: changed node_modules/x (never opened)
+  Note over W: only create, delete, rename count<br/>grouped by folder, 100 ms quiet
+  W->>V: dirty: lua/, node_modules/
+  alt lua/ was read by this view
+    V->>L: read lua/ (one read, however many events)
+    L-->>V: entries
+    V->>V: merge: only the changed rows are written,<br/>open folders stay open
+  else node_modules/ was never opened
+    Note over V: nothing is read
+  end
+```
+
+- **Handles.** One recursive handle per root on Windows and macOS, one per
+  folder the tree has read elsewhere (libuv cannot watch recursively there).
+  Views of the same root share them; they close with the last window that shows
+  the tree, and a tree that is opened again catches up in the background.
+- **One read per folder.** At most one read of a folder runs; changes that
+  arrive meanwhile are answered by one more read after it. Sixty files written
+  in a row cost one read in the spec.
+- **A storm is held back.** A folder with more than 200 events a second is
+  reported once, two seconds after it went quiet.
+- **`User FiletreeFsChanged`** fires with `data.dirs` for whoever else wants to
+  know; `git_status` re-queries on it.
+- With the own watcher on, the `file_watcher` feature stands down on this
+  backend (its answer to any event is a refresh of the whole tree).
+
+A limit where handles are per folder (Linux): a closed folder is not watched, so
+a change inside it shows when it is opened, and a plain closed folder that
+gains its only subfolder is not merged into one line until its parent is read
+again.
+
 ### The tree buffer
 
 Filetype `filetree`, `buftype=nofile`, unlisted; `b:filetree_view` (`"files"`)
@@ -102,6 +148,9 @@ buffer instead of closing the tab.
 
 - `get_expanded_paths` / `expand_paths`: the first backend with them, so
   [session](INTEGRATIONS.md) restores open folders here.
+- Folders show what lies below them: with `git_status` a closed folder carries the
+  worst git state inside it, and any registered
+  [decorator](../api.md#a-decorator) with `roll_up` does the same.
 - No handles to guard: `handle_guard`, `tree_integrity`, `sidebar_guard` and the
   neo-tree patch of `watcher_quarantine` do not apply and stay inert.
 

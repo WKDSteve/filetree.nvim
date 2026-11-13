@@ -18,6 +18,7 @@
 local tree_core = require("lib.nvim.tree")
 local list = require("filetree.native.fs.list")
 local files = require("filetree.native.source.files")
+local watch = require("filetree.native.fs.watch")
 local render = require("filetree.native.render.line")
 local columns = require("filetree.native.render.columns")
 local decor = require("filetree.native.decor")
@@ -67,6 +68,11 @@ local redraw_views
 ---@field private _loaded table<string, true>  Folder ids whose children were read.
 ---@field private _alias table<string, string>  A folder inside a merged line -> the id of that line.
 ---@field private _prev_buf integer?  The buffer a `current` view replaced.
+---@field private _watches table<string, fun()>  Watched folder -> give the reference back.
+---@field private _unsubscribe_watch fun()?
+---@field private _reading table<string, boolean>  Folder ids being read again: true = read once more after this one.
+---@field private _generation integer  Counts the trees this view has built.
+---@field private _seen_closed boolean?  The window was closed at least once.
 ---@field private _opts Filetree.View.Opts
 ---@field private _loader_fn fun(node: Filetree.Node, cb: fun(list?: Filetree.Node[], err?: string))
 local View = {}
@@ -80,6 +86,7 @@ View.__index = View
 ---@field hide? fun(): fun(name: string, path: string): boolean  Answers the test for the names `hide_ignored` hides; asked once per listing.
 ---@field icons? boolean  false: no icons at all.
 ---@field max_entries? integer  Entries shown per folder (see `Filetree.Files.Opts`).
+---@field watch? boolean  Follow changes on disk while the tree is shown (default true).
 
 local function define_highlights()
   for group, link in pairs(M.HL) do
@@ -162,8 +169,12 @@ function View:_loader()
         return
       end
       self._loaded[node.id] = true
+      self:_watch_dir(dir)
       cb(self:_nodes(dir, entries, loader))
     end
+    -- The cache may hold this folder from a look into it (merging `a/b/c` reads ahead). Without a
+    -- watcher on it nobody would have said that it changed since: read it now.
+    if not watch.covers(dir) then list.invalidate(dir) end
     if self._sync then
       done(list.list_sync(dir))
     else
@@ -193,6 +204,12 @@ function View:_nodes(dir, entries, loader)
       for i = 1, #chain - 1 do
         self._alias[chain[i]] = node.id
       end
+      if not watch.recursive then
+        -- every folder of the line decides what the line is; none of them is loaded
+        for _, member in ipairs(chain) do
+          self:_watch_dir(member)
+        end
+      end
     end
   end
   return nodes
@@ -211,7 +228,9 @@ end
 
 ---@private
 function View:_build()
-  self._loaded, self._alias = {}, {}
+  self._loaded, self._alias, self._reading = {}, {}, {}
+  self._generation = (self._generation or 0) + 1
+  self:_unwatch()
   local root = self.root
   self._loader_fn = self:_loader()
   -- The root is read here and handed over as a list: the tree core counts a root as open from the
@@ -234,6 +253,99 @@ function View:_build()
     end,
   })
   built = self.tree
+end
+
+-- ── following the disk ─────────────────────────────────────────────────────────
+
+---@private
+---@param dir string
+function View:_watch_dir(dir)
+  if not self._unsubscribe_watch or self._watches[dir] then return end
+  self._watches[dir] = (watch.watch(dir))
+end
+
+---Start following the folders this view has read. Called when its window appears.
+---@private
+function View:_watch()
+  if self._opts.watch == false or self._unsubscribe_watch then return end
+  self._unsubscribe_watch = watch.subscribe(function(dirs)
+    self:_changed(dirs)
+  end)
+  self:_watch_dir(self.root)
+  if not watch.recursive then
+    for id in pairs(self._loaded) do
+      local node = self.tree:node(id)
+      if node and node.path then self:_watch_dir(node.path) end
+    end
+    for member, id in pairs(self._alias) do
+      self:_watch_dir(member)
+      self:_watch_dir(id)
+    end
+  end
+end
+
+---Stop following; the handles close when no other view holds them.
+---@private
+function View:_unwatch()
+  if self._unsubscribe_watch then
+    self._unsubscribe_watch()
+    self._unsubscribe_watch = nil
+  end
+  for _, unwatch in pairs(self._watches or {}) do
+    unwatch()
+  end
+  self._watches = {}
+end
+
+---Folders changed on disk: read again the ones this view has read, and no other.
+---@private
+---@param dirs string[]
+function View:_changed(dirs)
+  local seen = {}
+  for _, dir in ipairs(dirs) do
+    list.invalidate(dir)
+    local id = self:id_of(dir)
+    -- a folder of a merged line `a/b/c` (the innermost one too, while it is not loaded): what has
+    -- to be listed again is the folder the line is in
+    local node = self.tree:node(id)
+    local merged = node and node.data and node.data.chain ~= nil
+    if id ~= dir or (merged and not self._loaded[id]) then id = self.tree:parent(id) or id end
+    if self._loaded[id] and not seen[id] then
+      seen[id] = true
+      self:refresh_dir(id)
+    end
+  end
+end
+
+---Read one folder again, without blocking, and take over what changed. At most one read per folder
+---runs; a change that arrives meanwhile is answered by one more read after it, however many there were.
+---@param id string  The id of a folder this view has read.
+function View:refresh_dir(id)
+  if self._reading[id] ~= nil then
+    self._reading[id] = true
+    return
+  end
+  local node = self.tree:node(id)
+  if not node or not node.path then return end
+  self._reading[id] = false
+  local generation = self._generation
+  local dir = node.path
+  list.invalidate(dir)
+  list.list(dir, function(entries)
+    -- the view shows another tree by now: this answer belongs to none of its folders
+    if generation ~= self._generation then return end
+    local again = self._reading[id]
+    self._reading[id] = nil
+    if not self.tree:node(id) then return end
+    self:sync_cursor()
+    if entries then
+      self:_apply(self.tree:merge_children(id, self:_nodes(dir, entries, self._loader_fn)))
+    elseif id ~= self.root then
+      self._loaded[id] = nil
+      self:_apply(self.tree:remove(id))
+    end
+    if again then self:refresh_dir(id) end
+  end)
 end
 
 -- ── buffer ─────────────────────────────────────────────────────────────────────
@@ -475,6 +587,15 @@ function View:open(position, focus)
   end
   self.win, self.position = win, position
   self:_place_cursor()
+  local was_watching = self._unsubscribe_watch ~= nil
+  self:_watch()
+  if self._seen_closed and not was_watching and self._unsubscribe_watch then
+    -- nothing was followed while the window was away: read what this view shows again, in the background
+    list.invalidate()
+    for id in pairs(self._loaded) do
+      self:refresh_dir(id)
+    end
+  end
   return true
 end
 
@@ -510,6 +631,8 @@ function View:close()
     end
   end
   self.win = nil
+  self._seen_closed = true
+  self:_unwatch()
   return true
 end
 
@@ -519,7 +642,10 @@ end
 ---@param path string  Normalized.
 ---@return string
 function View:id_of(path)
-  return self._alias[path] or path
+  local id = self._alias[path]
+  -- a merged line that was split or removed since leaves its folders their own ids again
+  if id and self.tree:node(id) then return id end
+  return path
 end
 
 ---@param line integer  1-based.
@@ -748,6 +874,9 @@ function M.new(opts)
     _sync = false,
     _loaded = {},
     _alias = {},
+    _watches = {},
+    _reading = {},
+    _generation = 0,
     _opts = opts,
   }, View)
   self:_build()

@@ -162,6 +162,11 @@ local _augroup = nil
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
+  -- The own tree follows the disk itself and reads only the folders that changed; this feature's
+  -- answer to any event is a refresh of the whole tree, which would undo exactly that.
+  if adapter.name == "native" and require("filetree.native").options().watch ~= false then
+    return
+  end
   _cfg = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS), config)
   _adapter = adapter
 

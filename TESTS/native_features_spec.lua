@@ -96,6 +96,7 @@ local set_up = pcall(filetree.setup, {
     auto_reveal = { enabled = true, debounce_ms = 10 },
     session = { enabled = false }, -- writes into the user's data directory
     git_status = { enabled = true, debounce_ms = 10 },
+    file_watcher = { enabled = true }, -- stands down on the own tree, which watches itself
   },
 })
 ok("setup with adapter = native", set_up)
@@ -281,6 +282,24 @@ if vim.fn.executable("git") == 1 then
   adapter.collapse_node({ path = dir .. "/lua" })
   eq("... also when it is closed", right_of(dir .. "/lua"), "?")
   adapter.expand_node({ path = dir .. "/lua" })
+  -- a file created outside the editor: the tree shows it by itself, and git_status hears of it
+  local full_refreshes = 0
+  local real_refresh = adapter.refresh
+  adapter.refresh = function(...)
+    full_refreshes = full_refreshes + 1
+    return real_refresh(...)
+  end
+  vim.fn.writefile({ "x" }, dir .. "/lua/outside.lua")
+  vim.wait(6000, function()
+    return (right_of(dir .. "/lua/outside.lua") or "") ~= ""
+  end, 25)
+  eq(
+    "a file created outside appears with its git sign, no refresh asked",
+    right_of(dir .. "/lua/outside.lua"),
+    "?"
+  )
+  eq("... and no feature answered the change with a refresh of the whole tree", full_refreshes, 0)
+  adapter.refresh = real_refresh
   vim.fn.delete(dir .. "/.git", "rf")
 else
   say("  n/a  git_status: no git on this machine")
@@ -291,7 +310,10 @@ vim.api.nvim_set_current_win(win)
 feed("W")
 settle()
 eq("W closes every folder", adapter.get_expanded_paths(), {})
-eq("... and the tree shows the top level only", #lines(), 4)
+local nested = vim.tbl_filter(function(node)
+  return node.depth > 1
+end, adapter.get_visible_nodes())
+eq("... and the tree shows the top level only", #nested, 0)
 
 -- ── sort_cycle ─────────────────────────────────────────────────────────────────
 local sort_cycle = filetree.feature("sort_cycle")

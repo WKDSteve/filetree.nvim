@@ -408,6 +408,11 @@ eq("the cursor is on the revealed file", adapter.get_current_node().name, "a1.lu
 adapter.close()
 
 -- ── the last window of a tab ───────────────────────────────────────────────────
+-- the first tab's tree is shown and has caught up with the disk, so the cache is warm and steady
+adapter.toggle_at("left")
+vim.wait(400, function()
+  return false
+end)
 vim.cmd("tabnew")
 local scans = list.stats.scans
 adapter.toggle_at("left", { dir = dir })
@@ -423,6 +428,7 @@ eq(
 )
 vim.cmd("tabclose")
 eq("back in the first tab its view answers", adapter.get_bufnr(), buf)
+adapter.close()
 
 -- ── the trash history viewer no longer shares the tree's filetype ──────────────
 local undo =

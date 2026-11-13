@@ -24,10 +24,17 @@ local M = {}
 ---@field group_empty_dirs? boolean  Draw a chain of folders that hold one folder each as one line (default true).
 ---@field icons? boolean  File and folder icons (default true; without a Nerd Font none are drawn).
 ---@field max_entries? integer  Entries shown per folder; a last line says how many more there are (default 20000, 0 = no limit).
+---@field watch? boolean  Follow changes on disk while the tree is shown and read only the folders that changed (default true).
 
 ---@type Filetree.Native.Opts
-local DEFAULTS =
-  { position = "left", width = 32, group_empty_dirs = true, icons = true, max_entries = 20000 }
+local DEFAULTS = {
+  position = "left",
+  width = 32,
+  group_empty_dirs = true,
+  icons = true,
+  max_entries = 20000,
+  watch = true,
+}
 
 ---@type Filetree.Native.Opts
 local options = vim.deepcopy(DEFAULTS)
@@ -77,6 +84,7 @@ function M.ensure(root)
     group_empty = options.group_empty_dirs,
     icons = options.icons,
     max_entries = options.max_entries,
+    watch = options.watch,
     hide = ignored,
   })
   views[api.nvim_get_current_tabpage()] = view
@@ -106,6 +114,7 @@ function M.reset()
   end
   views = {}
   list.invalidate()
+  require("filetree.native.fs.watch").stop_all()
   require("filetree.native.decor").stop()
 end
 

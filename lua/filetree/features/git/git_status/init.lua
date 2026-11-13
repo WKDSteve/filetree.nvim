@@ -333,6 +333,23 @@ function M.setup(config, adapter)
     end,
   })
 
+  -- The own tree reports folders whose listing changed on disk (a file created, deleted or renamed
+  -- outside the editor). Changes inside `.git` are left out: `git status` itself may write the index,
+  -- and answering that with another `git status` would never end.
+  au.acmd("User", {
+    group = _augroup,
+    pattern = "FiletreeFsChanged",
+    desc = "[filetree] Re-query git status after files came or went on disk",
+    callback = function(ev)
+      for _, dir in ipairs((ev.data and ev.data.dirs) or {}) do
+        if not (dir .. "/"):find("/.git/", 1, true) then
+          debounce_refresh()
+          return
+        end
+      end
+    end,
+  })
+
   M.refresh()
 end
 
