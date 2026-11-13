@@ -63,7 +63,12 @@ seven real-neo-tree suites (`adapter_lines.lua`, `collapse_all_backends.lua`,
 `group_empty_dirs_collapse.lua`, `neotree_redraw_hook.lua`,
 `neotree_collapse_redraw_coalesce.lua`, `quickpick_neotree.lua`, `sort_cycle_backends.lua`)
 find them there. Locally those suites look in `$<NAME>_DIR` (`$NEO_TREE_NVIM_DIR`, ...),
-`.deps/<name>`, `../<name>` and the lazy.nvim directory of your editor, like the sheets.
+`.deps/<name>`, `../<name>` and the lazy.nvim directory of your editor, like the sheets. A
+neo-tree, nui or plenary they find on their own is used only at the commit `ci.yml` pins
+([`neotree_pins.lua`](neotree_pins.lua) reads the pins from there; their checks lean on neo-tree
+internals that differ between versions): any other commit is skipped with a `note` line, and
+without a pinned one the suite is `n/a`. A checkout named in `$NEO_TREE_NVIM_DIR` (etc.) or
+`$FILETREE_NEOTREE` is used as it is.
 All but those run against a
 stub adapter and need no tree plugin; those seven need neo-tree (plus
 nui/plenary/devicons, and lib.nvim) and print an `n/a` line (testing.nvim's

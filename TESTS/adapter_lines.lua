@@ -47,31 +47,38 @@ local function resolve(env, names, probe)
   -- <repo>/.deps/<name>, a sibling ../<name> (what CI checks out: neo-tree, nui and plenary at
   -- pinned commits), ../.test-plugins/<name>, stdpath("data")/lazy/<name>, and the lazy.nvim
   -- directory of the real editor (under testing.nvim the child's own stdpath is a sandbox) -- the
-  -- places TESTS/minimal_init_sheet_neotree.lua searches.
-  local candidates = {}
+  -- places TESTS/minimal_init_sheet_neotree.lua searches. A checkout found on its own (not named
+  -- by a variable) of what CI pins is used only at the pinned commit (TESTS/neotree_pins.lua).
+  local candidates = {} ---@type { [1]: string, [2]: string? }[] dir, name to check against its pin
   for _, e in ipairs(env) do
     local v = vim.env[e]
-    if v and v ~= "" then candidates[#candidates + 1] = v end
+    if v and v ~= "" then candidates[#candidates + 1] = { v } end
   end
   local parent = vim.fn.fnamemodify(root_dir, ":h")
   for _, name in ipairs(names) do
     local dir_env = vim.env[(name:upper():gsub("[^%w]", "_")) .. "_DIR"]
-    if dir_env and dir_env ~= "" then candidates[#candidates + 1] = dir_env end
-    candidates[#candidates + 1] = root_dir .. "/.deps/" .. name
-    candidates[#candidates + 1] = parent .. "/" .. name
-    candidates[#candidates + 1] = parent .. "/.test-plugins/" .. name
-    candidates[#candidates + 1] = vim.fn.stdpath("data") .. "/lazy/" .. name
+    if dir_env and dir_env ~= "" then candidates[#candidates + 1] = { dir_env } end
+    candidates[#candidates + 1] = { root_dir .. "/.deps/" .. name, name }
+    candidates[#candidates + 1] = { parent .. "/" .. name, name }
+    candidates[#candidates + 1] = { parent .. "/.test-plugins/" .. name, name }
+    candidates[#candidates + 1] = { vim.fn.stdpath("data") .. "/lazy/" .. name, name }
     local appdata, home = vim.env.LOCALAPPDATA, vim.env.HOME
     if appdata and appdata ~= "" then
-      candidates[#candidates + 1] = appdata .. "/nvim-data/lazy/" .. name
+      candidates[#candidates + 1] = { appdata .. "/nvim-data/lazy/" .. name, name }
     end
     if home and home ~= "" then
-      candidates[#candidates + 1] = home .. "/.local/share/nvim/lazy/" .. name
+      candidates[#candidates + 1] = { home .. "/.local/share/nvim/lazy/" .. name, name }
     end
   end
+  local pins = dofile(root_dir .. "/TESTS/neotree_pins.lua")
+  local seen = {} -- stdpath("data")/lazy and ~/.local/share/nvim/lazy are often one directory
   for _, c in ipairs(candidates) do
-    local norm = vim.fs.normalize(c)
-    if vim.fn.isdirectory(norm .. "/" .. probe) == 1 then
+    local norm = vim.fs.normalize(c[1])
+    local found = not seen[norm] and vim.fn.isdirectory(norm .. "/" .. probe) == 1
+    seen[norm] = true
+    local off = found and c[2] and pins.off_pin(c[2], norm)
+    if off then print("  note " .. off) end
+    if found and not off then
       vim.opt.rtp:prepend(norm)
       package.path = table.concat({
         norm .. "/lua/?.lua",

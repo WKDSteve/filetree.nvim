@@ -91,7 +91,9 @@ jobs:
 
       # The test sheet TESTS/sheets/diag-badges-neotree.sheet.lua runs a real neo-tree in its child
       # editor (TESTS/minimal_init_sheet_neotree.lua finds these as siblings). Pinned: the sheet's
-      # screen snapshots were taken with exactly these commits.
+      # screen snapshots were taken with exactly these commits. The real-neo-tree suites
+      # (adapter_lines.lua, ...) use a checkout they find on their own only at these refs:
+      # TESTS/neotree_pins.lua reads them from here (`repository:` + a 40-hex `ref:` per step).
       - name: Checkout neo-tree.nvim (pinned)
         uses: actions/checkout@v5
         with:
