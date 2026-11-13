@@ -11,6 +11,8 @@
 ---
 --- The action table with `needs` / `when` of a later stage replaces this list.
 
+local notify = require("filetree.util.notify").create("[filetree.native]")
+
 local M = {}
 
 ---`<CR>` on a row: a folder opens or closes, a file opens in an editor window.
@@ -19,6 +21,10 @@ local M = {}
 function M.activate(view, mode)
   local row = view:current()
   if not row then return end
+  if row.node.kind == "more" then
+    notify.info("this folder has more entries than native.max_entries shows; raise the option")
+    return
+  end
   if row.expandable or row.node.kind == "dir" then
     if row.id ~= view.root then view:toggle(row.id) end
     return

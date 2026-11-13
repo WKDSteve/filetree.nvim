@@ -23,9 +23,11 @@ local M = {}
 ---@field width? integer  Width of a side tree (default 32).
 ---@field group_empty_dirs? boolean  Draw a chain of folders that hold one folder each as one line (default true).
 ---@field icons? boolean  File and folder icons (default true; without a Nerd Font none are drawn).
+---@field max_entries? integer  Entries shown per folder; a last line says how many more there are (default 20000, 0 = no limit).
 
 ---@type Filetree.Native.Opts
-local DEFAULTS = { position = "left", width = 32, group_empty_dirs = true, icons = true }
+local DEFAULTS =
+  { position = "left", width = 32, group_empty_dirs = true, icons = true, max_entries = 20000 }
 
 ---@type Filetree.Native.Opts
 local options = vim.deepcopy(DEFAULTS)
@@ -74,6 +76,7 @@ function M.ensure(root)
     width = options.width,
     group_empty = options.group_empty_dirs,
     icons = options.icons,
+    max_entries = options.max_entries,
     hide = ignored,
   })
   views[api.nvim_get_current_tabpage()] = view

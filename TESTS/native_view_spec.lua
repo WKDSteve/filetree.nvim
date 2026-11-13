@@ -591,6 +591,49 @@ eq(
   0
 )
 
+-- ── a folder larger than max_entries is cut, and says so ───────────────────────
+do
+  local state = adapter.get_state()
+  if not adapter.is_open() then adapter.toggle_at("left") end
+  adapter.collapse_all()
+  state._opts.max_entries = 3
+  adapter.refresh()
+  local shown = lines()
+  eq("the root shows three entries and a line for the rest", #shown, 5)
+  ok(
+    "the last line names how many more there are: " .. shown[5],
+    shown[5]:find("… %d+ more %(showing 3") ~= nil
+  )
+  eq("the entries kept are the first of the order", names(), { "a", "big", "chain/only/inner" })
+  eq("the line for the rest is no node", adapter.get_node_at_line(adapter.get_bufnr(), 4), nil)
+  adapter.scroll_to_line(5)
+  eq("... also not as the current node", adapter.get_current_node(), nil)
+  eq("visible nodes leave it out", #adapter.get_visible_nodes(), 3)
+  state._opts.max_entries = nil
+  adapter.refresh()
+  ok("without the limit everything is back", #lines() > 5)
+end
+
+-- ── opening a tree whose folders are cached ────────────────────────────────────
+do
+  adapter.close()
+  local best = math.huge
+  for _ = 1, 5 do
+    local t = vim.uv.hrtime()
+    adapter.toggle_at("left")
+    best = math.min(best, (vim.uv.hrtime() - t) / 1e6)
+    adapter.close()
+  end
+  say(("  info opening the tree again (window, options, cursor): %.2f ms, best of 5"):format(best))
+  ok(("the tree opens again in under 30 ms (%.2f ms)"):format(best), best < 30)
+  local t = vim.uv.hrtime()
+  native.reset()
+  adapter.toggle_at("left", { dir = dir })
+  local cold = (vim.uv.hrtime() - t) / 1e6
+  say(("  info opening a new tree (read the root, build, buffer, window): %.2f ms"):format(cold))
+  ok(("a new tree opens in under 150 ms (%.2f ms)"):format(cold), cold < 150)
+end
+
 native.reset()
 eq("reset closes the tree", { adapter.is_open() }, { false })
 vim.fn.delete(dir, "rf")

@@ -10,6 +10,9 @@
 --- - Folders first, then by name (case-insensitive), size or modification time
 --- - A merged line `a/b/c`: id and `path` are the innermost folder, `data.chain` lists all of them
 ---
+--- A folder with more entries than `max_entries` is cut after sorting, and its last node (`kind =
+--- "more"`, no `path`) says so: a cut that is not announced reads as "that is all there is".
+---
 --- Every folder node has `kind = "dir"`: the tree core calls a folder that turned out empty a leaf,
 --- and it has to stay a folder for everything that looks at the node.
 
@@ -23,6 +26,8 @@ local M = {}
 ---@field hide? fun(name: string, path: string): boolean  True for an entry that is not shown.
 ---@field group_empty? boolean  Merge chains of folders that hold exactly one folder (default true).
 ---@field group_limit? integer  Folders are only looked into for merging when the listing has at most this many (default 200).
+---@field dir? string  The folder the entries are of; needed for `max_entries`.
+---@field max_entries? integer  Show at most this many entries of one folder; a last line says how many more there are (default: no limit).
 
 ---@param entry Filetree.Fs.Entry
 ---@param field string  "size" or "mtime".
@@ -112,8 +117,12 @@ function M.nodes(entries, opts)
   end
   local group = opts.group_empty ~= false and dirs <= (opts.group_limit or 200)
 
+  local ordered = sorted(visible, opts.sort or { kind = "name" })
+  local limit = opts.max_entries
+  local cut = (limit and limit > 0 and #ordered > limit) and (#ordered - limit) or 0
   local out = {}
-  for _, entry in ipairs(sorted(visible, opts.sort or { kind = "name" })) do
+  for i, entry in ipairs(ordered) do
+    if cut > 0 and i > limit then break end
     ---@type table
     local node = {
       id = entry.path,
@@ -135,6 +144,14 @@ function M.nodes(entries, opts)
       end
     end
     out[#out + 1] = node
+  end
+  if cut > 0 then
+    out[#out + 1] = {
+      -- `//` cannot occur in a normalized path, so the id never collides with an entry
+      id = (opts.dir or "") .. "//more",
+      label = ("… %d more (showing %d, native.max_entries)"):format(cut, limit),
+      kind = "more",
+    }
   end
   return out
 end

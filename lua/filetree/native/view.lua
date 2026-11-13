@@ -38,6 +38,7 @@ M.HL = {
   FiletreeExpander = "NonText",
   FiletreeRoot = "Title",
   FiletreeFolderIcon = "Directory",
+  FiletreeMore = "Comment",
 }
 
 ---@type table<integer, Filetree.View>  buffer -> view
@@ -74,6 +75,7 @@ View.__index = View
 ---@field group_empty? boolean
 ---@field hide? fun(): fun(name: string, path: string): boolean  Answers the test for the names `hide_ignored` hides; asked once per listing.
 ---@field icons? boolean  false: no icons at all.
+---@field max_entries? integer  Entries shown per folder (see `Filetree.Files.Opts`).
 
 local function define_highlights()
   for group, link in pairs(M.HL) do
@@ -85,6 +87,7 @@ end
 ---@return string|nil glyph
 ---@return string|nil hl
 local function icon_of(row)
+  if row.node.kind == "more" then return nil, nil end
   local nerd = require("lib.nvim.ui.nerd_font").available()
   if row.expandable or row.node.kind == "dir" then
     if not nerd then return nil, nil end
@@ -117,9 +120,12 @@ end
 ---@return Filetree.Line
 local function line_of_row(self, row)
   local line = render.render(row, line_opts(self))
-  if row.id == self.root then
+  local whole = (row.id == self.root and "FiletreeRoot")
+    or (row.node.kind == "more" and "FiletreeMore")
+    or nil
+  if whole then
     for _, span in ipairs(line.spans) do
-      if span.col_start >= line.name_start then span.hl = "FiletreeRoot" end
+      if span.col_start >= line.name_start then span.hl = whole end
     end
   end
   return line
@@ -152,7 +158,7 @@ function View:_loader()
         return
       end
       self._loaded[node.id] = true
-      cb(self:_nodes(entries, loader))
+      cb(self:_nodes(dir, entries, loader))
     end
     if self._sync then
       done(list.list_sync(dir))
@@ -164,11 +170,14 @@ function View:_loader()
 end
 
 ---@private
+---@param dir string
 ---@param entries Filetree.Fs.Entry[]
 ---@param loader function
 ---@return Filetree.Node[]
-function View:_nodes(entries, loader)
+function View:_nodes(dir, entries, loader)
   local nodes = files.nodes(entries, {
+    dir = dir,
+    max_entries = self._opts.max_entries,
     loader = loader,
     sort = self.sort,
     hide = self:_hide(),
@@ -213,7 +222,7 @@ function View:_build()
       label = root == "/" and "" or list.basename(root),
       kind = "dir",
       path = root,
-      children = self:_nodes(entries or {}, self._loader_fn),
+      children = self:_nodes(root, entries or {}, self._loader_fn),
     },
     on_change = function(changes)
       -- an answer for a tree this view no longer shows (the root changed while a folder was read)
@@ -660,7 +669,7 @@ function View:refresh()
       local entries = list.list_sync(node.path)
       local changes
       if entries then
-        changes = self.tree:merge_children(id, self:_nodes(entries, self._loader_fn))
+        changes = self.tree:merge_children(id, self:_nodes(node.path, entries, self._loader_fn))
       else
         self._loaded[id] = nil
         changes = self.tree:remove(id)

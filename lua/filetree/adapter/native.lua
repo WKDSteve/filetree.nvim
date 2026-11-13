@@ -106,7 +106,7 @@ end
 function M.get_current_node()
   local view = native.current()
   local row = view and view:current()
-  if not view or not row then return nil end
+  if not view or not row or row.node.kind == "more" then return nil end
   return to_node(row, view.tree:row_of(row.id) or 1)
 end
 
@@ -121,14 +121,18 @@ function M.get_visible_nodes(filter, bufnr)
   -- line 1 is the root: the label of the tree, not an entry of it
   for line = 2, view.tree:count() do
     if #out >= cap then break end
-    local node = to_node(view.tree:row(line), line)
-    if
-      filter == nil
-      or filter == "all"
-      or (filter == "files" and node.type == "file")
-      or (filter == "folders" and node.type == "directory")
-    then
-      out[#out + 1] = node
+    local row = view.tree:row(line)
+    -- the line that says a folder was cut is no entry
+    if row.node.kind ~= "more" then
+      local node = to_node(row, line)
+      if
+        filter == nil
+        or filter == "all"
+        or (filter == "files" and node.type == "file")
+        or (filter == "folders" and node.type == "directory")
+      then
+        out[#out + 1] = node
+      end
     end
   end
   return out
@@ -149,7 +153,8 @@ function M.get_node_at_line(bufnr, linenr)
   local view = native.of_buf(bufnr)
   if not view or linenr < 1 then return nil end
   local row = view.tree:row(linenr + 1)
-  return row and to_node(row, linenr + 1) or nil
+  if not row or row.node.kind == "more" then return nil end
+  return to_node(row, linenr + 1)
 end
 
 ---@param node FiletreeNode
