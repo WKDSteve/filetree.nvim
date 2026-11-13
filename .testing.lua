@@ -35,12 +35,7 @@ return {
     "^TESTS/refs/usage%.lua$",
     -- Against a REAL neo-tree: CI checks out neo-tree, nui and plenary at pinned commits as
     -- siblings (ci.yml); without them each prints an n/a line instead of passing silently.
-    -- TESTS/adapter_lines.lua is NOT gated yet: hosted CI run 43420079289 (514f38d) failed its three
-    -- "filter-race" cases on ubuntu, windows and macos ("dirA survives the race and is still expanded
-    -- after the final clear", "dirB ALSO survives ...", "the snapshot does not stick forever ...":
-    -- after the clear only the root is expanded), which passes locally on Windows and in WSL with
-    -- the pinned neo-tree, also under CPU load. Until that is understood it is started by hand
-    -- (nvim -l TESTS/adapter_lines.lua).
+    "^TESTS/adapter_lines%.lua$",
     "^TESTS/collapse_all_backends%.lua$",
     "^TESTS/group_empty_dirs_collapse%.lua$",
     "^TESTS/neotree_collapse_redraw_coalesce%.lua$",

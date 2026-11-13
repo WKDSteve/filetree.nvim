@@ -100,6 +100,43 @@ local function neotree_state()
 end
 
 ---@internal
+---Second half of a clear: called once the clear's own refresh has rendered.
+---
+---`reset_search` hands the pre-search folders to neo-tree as
+---`state.force_open_folders`, which the next full draw consumes (and nils).
+---It also kills a search job that is still running, but a killed job still
+---runs its exit handler, which schedules a render of the partial search
+---result. When the clear comes less than one navigate debounce (100 ms) after
+---the search started, that stale render is the next full draw: it consumes the
+---folders, and the clear's refresh then rebuilds the tree from what that
+---render left open -- only the root. Whether it happens is timing alone: a
+---search that spawns quickly (short $PATH, so neo-tree's per-search lookup of
+---its find command is cheap) is cleared inside that window, a slow one is not.
+---This puts the folders back when the clear's refresh did not reopen them.
+---@param state table  The state the clear ran on.
+---@param restore string[]?  Its `open_folders_before_search` at the clear.
+local function restore_after_clear(state, restore)
+  -- A new query since the clear owns the tree now; it restores on its own clear.
+  if not restore or state.search_pattern or not state.tree then return end
+  local ok_r, renderer = pcall(require, "neo-tree.ui.renderer")
+  if not ok_r then return end
+  local open = {}
+  for _, id in ipairs(renderer.get_expanded_nodes(state.tree)) do
+    open[id] = true
+  end
+  for _, id in ipairs(restore) do
+    local stat = not open[id] and vim.uv.fs_stat(id)
+    if stat and stat.type == "directory" then
+      -- One more navigate, no callback: a folder that still does not open is
+      -- not retried forever.
+      state.force_open_folders = vim.deepcopy(restore)
+      require("neo-tree.sources.filesystem").navigate(state)
+      return
+    end
+  end
+end
+
+---@internal
 ---Drive neo-tree's own filter: it is `state.search_pattern` plus a refresh,
 ---which is exactly what its filter prompt does on submit. The pre-search
 ---expansion is recorded first so `reset_search` can put the tree back the way
@@ -126,8 +163,15 @@ local function neotree_filter(query)
     local shown = not (ok_r and renderer.window_exists) or renderer.window_exists(state)
 
     if not query or query == "" then
-      fs.reset_search(state, shown)
-      if not shown then state.dirty = true end
+      local restore = state.open_folders_before_search
+      fs.reset_search(state, false)
+      if shown then
+        fs.navigate(state, nil, nil, function()
+          restore_after_clear(state, restore)
+        end)
+      else
+        state.dirty = true
+      end
       -- Release the snapshot only once we're sure this clear stuck -- if
       -- another query lands before neo-tree's debounced re-render fires,
       -- search_pattern will be set again and the release is skipped, so the

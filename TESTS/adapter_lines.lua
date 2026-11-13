@@ -399,17 +399,77 @@ local function run_backend(spec)
   -- cost in the tens of microseconds is tens of milliseconds per render on a
   -- large tree. It was exactly that on neo-tree until the conversion stopped
   -- routing through a helper that stats the filesystem for an is-directory
-  -- flag it discards. The bound is loose on purpose -- this guards against a
-  -- regression of that shape, not against machine-to-machine variance.
-  local reps = 2000
-  adapter.get_node_at_line(bufnr, 1)
-  local t0 = vim.uv.hrtime()
-  for _ = 1, reps do
+  -- flag it discards. The exact shape of that regression is pinned without a
+  -- clock below (a lookup touches no filesystem); the timing check bounds the
+  -- cost against a stat of the very path the lookup resolves, measured here
+  -- and now, not against machine-to-machine variance. A fixed bound in
+  -- microseconds was red under load (14-20 us in WSL with every core busy),
+  -- and a stat ranges from ~1 us (Linux) to ~50 us (Windows). On Linux a
+  -- lookup (~0.4-0.8 us) is close to a stat, hence twice a stat as the bound.
+  -- Batches of both alternate and the cheapest batch of each counts, so a
+  -- load spike in one batch does not decide it.
+  local reps, batches = 2000, 7
+  local stat_path = by_line[1] and by_line[1].path or work
+  local function per_call_us(fn)
+    local t0 = vim.uv.hrtime()
+    for _ = 1, reps do
+      fn()
+    end
+    return (vim.uv.hrtime() - t0) / reps / 1000
+  end
+  local function lookup()
     adapter.get_node_at_line(bufnr, 1)
   end
-  local us = (vim.uv.hrtime() - t0) / reps / 1000
-  print(string.format("    cost: %.2f us/call (~%.1f ms per 1000 lines x 4 features)", us, us * 4))
-  check("one lookup stays well under a filesystem stat (~20us here)", us < 5, us .. " us/call")
+  local function stat()
+    vim.uv.fs_stat(stat_path)
+  end
+  lookup()
+  stat()
+  local us, stat_us = math.huge, math.huge
+  for _ = 1, batches do
+    us = math.min(us, per_call_us(lookup))
+    stat_us = math.min(stat_us, per_call_us(stat))
+  end
+  print(
+    string.format(
+      "    cost: %.2f us/call (~%.1f ms per 1000 lines x 4 features), a stat %.2f us",
+      us,
+      us * 4,
+      stat_us
+    )
+  )
+  check(
+    "one lookup costs less than two filesystem stats of the same path, measured here",
+    us < 2 * stat_us,
+    ("%.2f us/call, a stat %.2f us"):format(us, stat_us)
+  )
+  -- The same regression without a clock: a lookup touches no filesystem.
+  local fs_calls = {}
+  local spied = {
+    { vim.uv, "fs_stat" },
+    { vim.uv, "fs_lstat" },
+    { vim.uv, "fs_realpath" },
+    { vim.fn, "isdirectory" },
+    { vim.fn, "getftype" },
+    { vim.fn, "filereadable" },
+  }
+  for _, s in ipairs(spied) do
+    local orig = s[1][s[2]]
+    s[3] = orig
+    s[1][s[2]] = function(...)
+      fs_calls[#fs_calls + 1] = s[2]
+      return orig(...)
+    end
+  end
+  lookup()
+  for _, s in ipairs(spied) do
+    s[1][s[2]] = s[3]
+  end
+  check(
+    "one lookup touches no filesystem (no stat, no isdirectory)",
+    #fs_calls == 0,
+    table.concat(fs_calls, ", ")
+  )
 
   local features = require("filetree.features")
 
@@ -823,6 +883,29 @@ local function run_neotree_filter_race_check()
   local mgr = require("neo-tree.sources.manager")
   local renderer = require("neo-tree.ui.renderer")
   local state = mgr.get_state("filesystem")
+
+  -- Run the race with CI's timing on every machine. neo-tree looks its find
+  -- command up on EVERY search (`vim.fn.executable` of fdfind, fd, ... over
+  -- $PATH; the result lands on that search's options, not on the state). On a
+  -- long $PATH (Windows, or WSL with the Windows $PATH appended) these
+  -- lookups cost 100-160 ms per search, so the clear below came after neo-tree's
+  -- 100 ms navigate debounce had run out, and the bug this pins stayed hidden
+  -- on every machine but the hosted runners (run 43420079289: "after the
+  -- clear only the root is expanded" on all three). Resolved once, as neo-tree
+  -- would, the search starts within milliseconds, as it does there. Done here,
+  -- before the settle waits below: neo-tree's debounce timer counts from the
+  -- event loop's last tick, so every millisecond of work between that tick and
+  -- the race shortens its window.
+  if not state.find_command then
+    for _, cmd in ipairs({ "fdfind", "fd", "find", "where" }) do
+      local usable = vim.fn.executable(cmd) == 1
+        and not (cmd == "find" and vim.fn.has("win32") == 1)
+      if usable then
+        state.find_command = cmd
+        break
+      end
+    end
+  end
 
   -- neo-tree node ids are native paths (backslashes on Windows), not the
   -- forward-slash form `work` is built from -- resolve them from what the

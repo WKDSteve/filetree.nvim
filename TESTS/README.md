@@ -57,13 +57,12 @@ when one is missing. A single file can still be run directly, e.g.
 `nvim -n --clean --headless -u NONE -l TESTS/keys.lua`.
 
 All of them are headless and exit 0 on a pass. `.github/workflows/ci.yml`'s
-`test` job gates on every suite in the table but `adapter_lines.lua`, `refs/run.lua` and the test sheets. It
+`test` job gates on every suite in the table, `refs/run.lua` and the test sheets. It
 checks out neo-tree/nui/plenary at pinned commits as siblings; the test sheets and the
 seven real-neo-tree suites (`adapter_lines.lua`, `collapse_all_backends.lua`,
 `group_empty_dirs_collapse.lua`, `neotree_redraw_hook.lua`,
 `neotree_collapse_redraw_coalesce.lua`, `quickpick_neotree.lua`, `sort_cycle_backends.lua`)
-find them there. `adapter_lines.lua` is the exception for now: its three "filter-race" cases fail on
-the hosted runners only (run 43420079289), so it is out of `spec_pattern` and started by hand. Locally those suites look in `$<NAME>_DIR` (`$NEO_TREE_NVIM_DIR`, ...),
+find them there. Locally those suites look in `$<NAME>_DIR` (`$NEO_TREE_NVIM_DIR`, ...),
 `.deps/<name>`, `../<name>` and the lazy.nvim directory of your editor, like the sheets. A
 neo-tree, nui or plenary they find on their own is used only at the commit `ci.yml` pins
 ([`neotree_pins.lua`](neotree_pins.lua) reads the pins from there; their checks lean on neo-tree
