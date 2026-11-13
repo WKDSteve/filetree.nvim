@@ -300,6 +300,80 @@ eq("nothing is drawn for it any more", drawn(dir .. "/lua/mod/a.lua").right, {})
 native.reset()
 eq("reset stops following the registry", decor.names(), {})
 
+-- ── another plugin's decorator: testing.nvim's test results ────────────────────
+-- testing.nvim registers at lib.nvim's registry and knows nothing of filetree; the tree draws it.
+do
+  for _, candidate in ipairs({
+    vim.env.TESTING_NVIM_DIR or "",
+    vim.fn.fnamemodify(root, ":h") .. "/testing.nvim",
+    root .. "/.deps/testing.nvim",
+    vim.fn.stdpath("data") .. "/lazy/testing.nvim",
+  }) do
+    if candidate ~= "" and vim.fn.isdirectory(candidate .. "/lua") == 1 then
+      vim.opt.rtp:prepend(candidate)
+      break
+    end
+  end
+  local has_testing, tests = pcall(require, "testing.integrations.tree")
+  if not has_testing then
+    say(
+      "  n/a  testing.nvim's decorator: testing.nvim (with integrations.tree) is not on this machine"
+    )
+  else
+    local state = require("testing.state")
+    local result = require("testing.core.result")
+    local res = result.new({ root = dir, id = "2026-01-01T00:00:00Z-0001" })
+    for _, c in ipairs({
+      { "lua/mod/a.lua", "one", "fail" },
+      { "lua/mod/a.lua", "two", "pass" },
+      { "lua/mod/b.lua", "one", "pass" },
+    }) do
+      local case = result.new_case({ file = c[1], name = c[2] })
+      case.status = c[3]
+      case.duration_ms = 1
+      result.add_case(res, case)
+    end
+    local st = state.new(dir)
+    state.apply(
+      st,
+      result.finalize(res),
+      { ran_files = { ["lua/mod/a.lua"] = true, ["lua/mod/b.lua"] = true } }
+    )
+    local real_load = state.load
+    state.load = function()
+      return st
+    end
+    adapter.toggle_at("left", { dir = dir })
+    tests.register({
+      root = function()
+        return dir
+      end,
+      state_opts = { state_dir = dir .. "/.no-state" },
+    })
+    adapter.expand_node({ path = dir .. "/lua" })
+    adapter.expand_node({ path = dir .. "/lua/mod" })
+    eq(
+      "testing.nvim: a red spec file shows its count",
+      drawn(dir .. "/lua/mod/a.lua").right,
+      { "✗ 1/2:DiagnosticError" }
+    )
+    eq(
+      "testing.nvim: a green one its sign",
+      drawn(dir .. "/lua/mod/b.lua").right,
+      { "✓:DiagnosticOk" }
+    )
+    eq(
+      "testing.nvim: the folder shows the worst below it",
+      drawn(dir .. "/lua").right,
+      { "✗ 1/2:DiagnosticError" }
+    )
+    tests.unregister()
+    eq("testing.nvim: gone when it unregisters", drawn(dir .. "/lua/mod/a.lua").right, {})
+    state.load = real_load
+    native.reset()
+  end
+end
+
 vim.notify = real_notify
 require("lib.nvim.tree.registry").reset()
 vim.fn.delete(dir, "rf")
