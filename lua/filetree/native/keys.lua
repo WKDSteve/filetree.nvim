@@ -11,8 +11,6 @@
 ---
 --- The action table with `needs` / `when` of a later stage replaces this list.
 
-local api = vim.api
-
 local M = {}
 
 ---`<CR>` on a row: a folder opens or closes, a file opens in an editor window.
@@ -39,7 +37,7 @@ local function close_or_parent(view)
   end
   local parent = view.tree:parent(row.id)
   local line = parent and view.tree:row_of(parent)
-  if line and view.win then api.nvim_win_set_cursor(view.win, { line, 0 }) end
+  if line then view:set_cursor(line) end
 end
 
 ---`l`: open the folder under the cursor, or the file.
@@ -50,9 +48,7 @@ local function open_or_enter(view)
   if (row.expandable or row.node.kind == "dir") and row.expanded then
     local line = view.tree:row_of(row.id)
     local below = line and view.tree:row(line + 1)
-    if below and below.depth > row.depth and view.win then
-      api.nvim_win_set_cursor(view.win, { line + 1, 0 })
-    end
+    if below and below.depth > row.depth then view:set_cursor(line + 1) end
     return
   end
   M.activate(view)
@@ -95,9 +91,8 @@ function M.attach(view, buf)
       view:collapse(row.id)
     elseif parent and parent ~= view.root then
       view:collapse(parent)
-      view.cursor_id = parent
       local line = view.tree:row_of(parent)
-      if line and view.win then api.nvim_win_set_cursor(view.win, { line, 0 }) end
+      if line then view:set_cursor(line) end
     end
   end)
   map("z", "Close every folder", function()

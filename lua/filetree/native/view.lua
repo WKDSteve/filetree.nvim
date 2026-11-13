@@ -72,7 +72,7 @@ View.__index = View
 ---@field position? FiletreeTreePosition
 ---@field width? integer
 ---@field group_empty? boolean
----@field hide? fun(name: string, path: string): boolean  Which names `hide_ignored` hides.
+---@field hide? fun(): fun(name: string, path: string): boolean  Answers the test for the names `hide_ignored` hides; asked once per listing.
 ---@field icons? boolean  false: no icons at all.
 
 local function define_highlights()
@@ -135,7 +135,8 @@ function View:_hide()
       return false
     end
   end
-  return self._opts.hide
+  -- asked once per listing, not once per entry: the factory may be costly (it resolves a feature)
+  return self._opts.hide()
 end
 
 ---The lazy `children` of every folder node of this view.
@@ -203,20 +204,23 @@ function View:_build()
   -- The root is read here and handed over as a list: the tree core counts a root as open from the
   -- start, so it never asks a lazy root for its children.
   local entries, err = list.list_sync(root)
+  local built
   self.root_error = entries == nil and err or nil
   self._loaded[root] = true
   self.tree = tree_core.new({
     root = {
       id = root,
-      label = list.basename(root),
+      label = root == "/" and "" or list.basename(root),
       kind = "dir",
       path = root,
       children = self:_nodes(entries or {}, self._loader_fn),
     },
     on_change = function(changes)
-      self:_apply(changes)
+      -- an answer for a tree this view no longer shows (the root changed while a folder was read)
+      if self.tree == built then self:_apply(changes) end
     end,
   })
+  built = self.tree
 end
 
 -- ── buffer ─────────────────────────────────────────────────────────────────────
@@ -335,6 +339,29 @@ function View:_after_draw()
   for _, fn in ipairs(render_listeners) do
     pcall(fn, buf)
   end
+end
+
+---Take the node under the window's cursor as the one the cursor belongs to. Called before the model
+---changes: a cursor moved by `nvim_win_set_cursor` reports `CursorMoved` only later, and the rows it
+---was moved on are about to shift.
+function View:sync_cursor()
+  local win = self.win
+  if not win or not api.nvim_win_is_valid(win) or api.nvim_win_get_buf(win) ~= self.buf then
+    return
+  end
+  local row = self.tree:row(api.nvim_win_get_cursor(win)[1])
+  if row then self.cursor_id = row.id end
+end
+
+---Move the cursor of the tree window to a line; the node there is the one it belongs to from now on.
+---@param line integer  1-based.
+---@return boolean
+function View:set_cursor(line)
+  local row = self.tree:row(line)
+  if not row then return false end
+  self.cursor_id = row.id
+  self:_place_cursor()
+  return true
 end
 
 ---Put the window's cursor back on the node it belongs to.
@@ -505,6 +532,7 @@ end
 ---@param id string
 ---@return boolean
 function View:expand(id)
+  self:sync_cursor()
   local row = self.tree:row_of(id)
   if not row or not self.tree:row(row).expandable then return false end
   self:_now(function()
@@ -516,6 +544,7 @@ end
 ---@param id string
 ---@return boolean
 function View:collapse(id)
+  self:sync_cursor()
   if id == self.root or not self.tree:is_expanded(id) then return false end
   self:_apply(self.tree:collapse(id))
   return true
@@ -524,6 +553,7 @@ end
 ---Open or close the folder on a row; a folder being read is left alone.
 ---@param id string
 function View:toggle(id)
+  self:sync_cursor()
   if self.tree:is_expanded(id) then
     self:collapse(id)
   else
@@ -536,9 +566,7 @@ end
 ---@param path string  Normalized; below the root.
 ---@return boolean found
 function View:reveal(path)
-  if path ~= self.root and path:sub(1, #self.root + 1) ~= list.join(self.root, "") then
-    return false
-  end
+  if not list.inside(self.root, path) then return false end
   local chain = {}
   local current = path
   while current and current ~= self.root do
@@ -563,6 +591,7 @@ end
 ---Close every folder; with `keep`, the folders on the way to that path stay open.
 ---@param keep? string  Normalized path.
 function View:collapse_all(keep)
+  self:sync_cursor()
   -- the top-level entry the cursor is under, found while its ancestors are still rows
   local top = nil
   local current = self.cursor_id
@@ -596,6 +625,7 @@ end
 ---Open the given folders (the ones that still exist).
 ---@param paths string[]
 function View:expand_paths(paths)
+  self:sync_cursor()
   local sorted = vim.list_slice(paths)
   table.sort(sorted, function(a, b)
     return #a < #b
@@ -613,6 +643,7 @@ end
 
 ---Read every folder that was read before again and take over what changed. Open folders stay open.
 function View:refresh()
+  self:sync_cursor()
   list.invalidate()
   local ids = vim.tbl_keys(self._loaded)
   table.sort(ids, function(a, b)
@@ -647,6 +678,7 @@ end
 ---Build the tree again from the cache: for a change of what is listed (sort order, hidden names).
 ---@private
 function View:_relist()
+  self:sync_cursor()
   local open = self:expanded_paths()
   local cursor = self.cursor_id
   self:_build()

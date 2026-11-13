@@ -228,9 +228,9 @@ end
 
 ---@return boolean
 function M.open_cwd()
-  local view = native.ensure()
-  if not view:is_open() then view:set_root(vim.fn.getcwd()) end
-  return view:open(nil, false)
+  -- a new view starts at the working directory; one that exists comes back as it was left (its
+  -- root, its open folders), which is what a foreign tree does on "show"
+  return native.ensure():open(nil, false)
 end
 
 ---@param position FiletreeTreePosition
@@ -299,9 +299,9 @@ end
 ---@param line integer
 ---@return boolean
 function M.scroll_to_line(line)
-  local win = M.get_winid()
-  if not win then return false end
-  return (pcall(api.nvim_win_set_cursor, win, { math.max(1, line), 0 }))
+  local view = native.current()
+  if not view or not view:is_open() then return false end
+  return view:set_cursor(math.max(1, line))
 end
 
 ---@type table<string, integer>  path -> extmark id of its line highlight

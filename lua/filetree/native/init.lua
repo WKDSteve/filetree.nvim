@@ -43,11 +43,10 @@ function M.options()
   return options
 end
 
----The names the ignore list hides when a view is told to hide them.
----@param name string
----@return boolean
-local function ignored(name)
-  return require("filetree.util.ignore").predicate()(name)
+---The test for the names the ignore list hides, as it stands now.
+---@return fun(name: string, path: string): boolean
+local function ignored()
+  return require("filetree.util.ignore").predicate()
 end
 
 ---The view of the current tab, or nil when the tree was never asked for in it.

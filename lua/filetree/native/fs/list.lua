@@ -65,6 +65,17 @@ function M.parent(path)
   return parent
 end
 
+---Is `path` the folder `root` or something below it? Both normalized.
+---@param root string
+---@param path string
+---@return boolean
+function M.inside(root, path)
+  if path == root then return true end
+  -- with the separator: `/a/bc` is not inside `/a/b`; a bare root (`/`, `C:/`) ends in it already
+  local prefix = M.join(root, "")
+  return path:sub(1, #prefix) == prefix
+end
+
 ---@param path string
 ---@return string
 function M.basename(path)

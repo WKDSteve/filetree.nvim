@@ -327,8 +327,10 @@ vim.fn.mkdir(dir .. "/node_modules", "p")
 adapter.refresh()
 ok("an ignored name is shown by default", vim.tbl_contains(names(), "node_modules"))
 -- the ignore list feature is not set up in this spec: hand the view the predicate it would get
-adapter.get_state()._opts.hide = function(name)
-  return name == "node_modules"
+adapter.get_state()._opts.hide = function()
+  return function(name)
+    return name == "node_modules"
+  end
 end
 adapter.get_state():set_hide_ignored(true)
 ok("... and hidden on request", not vim.tbl_contains(names(), "node_modules"))
@@ -427,6 +429,111 @@ local undo =
 ok(
   "the trash history is not filetype `filetree`",
   undo:find('filetype = "filetree"', 1, true) == nil
+)
+
+-- ── found in review ────────────────────────────────────────────────────────────
+adapter.toggle_at("left", { dir = dir })
+adapter.collapse_all()
+
+-- a cursor moved by the API belongs to its new node at once, not after CursorMoved
+local c_line = adapter.get_node_line(dir .. "/c.txt")
+ok("scroll_to_line", adapter.scroll_to_line(c_line))
+adapter.expand_node({ path = dir .. "/a" })
+eq(
+  "a cursor set by scroll_to_line stays on that node when rows above it come",
+  adapter.get_node_at_line(
+    adapter.get_bufnr(),
+    vim.api.nvim_win_get_cursor(adapter.get_winid())[1] - 1
+  ).name,
+  "c.txt"
+)
+vim.api.nvim_win_set_cursor(adapter.get_winid(), { adapter.get_node_line(dir .. "/zz.txt"), 0 })
+adapter.collapse_node({ path = dir .. "/a" })
+eq(
+  "... and one set with nvim_win_set_cursor, without a CursorMoved in between",
+  adapter.get_node_at_line(
+    adapter.get_bufnr(),
+    vim.api.nvim_win_get_cursor(adapter.get_winid())[1] - 1
+  ).name,
+  "zz.txt"
+)
+eq("scroll_to_line past the end answers false", adapter.scroll_to_line(9999), false)
+
+-- open_cwd brings a tree back as it was left, it does not root it at the cwd again
+adapter.set_root(dir .. "/a")
+adapter.close()
+adapter.open_cwd()
+eq("open_cwd keeps the root of an existing view", adapter.get_root_path(), dir .. "/a")
+adapter.set_root(dir)
+
+-- a folder that answers after the root changed must not write into the new tree
+do
+  local held
+  local real_list = list.list
+  list.list = function(path, cb)
+    if path == dir .. "/chain/only/inner" then
+      held = function()
+        real_list(path, cb)
+      end
+      return
+    end
+    real_list(path, cb)
+  end
+  list.invalidate(dir .. "/chain/only/inner")
+  local state = adapter.get_state()
+  state:toggle(dir .. "/chain/only/inner") -- asynchronous: the read is held back
+  ok("the folder is being read", held ~= nil)
+  adapter.set_root(dir .. "/a")
+  local shown = lines()
+  held()
+  vim.wait(300, function()
+    return false
+  end)
+  eq("an answer for the old tree leaves the new one alone", lines(), shown)
+  list.list = real_list
+  adapter.set_root(dir)
+end
+
+-- the test for hidden names is built once per listing
+do
+  local built = 0
+  local state = adapter.get_state()
+  state._opts.hide = function()
+    built = built + 1
+    return function(name)
+      return name == "node_modules"
+    end
+  end
+  state:set_hide_ignored(true)
+  ok(
+    ("the hide test is built per listing, not per entry (%d times)"):format(built),
+    built >= 1 and built <= 3
+  )
+  state:set_hide_ignored(false)
+end
+
+-- inside(): the separator counts, a bare root already ends in one
+eq(
+  "inside: a folder and what is below it",
+  { list.inside("/a/b", "/a/b"), list.inside("/a/b", "/a/b/c") },
+  { true, true }
+)
+eq("inside: a longer sibling name is not below", list.inside("/a/b", "/a/bc/d"), false)
+eq(
+  "inside: the file system root",
+  { list.inside("/", "/x/y"), list.inside("C:/", "C:/x") },
+  { true, true }
+)
+eq("inside: another drive", list.inside("C:/", "D:/x"), false)
+eq(
+  "norm keeps a bare root",
+  { list.norm("c:\\"), list.norm("/"), list.norm("c:\\a\\") },
+  { "C:/", "/", "C:/a" }
+)
+eq(
+  "parent of an entry of a drive root",
+  { list.parent("C:/x"), list.parent("/x"), list.parent("/") },
+  { "C:/", "/" }
 )
 
 -- ── 10 000 entries in one folder ───────────────────────────────────────────────
