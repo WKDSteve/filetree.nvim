@@ -25,6 +25,7 @@ require("filetree").setup({
     width = 32,               -- of a side tree
     group_empty_dirs = true,  -- a chain of folders holding one folder each is one line: a/b/c/
     icons = true,             -- file and folder icons; drawn only with a Nerd Font declared
+    max_entries = 20000,      -- entries shown per folder; a last line says how many more (0 = no limit)
   },
 })
 ```
@@ -107,10 +108,20 @@ buffer instead of closing the tab.
 ### Measured
 
 On the development machine (Windows 11, NVMe), by `TESTS/native_view_spec.lua`:
-opening a folder with 10 000 entries (read, sort, model, 10 000 buffer lines)
-about 50 ms; closing and opening it again from the model about 30 ms; drawing
-the highlights of 50 visible lines about 0.5 ms. The read is not sliced yet, so
-a folder of that size blocks for those 50 ms once.
+
+| | |
+| --- | --- |
+| open the tree again (its folders are cached) | about 2 ms |
+| open a new tree (read the root, build, buffer, window) | about 15 ms |
+| open a folder with 10 000 entries (read, sort, model, 10 000 buffer lines) | 50 to 80 ms |
+| close and open that folder again from the model | about 30 ms |
+| draw the highlights of 50 visible lines | under 1 ms |
+
+A folder is read and written in one piece, not in slices: the 10 000 entries
+above block once for those 50 to 80 ms. Measured by hand for the decision: 50 000
+entries take about 250 ms without a limit and about 135 ms with the default
+`max_entries = 20000`, which is what bounds the model and the buffer. A folder
+that is cut ends in a line that says how many entries are not shown.
 
 ## neo-tree adapter
 

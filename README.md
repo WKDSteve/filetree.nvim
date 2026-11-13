@@ -29,6 +29,11 @@ nvim-tree.lua, netrw, oil.nvim and mini.files through one adapter interface, so
 changing tree plugins costs you the plugin, not the workflow you built on top
 of it.
 
+**And a tree of its own.** `adapter = "native"` is filetree.nvim's own tree, with
+no tree plugin behind it: lazy, one read per folder shared by every tab, the
+cursor bound to its entry. It is new and chosen by name; see
+[the native adapter](docs/FEATURES/BACKENDS.md#native-adapter-the-own-tree).
+
 **Screenshots, readable.** `<CR>` on an image opens an
 [image viewer](docs/FEATURES/UI.md#image-viewer): zoom into the corner that
 matters (Alt + wheel at the pointer), drag the picture around, cut a part into

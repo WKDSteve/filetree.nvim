@@ -30,6 +30,27 @@ require("filetree").setup({
 })
 ```
 
+## The own tree's keys (`adapter = "native"`)
+
+The own tree brings only the keys that make it a tree; everything else in the
+table of [`BINDINGS/KEYMAPS.md`](BINDINGS/KEYMAPS.md) is a feature key and works
+on it as on any backend. Where a feature binds the same key, the feature wins
+(`<CR>` goes through the preview feature first and falls through to the tree).
+
+| Key | Action |
+| --- | --- |
+| `<CR>`, `o`, `<2-LeftMouse>` | open the file in an editor window, or open/close the folder |
+| `l` | open the folder or file; on an open folder, go to its first entry |
+| `h` | close the folder, or go to the parent folder |
+| `C` | close the folder the entry lies in |
+| `z` | close every folder |
+| `R` | read the folders again |
+| `H` | show or hide the names of the ignore list |
+| `q` | close the tree |
+
+Switch one off or point it elsewhere with `adapter_keymaps`, as for any backend:
+`adapter_keymaps = { H = false }`.
+
 ## Noop an adapter (neotree) built-in key:
 
 ```lua

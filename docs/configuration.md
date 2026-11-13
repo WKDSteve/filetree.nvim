@@ -64,6 +64,7 @@ require("filetree").setup({
   --   width = 32,
   --   group_empty_dirs = true,  -- a/b/c/ as one line
   --   icons = true,
+  --   max_entries = 20000,      -- per folder; 0 = no limit
   -- },
 
   -- Sources, decorators and actions for the own tree (being built; see

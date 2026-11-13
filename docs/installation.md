@@ -36,7 +36,9 @@ spec with `deps_popup = false`, or globally with
 filetree.nvim must load **after** your tree plugin's own config runs, so pick a
 load point like `event = "VeryLazy"` (lazy.nvim) or place the `setup()` call after
 the tree plugin is configured. Only **one** tree plugin is needed; `lib.nvim`
-and `ui.nvim` are both declared dependencies.
+and `ui.nvim` are both declared dependencies. With `adapter = "native"`
+([filetree.nvim's own tree](FEATURES/BACKENDS.md#native-adapter-the-own-tree)) no
+tree plugin is needed at all.
 
 ### lazy.nvim
 
