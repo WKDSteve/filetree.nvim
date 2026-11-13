@@ -80,9 +80,13 @@ function M.truncate(text, width, strwidth)
   if width <= 0 then return "", text ~= "" end
   if strwidth(text) <= width then return text, false end
   local room = width - strwidth(ELLIPSIS)
+  -- narrower than the ellipsis itself (it is two columns wide with 'ambiwidth' = double)
+  if room < 0 then return "", true end
   local out = ""
   -- character by character: a display width is not a byte count
-  for char in text:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
+  -- one byte plus the continuation bytes behind it: a byte that is no valid UTF-8 (a Latin-1 file
+  -- name) is its own "character" and is kept, where a stricter pattern would silently drop it
+  for char in text:gmatch(".[\128-\191]*") do
     if strwidth(out .. char) > room then break end
     out = out .. char
   end

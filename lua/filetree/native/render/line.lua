@@ -73,7 +73,9 @@ function M.render(row, opts)
   local is_dir = row.expandable or row.node.kind == "dir"
   local name_hl = is_dir and (hl.dir or HL.dir) or (hl.name or HL.name)
   local name_start = col
-  local label = row.node.label
+  -- a file name may hold a line break or a tab (Linux allows both); a buffer line may not hold the
+  -- first and should not jump at the second. One byte for one byte, so every column stays right.
+  local label = (tostring(row.node.label):gsub("%c", "?"))
   ---@type any[]|nil
   local chain = type(row.node.data) == "table" and row.node.data.chain or nil
   local segments = {}

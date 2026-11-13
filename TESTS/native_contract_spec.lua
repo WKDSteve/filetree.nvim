@@ -255,6 +255,19 @@ eq(
   }, plain).text,
   "~ q"
 )
+eq(
+  "control characters in a name never reach the buffer line",
+  line.render({
+    id = "q",
+    depth = 0,
+    expandable = false,
+    expanded = false,
+    loading = false,
+    agg = {},
+    node = { id = "q", label = "a\nb\tc\r" },
+  }, plain).text,
+  "  a?b?c?"
+)
 eq("default glyphs", line.render(t:row(1)).text, "▾ lua")
 
 -- ── render.columns: who keeps room when the window is narrow ───────────────────
@@ -314,6 +327,16 @@ eq(
   { "日本…", true }
 )
 eq("truncate: width 1", { columns.truncate("abc", 1, strwidth) }, { "…", true })
+eq("truncate: narrower than the ellipsis", {
+  columns.truncate("abc", 1, function(s)
+    return s == "…" and 2 or #s
+  end),
+}, { "", true })
+eq("truncate: a byte that is no valid UTF-8 is kept, not dropped", {
+  columns.truncate("a\255bcdef", 4, function(s)
+    return s == "…" and 1 or #s
+  end),
+}, { "a\255b…", true })
 eq("truncate: width 0", { columns.truncate("abc", 0, strwidth) }, { "", true })
 
 -- ── decor.store: badges by path, folders add up what lies below ────────────────
