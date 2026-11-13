@@ -23,9 +23,12 @@ for _, dep in ipairs({ "lib.nvim", "ui.nvim" }) do
   end
 end
 
--- Results go to stdout directly, not through print(): Neovim 0.12.2 segfaults in a headless `-l` run
--- when the screen is redrawn (`:redraw`, or a `vim.wait` that processes events) after a dozen
--- print() lines.
+-- No `vim.o.columns` / `vim.o.lines` in this file: a headless run has no UI, its screen grid stays
+-- 80x24 whatever the options say, and the next forced redraw writes past it (Neovim 0.12: a
+-- segfault on Windows, a failed assertion in grid_line_flush in a debug build). The tree and the
+-- editor windows fit into 80 columns.
+
+-- Results go to stdout directly: print() in a headless run goes through the message area.
 local function say(text)
   io.stdout:write(text, "\n")
 end
@@ -44,8 +47,6 @@ local function ok(name, cond)
   eq(name, cond and true or false, true)
 end
 
-vim.o.columns = 140
-vim.o.lines = 45
 vim.g.have_nerd_font = false
 vim.g.mapleader = "\\"
 
@@ -292,7 +293,7 @@ eq(
 )
 
 -- ── health ─────────────────────────────────────────────────────────────────────
--- the check function itself: `:checkhealth` ends a headless `-l` run on this Neovim
+-- the check function itself, with a stand-in `vim.health`: the report is read here, not shown in a tab
 local reported = {}
 local real_health = vim.health
 ---@diagnostic disable-next-line: duplicate-set-field

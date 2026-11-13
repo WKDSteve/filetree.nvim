@@ -23,9 +23,12 @@ for _, dep in ipairs({ "lib.nvim", "ui.nvim" }) do
   end
 end
 
--- Results go to stdout directly, not through print(): Neovim 0.12.2 segfaults in a headless `-l` run
--- when the screen is redrawn (`:redraw`, or a `vim.wait` that processes events) after a dozen
--- print() lines.
+-- No `vim.o.columns` / `vim.o.lines` in this file: a headless run has no UI, its screen grid stays
+-- 80x24 whatever the options say, and the next forced redraw writes past it (Neovim 0.12: a
+-- segfault on Windows, a failed assertion in grid_line_flush in a debug build). The tree and the
+-- editor windows fit into 80 columns.
+
+-- Results go to stdout directly: print() in a headless run goes through the message area.
 local function say(text)
   io.stdout:write(text, "\n")
 end
@@ -44,8 +47,6 @@ local function ok(name, cond)
   eq(name, cond and true or false, true)
 end
 
-vim.o.columns = 120
-vim.o.lines = 40
 vim.g.have_nerd_font = false -- no icons: the lines below are plain text on every machine
 
 local list = require("filetree.native.fs.list")
@@ -557,8 +558,8 @@ adapter.expand_node({ path = big })
 local again_ms = (vim.uv.hrtime() - t0) / 1e6
 say(("  info 10k entries: close and open again from the model %.1f ms"):format(again_ms))
 ok(("10k entries: reopening under 500 ms (%.0f ms)"):format(again_ms), again_ms < 500)
--- Not through `:redraw`: Neovim 0.12.2 segfaults in a headless `-l` run when a redraw follows a
--- dozen print() lines (no plugin needed to see it). The provider's line function is called directly.
+-- The provider's line function is called directly: it is what a redraw runs for each line on screen,
+-- and timing it needs no screen.
 local view_mod = require("filetree.native.view")
 local big_buf = adapter.get_bufnr()
 t0 = vim.uv.hrtime()
