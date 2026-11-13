@@ -149,7 +149,11 @@ end
 ---@param tag string
 ---@return string work
 local function make_project(tag)
-  local work = slash((vim.env.TEMP or "/tmp") .. "/filetree-lines-" .. tag)
+  local work = slash(
+    (vim.uv.fs_realpath(vim.env.TEMP or "/tmp") or vim.env.TEMP or "/tmp")
+      .. "/filetree-lines-"
+      .. tag
+  )
   vim.fn.delete(work, "rf")
   vim.fn.mkdir(work .. "/src", "p")
   vim.fn.writefile({ "-- committed" }, work .. "/src/a.lua")
@@ -668,7 +672,10 @@ end
 local function run_nvimtree_filter_line_check()
   print("\n== nvim-tree: the live-filter prompt line resolves to nil, not the root ==")
 
-  local work = slash((vim.env.TEMP or "/tmp") .. "/filetree-nvimtree-filterline")
+  local work = slash(
+    (vim.uv.fs_realpath(vim.env.TEMP or "/tmp") or vim.env.TEMP or "/tmp")
+      .. "/filetree-nvimtree-filterline"
+  )
   vim.fn.delete(work, "rf")
   vim.fn.mkdir(work .. "/src", "p")
   vim.fn.writefile({ "aaa" }, work .. "/src/a.lua")
@@ -770,7 +777,10 @@ end
 local function run_neotree_filter_race_check()
   print("\n== neo-tree: a clear-then-retype race must not corrupt the restore ==")
 
-  local work = slash((vim.env.TEMP or "/tmp") .. "/filetree-neotree-filterrace")
+  local work = slash(
+    (vim.uv.fs_realpath(vim.env.TEMP or "/tmp") or vim.env.TEMP or "/tmp")
+      .. "/filetree-neotree-filterrace"
+  )
   vim.fn.delete(work, "rf")
   vim.fn.mkdir(work .. "/dirA", "p")
   vim.fn.mkdir(work .. "/dirB", "p")
@@ -954,7 +964,10 @@ end
 local function run_neotree_filter_other_tab_check()
   print("\n== neo-tree: the filter drives the live tree, not the current tab's state ==")
 
-  local work = slash((vim.env.TEMP or "/tmp") .. "/filetree-neotree-filter-tab")
+  local work = slash(
+    (vim.uv.fs_realpath(vim.env.TEMP or "/tmp") or vim.env.TEMP or "/tmp")
+      .. "/filetree-neotree-filter-tab"
+  )
   vim.fn.delete(work, "rf")
   vim.fn.mkdir(work, "p")
   vim.fn.writefile({ "a" }, work .. "/alpha.lua")
@@ -1043,7 +1056,10 @@ end
 local function run_neotree_filter_closed_tree_check()
   print("\n== neo-tree: filtering a closed tree does not open it ==")
 
-  local work = slash((vim.env.TEMP or "/tmp") .. "/filetree-neotree-filter-closed")
+  local work = slash(
+    (vim.uv.fs_realpath(vim.env.TEMP or "/tmp") or vim.env.TEMP or "/tmp")
+      .. "/filetree-neotree-filter-closed"
+  )
   vim.fn.delete(work, "rf")
   vim.fn.mkdir(work, "p")
   vim.fn.writefile({ "a" }, work .. "/alpha.lua")
@@ -1146,7 +1162,10 @@ end
 local function run_neotree_link_marker_check()
   print("\n== neo-tree: link_marker survives neo-tree's own async re-render ==")
 
-  local work = slash((vim.env.TEMP or "/tmp") .. "/filetree-neotree-linkmarker")
+  local work = slash(
+    (vim.uv.fs_realpath(vim.env.TEMP or "/tmp") or vim.env.TEMP or "/tmp")
+      .. "/filetree-neotree-linkmarker"
+  )
   vim.fn.delete(work, "rf")
   vim.fn.mkdir(work, "p")
   vim.fn.writefile({ "hi" }, work .. "/plain.txt")
@@ -1235,7 +1254,10 @@ end
 local function run_neotree_get_visible_nodes_bufnr_check()
   print("\n== neo-tree: get_visible_nodes(filter, bufnr) never falls back to the ambient tree ==")
 
-  local work = slash((vim.env.TEMP or "/tmp") .. "/filetree-neotree-getvisiblebufnr")
+  local work = slash(
+    (vim.uv.fs_realpath(vim.env.TEMP or "/tmp") or vim.env.TEMP or "/tmp")
+      .. "/filetree-neotree-getvisiblebufnr"
+  )
   vim.fn.delete(work, "rf")
   vim.fn.mkdir(work, "p")
   vim.fn.writefile({ "hi" }, work .. "/plain.txt")
@@ -1304,7 +1326,10 @@ end
 local function run_neotree_multitab_redraw_check()
   print("\n== neo-tree: a background-tab redraw still finds the tree's own tab ==")
 
-  local work = slash((vim.env.TEMP or "/tmp") .. "/filetree-neotree-multitab")
+  local work = slash(
+    (vim.uv.fs_realpath(vim.env.TEMP or "/tmp") or vim.env.TEMP or "/tmp")
+      .. "/filetree-neotree-multitab"
+  )
   vim.fn.delete(work, "rf")
   vim.fn.mkdir(work, "p")
   vim.fn.writefile({ "hi" }, work .. "/plain.txt")
@@ -1562,7 +1587,10 @@ end
 local function run_neotree_cache_tier_isolation_check()
   print("\n== neo-tree: get_state()'s _tree_tabid cache tier is genuinely exercised ==")
 
-  local work = slash((vim.env.TEMP or "/tmp") .. "/filetree-neotree-cachetier")
+  local work = slash(
+    (vim.uv.fs_realpath(vim.env.TEMP or "/tmp") or vim.env.TEMP or "/tmp")
+      .. "/filetree-neotree-cachetier"
+  )
   vim.fn.delete(work, "rf")
   vim.fn.mkdir(work, "p")
   vim.fn.writefile({ "hi" }, work .. "/plain.txt")
@@ -1675,8 +1703,14 @@ end
 local function run_neotree_two_live_trees_check()
   print("\n== neo-tree: two simultaneously live per-tab trees never bleed into each other ==")
 
-  local work_a = slash((vim.env.TEMP or "/tmp") .. "/filetree-neotree-two-live-a")
-  local work_b = slash((vim.env.TEMP or "/tmp") .. "/filetree-neotree-two-live-b")
+  local work_a = slash(
+    (vim.uv.fs_realpath(vim.env.TEMP or "/tmp") or vim.env.TEMP or "/tmp")
+      .. "/filetree-neotree-two-live-a"
+  )
+  local work_b = slash(
+    (vim.uv.fs_realpath(vim.env.TEMP or "/tmp") or vim.env.TEMP or "/tmp")
+      .. "/filetree-neotree-two-live-b"
+  )
   for _, w in ipairs({ work_a, work_b }) do
     vim.fn.delete(w, "rf")
     vim.fn.mkdir(w, "p")
@@ -1998,7 +2032,10 @@ end
 local function run_neotree_opened_buffers_redraw_check()
   print("\n== neo-tree: link_marker/marks survive a real opened_buffers_changed redraw ==")
 
-  local work = slash((vim.env.TEMP or "/tmp") .. "/filetree-neotree-openedbuffers")
+  local work = slash(
+    (vim.uv.fs_realpath(vim.env.TEMP or "/tmp") or vim.env.TEMP or "/tmp")
+      .. "/filetree-neotree-openedbuffers"
+  )
   vim.fn.delete(work, "rf")
   vim.fn.mkdir(work, "p")
   vim.fn.writefile({ "hi" }, work .. "/plain.txt")
@@ -2228,7 +2265,10 @@ local function run_neotree_context_menu_click_check()
     return
   end
 
-  local work = slash((vim.env.TEMP or "/tmp") .. "/filetree-neotree-ctxmenu-click")
+  local work = slash(
+    (vim.uv.fs_realpath(vim.env.TEMP or "/tmp") or vim.env.TEMP or "/tmp")
+      .. "/filetree-neotree-ctxmenu-click"
+  )
   vim.fn.delete(work, "rf")
   vim.fn.mkdir(work, "p")
   for _, f in ipairs({ "a.txt", "b.txt", "c.txt", "d.txt" }) do

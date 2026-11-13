@@ -112,7 +112,10 @@ end
 ---root/top.lua, root/a/b/c/deep.lua, root/x/y/z.lua, root/g/h/i/leaf.lua
 ---@return string work
 local function make_project()
-  local work = vim.fs.normalize((vim.env.TEMP or "/tmp") .. "/filetree-collapse-all")
+  local work = vim.fs.normalize(
+    (vim.uv.fs_realpath(vim.env.TEMP or "/tmp") or vim.env.TEMP or "/tmp")
+      .. "/filetree-collapse-all"
+  )
   vim.fn.delete(work, "rf")
   vim.fn.mkdir(work .. "/a/b/c", "p")
   vim.fn.mkdir(work .. "/x/y", "p")

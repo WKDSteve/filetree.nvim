@@ -129,7 +129,10 @@ end
 
 require("filetree.adapter.neotree")
 
-local work = slash((vim.env.TEMP or "/tmp") .. "/filetree-neotree-collapse-coalesce")
+local work = slash(
+  (vim.uv.fs_realpath(vim.env.TEMP or "/tmp") or vim.env.TEMP or "/tmp")
+    .. "/filetree-neotree-collapse-coalesce"
+)
 vim.fn.delete(work, "rf")
 vim.fn.mkdir(work .. "/A/B", "p")
 vim.fn.writefile({ "leaf" }, work .. "/A/B/leaf.txt")

@@ -140,7 +140,10 @@ end
 -- gives on the user's first `:Neotree`.
 require("filetree.adapter.neotree")
 
-local work = slash((vim.env.TEMP or "/tmp") .. "/filetree-neotree-redrawhook")
+local work = slash(
+  (vim.uv.fs_realpath(vim.env.TEMP or "/tmp") or vim.env.TEMP or "/tmp")
+    .. "/filetree-neotree-redrawhook"
+)
 vim.fn.delete(work, "rf")
 vim.fn.mkdir(work, "p")
 vim.fn.writefile({ "hi" }, work .. "/plain.txt")
@@ -389,7 +392,10 @@ end
 -- untouched by reloading this one) instead of in a local here -- see
 -- `install_redraw_hook`'s doc comment.
 do
-  local reload_work = slash((vim.env.TEMP or "/tmp") .. "/filetree-neotree-redrawhook-reload")
+  local reload_work = slash(
+    (vim.uv.fs_realpath(vim.env.TEMP or "/tmp") or vim.env.TEMP or "/tmp")
+      .. "/filetree-neotree-redrawhook-reload"
+  )
   vim.fn.delete(reload_work, "rf")
   vim.fn.mkdir(reload_work, "p")
   vim.fn.writefile({ "hi" }, reload_work .. "/plain.txt")

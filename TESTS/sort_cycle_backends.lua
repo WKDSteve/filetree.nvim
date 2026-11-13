@@ -111,7 +111,9 @@ if not (has_neotree and has_nui) then
 end
 
 -- big.lua is the largest and the oldest, small.lua the smallest and the newest.
-local work = vim.fs.normalize((vim.env.TEMP or "/tmp") .. "/filetree-sort-cycle")
+local work = vim.fs.normalize(
+  (vim.uv.fs_realpath(vim.env.TEMP or "/tmp") or vim.env.TEMP or "/tmp") .. "/filetree-sort-cycle"
+)
 vim.fn.delete(work, "rf")
 vim.fn.mkdir(work, "p")
 vim.fn.writefile({ string.rep("x", 3000) }, work .. "/big.lua")

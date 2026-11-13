@@ -114,7 +114,9 @@ end
 
 -- ── Fixture: personal/All/Finish/leaf.txt -- a chain of single-child dirs,
 -- exactly the shape group_empty_dirs merges into one display line.
-local work = slash((vim.env.TEMP or "/tmp") .. "/filetree-groupempty")
+local work = slash(
+  (vim.uv.fs_realpath(vim.env.TEMP or "/tmp") or vim.env.TEMP or "/tmp") .. "/filetree-groupempty"
+)
 vim.fn.delete(work, "rf")
 vim.fn.mkdir(work .. "/personal/All/Finish", "p")
 vim.fn.writefile({ "leaf" }, work .. "/personal/All/Finish/leaf.txt")

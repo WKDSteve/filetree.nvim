@@ -118,7 +118,10 @@ local function press(keys)
 end
 
 -- ── A real little project ─────────────────────────────────────────────────────
-local work = slash((vim.env.TEMP or "/tmp") .. "/filetree-quickpick-neotree")
+local work = slash(
+  (vim.uv.fs_realpath(vim.env.TEMP or "/tmp") or vim.env.TEMP or "/tmp")
+    .. "/filetree-quickpick-neotree"
+)
 vim.fn.delete(work, "rf")
 vim.fn.mkdir(work .. "/src/deep", "p")
 vim.fn.mkdir(work .. "/docs", "p")
