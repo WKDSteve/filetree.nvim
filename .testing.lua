@@ -33,6 +33,15 @@ return {
     "^TESTS/quickpick%.lua$",
     "^TESTS/refs/run%.lua$",
     "^TESTS/refs/usage%.lua$",
+    -- Against a REAL neo-tree: CI checks out neo-tree, nui and plenary at pinned commits as
+    -- siblings (ci.yml); without them each prints an n/a line instead of passing silently.
+    "^TESTS/adapter_lines%.lua$",
+    "^TESTS/collapse_all_backends%.lua$",
+    "^TESTS/group_empty_dirs_collapse%.lua$",
+    "^TESTS/neotree_collapse_redraw_coalesce%.lua$",
+    "^TESTS/neotree_redraw_hook%.lua$",
+    "^TESTS/quickpick_neotree%.lua$",
+    "^TESTS/sort_cycle_backends%.lua$",
   },
   -- Dependencies (directory names) put on the runtimepath: $<NAME>_DIR, .deps/<name>, ../<name>,
   -- stdpath('data')/lazy/<name>.
@@ -87,6 +96,9 @@ return {
     "NEO_TREE_NVIM_DIR",
     "NUI_NVIM_DIR",
     "PLENARY_NVIM_DIR",
+    -- The real-neo-tree suites (adapter_lines.lua, ...): a neo-tree / nvim-tree checkout to use.
+    "FILETREE_NEOTREE",
+    "FILETREE_NVIMTREE",
     "FT_CODE",
     "FT_X",
     "LIB_NVIM_PATH",

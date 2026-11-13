@@ -8,8 +8,8 @@
 -- never-opened directory asynchronously), that the open lands in an editor
 -- window, and that neo-tree's own buffer-local keys come back byte for byte.
 --
--- Needs neo-tree.nvim + nui.nvim (+ plenary, devicons) and prints a skip
--- without them, like `adapter_lines.lua`; not part of CI for the same reason.
+-- Needs neo-tree.nvim + nui.nvim (+ plenary, devicons) and prints an n/a line
+-- without them, like `adapter_lines.lua`; gated on CI like it.
 --
 -- Usage (from the repo root):
 --   nvim --clean --headless -u NONE -l TESTS/quickpick_neotree.lua
@@ -34,17 +34,31 @@ package.path = table.concat({
 ---@param probe string
 ---@return string?
 local function resolve(env, names, probe)
+  -- Looked up in, in this order: the named variables, $<NAME>_DIR ($NEO_TREE_NVIM_DIR, ...),
+  -- <repo>/.deps/<name>, a sibling ../<name> (what CI checks out: neo-tree, nui and plenary at
+  -- pinned commits), ../.test-plugins/<name>, stdpath("data")/lazy/<name>, and the lazy.nvim
+  -- directory of the real editor (under testing.nvim the child's own stdpath is a sandbox) -- the
+  -- places TESTS/minimal_init_sheet_neotree.lua searches.
   local candidates = {}
   for _, e in ipairs(env) do
     local v = vim.env[e]
     if v and v ~= "" then candidates[#candidates + 1] = v end
   end
+  local parent = vim.fn.fnamemodify(root_dir, ":h")
   for _, name in ipairs(names) do
-    local parent = vim.fn.fnamemodify(root_dir, ":h")
+    local dir_env = vim.env[(name:upper():gsub("[^%w]", "_")) .. "_DIR"]
+    if dir_env and dir_env ~= "" then candidates[#candidates + 1] = dir_env end
+    candidates[#candidates + 1] = root_dir .. "/.deps/" .. name
     candidates[#candidates + 1] = parent .. "/" .. name
     candidates[#candidates + 1] = parent .. "/.test-plugins/" .. name
     candidates[#candidates + 1] = vim.fn.stdpath("data") .. "/lazy/" .. name
-    candidates[#candidates + 1] = vim.fn.expand("$LOCALAPPDATA/nvim-data/lazy/" .. name)
+    local appdata, home = vim.env.LOCALAPPDATA, vim.env.HOME
+    if appdata and appdata ~= "" then
+      candidates[#candidates + 1] = appdata .. "/nvim-data/lazy/" .. name
+    end
+    if home and home ~= "" then
+      candidates[#candidates + 1] = home .. "/.local/share/nvim/lazy/" .. name
+    end
   end
   for _, c in ipairs(candidates) do
     local norm = vim.fs.normalize(c)
@@ -69,7 +83,7 @@ local has_nui = resolve({}, { "nui.nvim" }, "lua/nui")
 local has_neotree = resolve({ "FILETREE_NEOTREE" }, { "neo-tree.nvim" }, "lua/neo-tree")
 
 if not (has_nui and has_neotree) then
-  print("quickpick_neotree: neo-tree/nui not installed -- skipping (not a failure).")
+  print("n/a  quickpick_neotree: neo-tree/nui not installed")
   vim.cmd("qa!")
   return
 end
