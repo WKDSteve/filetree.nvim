@@ -58,6 +58,14 @@ require("filetree").setup({
   -- "Progress indicators" below.
   progress_style = "auto",  -- "auto" | "notify" | "statusline" | "fidget" | "float" | "kit"
 
+  -- Sources, decorators and actions for the own tree (being built; see
+  -- docs/api.md, "Sources, decorators and actions"). Lists of entries; a later
+  -- setup() replaces what an earlier one listed. Same as calling
+  -- require("filetree").source / .decorator / .action yourself.
+  -- sources    = {},
+  -- decorators = {},
+  -- actions    = {},
+
   -- Named roots that portable paths are written with — see "Env roots" below.
   -- A created symlink's messages come out as `$REPOS_DIR/foo.nvim/x.lua` /
   -- `$NVIM_CONFIG_DIR/lua/x.lua` instead of `E:/repos/foo.nvim/x.lua`; `[e` and

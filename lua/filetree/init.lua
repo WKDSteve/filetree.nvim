@@ -67,6 +67,9 @@ local _active_features = {}
 ---@type integer?
 local _adapter_keymaps_augroup = nil
 
+---@type boolean  A setup() registered sources, decorators or actions: the next one has to replace them.
+local _registered_from_setup = false
+
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
 ---Initialize filetree.nvim.
@@ -128,6 +131,15 @@ function M.setup(user_config)
   -- reads it at call time, but a re-setup() must not leave the old roots in
   -- place.
   require("filetree.util.env_roots").setup(cfg.env_roots)
+
+  -- Sources, decorators and actions listed in setup() (see filetree.registry). Only touched when one
+  -- of the three is given or was given before, so a setup() without them never needs the registry.
+  if cfg.sources or cfg.decorators or cfg.actions or _registered_from_setup then
+    _registered_from_setup = true
+    for _, issue in ipairs(require("filetree.registry").apply_setup(cfg)) do
+      notify.warn(issue)
+    end
+  end
 
   -- Configure the reference engine before any feature sets up: every fileops
   -- feature that mutates paths reads its scan/ask/apply policy from here
@@ -298,6 +310,27 @@ function M.is_feature_enabled(name)
   local fcfg = features and features[name]
   if type(fcfg) == "table" and fcfg.enabled ~= nil then return fcfg.enabled == true end
   return not DEFAULT_DISABLED[name]
+end
+
+---Register a source for the tree: it supplies the nodes of one view. See docs/api.md.
+---@param entry Filetree.Source
+---@return fun(): boolean unregister
+function M.source(entry)
+  return require("filetree.registry").source(entry)
+end
+
+---Register a decorator for the tree: badges on nodes, looked up by path or id.
+---@param entry Filetree.Decorator
+---@return fun(): boolean unregister
+function M.decorator(entry)
+  return require("filetree.registry").decorator(entry)
+end
+
+---Register an action for the tree: something to do with the node under the cursor or the selection.
+---@param entry Filetree.Action
+---@return fun(): boolean unregister
+function M.action(entry)
+  return require("filetree.registry").action(entry)
 end
 
 ---Register a custom adapter.

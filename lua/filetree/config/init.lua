@@ -38,6 +38,9 @@ local KNOWN_TOP = {
   progress_style = true,
   max_visible_nodes = true,
   env_roots = true,
+  sources = true,
+  decorators = true,
+  actions = true,
 }
 
 ---Known sub-keys of the top-level `menu` table (see `DEFAULTS.lua`).
