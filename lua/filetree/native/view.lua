@@ -76,11 +76,27 @@ local text_width = {}
 ---@field private _unsubscribe_watch fun()?
 ---@field private _reading table<string, boolean>  Folder ids being read again: true = read once more after this one.
 ---@field private _generation integer  Counts the trees this view has built.
+---@field main Lib.Tree  The tree of the files; `tree` is what is on screen (the same, or the hits of a search).
+---@field private _known table<string, true>  Every path the view has made a node of.
+---@field private _known_dirs table<string, true>
+---@field private _search Filetree.View.Search?
+---@field private _search_gen integer?
+---@field private _main_cursor string?  Where the cursor of the main tree was when the search began.
 ---@field private _seen_closed boolean?  The window was closed at least once.
 ---@field private _opts Filetree.View.Opts
 ---@field private _loader_fn fun(node: Filetree.Node, cb: fun(list?: Filetree.Node[], err?: string))
 local View = {}
 View.__index = View
+
+---@class Filetree.View.Search
+---@field query string
+---@field hits string[]
+---@field dirs table<string, true>
+---@field seen table<string, true>
+---@field max integer
+---@field done boolean
+---@field pending boolean
+---@field cancel? fun()
 
 ---@class Filetree.View.Opts
 ---@field root string
@@ -91,6 +107,8 @@ View.__index = View
 ---@field icons? boolean  false: no icons at all.
 ---@field max_entries? integer  Entries shown per folder (see `Filetree.Files.Opts`).
 ---@field watch? boolean  Follow changes on disk while the tree is shown (default true).
+---@field search_max? integer  Hits a search shows at most (default 1000).
+---@field search_tier? "fd"|"rg"|"lua"  Force how a search lists files (specs).
 
 local function define_highlights()
   for group, link in pairs(M.HL) do
@@ -203,6 +221,10 @@ function View:_nodes(dir, entries, loader)
     group_empty = self._opts.group_empty,
   })
   for _, node in ipairs(nodes) do
+    if node.path then
+      self._known[node.path] = true
+      if node.kind == "dir" then self._known_dirs[node.path] = true end
+    end
     local chain = node.data and node.data.chain
     if chain then
       for i = 1, #chain - 1 do
@@ -232,7 +254,9 @@ end
 
 ---@private
 function View:_build()
+  self:_drop_search()
   self._loaded, self._alias, self._reading = {}, {}, {}
+  self._known, self._known_dirs = {}, {}
   self._generation = (self._generation or 0) + 1
   -- the handles belong to the folders of the old tree; a view that was following keeps following
   local following = self._unsubscribe_watch ~= nil
@@ -255,10 +279,11 @@ function View:_build()
     },
     on_change = function(changes)
       -- an answer for a tree this view no longer shows (the root changed while a folder was read)
-      if self.tree == built then self:_apply(changes) end
+      if self.main == built then self:_apply_main(changes) end
     end,
   })
   built = self.tree
+  self.main = built
   if following then self:_watch() end
 end
 
@@ -281,7 +306,7 @@ function View:_watch()
   self:_watch_dir(self.root)
   if not watch.recursive then
     for id in pairs(self._loaded) do
-      local node = self.tree:node(id)
+      local node = self.main:node(id)
       if node and node.path then self:_watch_dir(node.path) end
     end
     for member, id in pairs(self._alias) do
@@ -314,9 +339,9 @@ function View:_changed(dirs)
     local id = self:id_of(dir)
     -- a folder of a merged line `a/b/c` (the innermost one too, while it is not loaded): what has
     -- to be listed again is the folder the line is in
-    local node = self.tree:node(id)
+    local node = self.main:node(id)
     local merged = node and node.data and node.data.chain ~= nil
-    if id ~= dir or (merged and not self._loaded[id]) then id = self.tree:parent(id) or id end
+    if id ~= dir or (merged and not self._loaded[id]) then id = self.main:parent(id) or id end
     if self._loaded[id] and not seen[id] then
       seen[id] = true
       self:refresh_dir(id)
@@ -332,7 +357,7 @@ function View:refresh_dir(id)
     self._reading[id] = true
     return
   end
-  local node = self.tree:node(id)
+  local node = self.main:node(id)
   if not node or not node.path then return end
   self._reading[id] = false
   local generation = self._generation
@@ -343,13 +368,13 @@ function View:refresh_dir(id)
     if generation ~= self._generation then return end
     local again = self._reading[id]
     self._reading[id] = nil
-    if not self.tree:node(id) then return end
+    if not self.main:node(id) then return end
     self:sync_cursor()
     if entries then
-      self:_apply(self.tree:merge_children(id, self:_nodes(dir, entries, self._loader_fn)))
+      self:_apply_main(self.main:merge_children(id, self:_nodes(dir, entries, self._loader_fn)))
     elseif id ~= self.root then
       self._loaded[id] = nil
-      self:_apply(self.tree:remove(id))
+      self:_apply_main(self.main:remove(id))
     end
     if again then self:refresh_dir(id) end
   end)
@@ -435,6 +460,25 @@ end
 ---Write every line again from the model, without reading the disk.
 function View:redraw()
   if self.buf and api.nvim_buf_is_valid(self.buf) then self:_draw_all() end
+end
+
+---Write rows of the main tree, when it is the one on screen. While a search is laid over it, the
+---main tree keeps changing underneath (a folder read again) and the buffer shows the hits.
+---@private
+---@param changes Lib.Tree.Splice[]
+function View:_apply_main(changes)
+  if self.tree == self.main then self:_apply(changes) end
+end
+
+---Forget a search without drawing: the tree it lies over is about to be replaced.
+---@private
+function View:_drop_search()
+  local search = self._search
+  if not search then return end
+  self._search = nil
+  self._search_gen = (self._search_gen or 0) + 1
+  if search.cancel then search.cancel() end
+  self._main_cursor = nil
 end
 
 ---Write the rows the tree reported as changed.
@@ -676,7 +720,7 @@ end
 function View:id_of(path)
   local id = self._alias[path]
   -- a merged line that was split or removed since leaves its folders their own ids again
-  if id and self.tree:node(id) then return id end
+  if id and self.main:node(id) then return id end
   return path
 end
 
@@ -782,8 +826,8 @@ end
 function View:expanded_paths()
   local out = {}
   for id in pairs(self._loaded) do
-    if id ~= self.root and self.tree:is_expanded(id) then
-      local node = self.tree:node(id)
+    if id ~= self.root and self.main:is_expanded(id) then
+      local node = self.main:node(id)
       if node then out[#out + 1] = node.path end
     end
   end
@@ -797,6 +841,7 @@ end
 ---Open the given folders (the ones that still exist).
 ---@param paths string[]
 function View:expand_paths(paths)
+  self:clear_search()
   self:sync_cursor()
   local sorted = vim.list_slice(paths)
   table.sort(sorted, function(a, b)
@@ -809,6 +854,194 @@ function View:expand_paths(paths)
   end
   self.cursor_id = keep
   self:_place_cursor()
+end
+
+-- ── search ─────────────────────────────────────────────────────────────────────
+-- The hits of a search are a tree of their own, laid over the view. The main tree is never touched
+-- by it: what is open there, where its cursor was, what it has read stays as it is, and clearing the
+-- search shows it again. There is nothing to restore, so nothing a late answer could undo.
+
+---@param query string
+---@return fun(rel: string): boolean
+local function matcher(query)
+  -- every word has to occur; lower case matches both cases, an upper-case letter makes it exact
+  local exact = query:find("%u") ~= nil
+  local words = vim.split(exact and query or query:lower(), "%s+", { trimempty = true })
+  return function(rel)
+    local text = exact and rel or rel:lower()
+    for _, word in ipairs(words) do
+      if not text:find(word, 1, true) then return false end
+    end
+    return true
+  end
+end
+
+---The hits as nodes: every folder on the way to a hit, folders first, all of them open.
+---@param root string
+---@param label string
+---@param hits string[]  Normalized paths below `root`.
+---@param dirs table<string, true>  Which of the hits are folders.
+---@param more integer  Hits that are not shown.
+---@return Filetree.Node root_node
+---@return table<string, true> expanded
+local function overlay_nodes(root, label, hits, dirs, more)
+  local nodes = { [root] = { id = root, label = label, kind = "dir", path = root, children = {} } }
+  local expanded = { [root] = true }
+  local function folder(path)
+    local node = nodes[path]
+    if node then return node end
+    node = { id = path, label = list.basename(path), kind = "dir", path = path, children = {} }
+    nodes[path] = node
+    expanded[path] = true
+    table.insert(folder(list.parent(path) or root).children, node)
+    return node
+  end
+  for _, path in ipairs(hits) do
+    if dirs[path] then
+      folder(path)
+    elseif not nodes[path] then
+      local node = { id = path, label = list.basename(path), kind = "file", path = path }
+      nodes[path] = node
+      table.insert(folder(list.parent(path) or root).children, node)
+    end
+  end
+  for _, node in pairs(nodes) do
+    if node.children then
+      table.sort(node.children, function(a, b)
+        if (a.kind == "dir") ~= (b.kind == "dir") then return a.kind == "dir" end
+        local la, lb = a.label:lower(), b.label:lower()
+        if la ~= lb then return la < lb end
+        return a.label < b.label
+      end)
+    end
+  end
+  if more > 0 then
+    table.insert(nodes[root].children, {
+      id = root .. "//more",
+      label = ("… %d more hits (showing %d, narrow the search)"):format(more, #hits),
+      kind = "more",
+    })
+  end
+  return nodes[root], expanded
+end
+
+---Draw the hits found so far.
+---@private
+function View:_search_draw()
+  local search = self._search
+  if not search then return end
+  search.pending = false
+  local shown = math.min(#search.hits, search.max)
+  local hits = shown < #search.hits and vim.list_slice(search.hits, 1, shown) or search.hits
+  local state = search.done and "" or " …"
+  local label = ("%s  /%s  %d%s"):format(
+    list.basename(self.root),
+    search.query,
+    #search.hits,
+    state
+  )
+  local root_node, expanded =
+    overlay_nodes(self.root, label, hits, search.dirs, #search.hits - shown)
+  self.tree = tree_core.new({ root = root_node, expanded = expanded })
+  -- the cursor goes to the first hit unless it is on one that is still there
+  if not (self.cursor_id and self.tree:row_of(self.cursor_id) and self.cursor_id ~= self.root) then
+    local first = nil
+    for i = 2, self.tree:count() do
+      local row = self.tree:row(i)
+      if row.node.kind == "file" then
+        first = row.id
+        break
+      end
+    end
+    self.cursor_id = first or (self.tree:row(2) and self.tree:row(2).id) or self.root
+  end
+  self:_draw_all()
+end
+
+---Show the entries whose path below the root contains every word of `query`: at once from what the
+---view has read, and from every folder below the root as the listing comes in. An empty query clears.
+---@param query string
+---@return boolean searching
+function View:search(query)
+  query = vim.trim(query or "")
+  if query == "" then
+    self:clear_search()
+    return false
+  end
+  if not self._search then
+    self:sync_cursor()
+    self._main_cursor = self.cursor_id
+  elseif self._search.cancel then
+    self._search.cancel()
+  end
+  self._search_gen = (self._search_gen or 0) + 1
+  local gen = self._search_gen
+  local matches = matcher(query)
+  local prefix = #list.join(self.root, "")
+  ---@type Filetree.View.Search
+  local search = {
+    query = query,
+    hits = {},
+    dirs = {},
+    seen = {},
+    max = self._opts.search_max or 1000,
+    done = false,
+    pending = false,
+  }
+  self._search = search
+  local function add(paths, is_dir)
+    for _, path in ipairs(paths) do
+      if not search.seen[path] and matches(path:sub(prefix + 1)) then
+        search.seen[path] = true
+        search.hits[#search.hits + 1] = path
+        if is_dir and is_dir[path] then search.dirs[path] = true end
+      end
+    end
+  end
+  local known = vim.tbl_keys(self._known)
+  table.sort(known)
+  add(known, self._known_dirs)
+  search.cancel = require("filetree.native.fs.deep").files(self.root, function(batch)
+    -- an answer of a search that was replaced or cleared never reaches the screen
+    if gen ~= self._search_gen or self._search ~= search then return end
+    local before = #search.hits
+    add(batch)
+    if #search.hits ~= before and not search.pending then
+      search.pending = true
+      vim.defer_fn(function()
+        if gen == self._search_gen and self._search == search then self:_search_draw() end
+      end, 60)
+    end
+  end, function()
+    if gen ~= self._search_gen or self._search ~= search then return end
+    search.done = true
+    self:_search_draw()
+  end, self._opts.search_tier and { tier = self._opts.search_tier } or nil)
+  self:_search_draw()
+  return true
+end
+
+---Leave the search: the main tree is shown again, as it was. Safe to call without a search.
+---@return boolean cleared
+function View:clear_search()
+  local search = self._search
+  if not search then return false end
+  self._search = nil
+  self._search_gen = (self._search_gen or 0) + 1
+  if search.cancel then search.cancel() end
+  self.tree = self.main
+  self.cursor_id = self._main_cursor
+  self._main_cursor = nil
+  if self.buf and api.nvim_buf_is_valid(self.buf) then self:_draw_all() end
+  return true
+end
+
+---The search in force, or nil.
+---@return { query: string, hits: integer, done: boolean }|nil
+function View:searching()
+  local search = self._search
+  if not search then return nil end
+  return { query = search.query, hits = #search.hits, done = search.done }
 end
 
 -- ── whole-tree changes ─────────────────────────────────────────────────────────
@@ -825,26 +1058,26 @@ function View:refresh()
   self._alias = {}
   local changed = false
   for _, id in ipairs(ids) do
-    local node = self.tree:node(id)
+    local node = self.main:node(id)
     if not node then
       self._loaded[id] = nil
     else
       local entries = list.list_sync(node.path)
       local changes
       if entries then
-        changes = self.tree:merge_children(id, self:_nodes(node.path, entries, self._loader_fn))
+        changes = self.main:merge_children(id, self:_nodes(node.path, entries, self._loader_fn))
       else
         self._loaded[id] = nil
-        changes = self.tree:remove(id)
+        changes = self.main:remove(id)
       end
       -- applied per folder: the splices of one operation are in terms of the rows as that operation
       -- left them, and the next folder's would be read against a tree that has moved on
       changed = changed or #changes > 0
-      self:_apply(changes)
+      self:_apply_main(changes)
     end
   end
   -- a refresh may change nothing on screen and still has to reach whoever decorates the tree
-  if not changed then self:_after_draw() end
+  if not changed and self.tree == self.main then self:_after_draw() end
 end
 
 ---Build the tree again from the cache: for a change of what is listed (sort order, hidden names).
@@ -908,6 +1141,8 @@ function M.new(opts)
     _alias = {},
     _watches = {},
     _reading = {},
+    _known = {},
+    _known_dirs = {},
     _generation = 0,
     _opts = opts,
   }, View)

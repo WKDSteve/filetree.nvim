@@ -13,8 +13,9 @@ Windows/WSL) leaks OS-level file handles.
 
 > **Status.** The tree, its window and the whole adapter contract are there, the
 > features run on it, it follows the disk by itself and draws the badges of
-> registered decorators. Still to come: search as an overlay, more sources than
-> files, and the action table. Until then treat it as a trial backend.
+> registered decorators, and it searches below folders it never opened. Still to
+> come: more sources than files and the action table. Until then treat it as a
+> trial backend.
 
 ```lua
 require("filetree").setup({
@@ -26,6 +27,7 @@ require("filetree").setup({
     icons = true,             -- file and folder icons; drawn only with a Nerd Font declared
     max_entries = 20000,      -- entries shown per folder; a last line says how many more (0 = no limit)
     watch = true,             -- follow changes on disk and read only the folders that changed
+    search_max = 1000,        -- hits a search shows at most; a last line says how many more
   },
 })
 ```
@@ -112,6 +114,35 @@ A limit where handles are per folder (Linux): a closed folder is not watched, so
 a change inside it shows when it is opened, and a plain closed folder that
 gains its only subfolder is not merged into one line until its parent is read
 again.
+
+### Search
+
+The `filter` feature (`/` and `:Filetree filter`) searches with this tree: the
+hits are a tree of their own, laid over the main tree, and they come from every
+folder below the root, opened or not.
+
+```mermaid
+flowchart LR
+  Q["query 'needle'"] --> K["what the view has read<br/>(hits at once)"]
+  Q --> D["fs/deep: every file below the root<br/>fd → rg --files → Lua walk<br/>streamed, cancellable"]
+  K --> H["hits"]
+  D -->|"batches, drawn every 60 ms"| H
+  H --> O["overlay tree<br/>(the folders on the way, all open)"]
+  M["main tree<br/>open folders, cursor, cache"] -. "never touched" .- O
+  O -->|"clear"| M
+```
+
+- **Matching.** Every word of the query has to occur in the path below the
+  root; lower case matches both cases, one upper-case letter makes it exact.
+- **The main tree is never touched.** What is open there, the cursor, what was
+  read: all of it stays, and clearing the search shows it as it was. The tree
+  underneath keeps following the disk meanwhile.
+- **Only the last search reaches the screen.** A search replaced or cleared
+  while it lists stops its listing, and a late answer of it is dropped.
+- **Limits.** At most `search_max` hits are shown, a last line says how many
+  more there are. `.git` is never listed; `fd` and `rg` leave out what
+  `.gitignore` names, the Lua walk the names of the ignore list. A new root
+  (`set_root`) ends a search.
 
 ### The tree buffer
 

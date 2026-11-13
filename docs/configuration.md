@@ -66,6 +66,7 @@ require("filetree").setup({
   --   icons = true,
   --   max_entries = 20000,      -- per folder; 0 = no limit
   --   watch = true,             -- follow the disk, read only what changed
+  --   search_max = 1000,        -- hits a search (filter) shows at most
   -- },
 
   -- Sources, decorators and actions for the own tree (being built; see

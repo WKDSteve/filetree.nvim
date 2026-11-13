@@ -25,6 +25,7 @@ local M = {}
 ---@field icons? boolean  File and folder icons (default true; without a Nerd Font none are drawn).
 ---@field max_entries? integer  Entries shown per folder; a last line says how many more there are (default 20000, 0 = no limit).
 ---@field watch? boolean  Follow changes on disk while the tree is shown and read only the folders that changed (default true).
+---@field search_max? integer  Hits a search shows at most; a last line says how many more there are (default 1000).
 
 ---@type Filetree.Native.Opts
 local DEFAULTS = {
@@ -34,6 +35,7 @@ local DEFAULTS = {
   icons = true,
   max_entries = 20000,
   watch = true,
+  search_max = 1000,
 }
 
 ---@type Filetree.Native.Opts
@@ -88,6 +90,7 @@ function M.ensure(root)
     icons = options.icons,
     max_entries = options.max_entries,
     watch = options.watch,
+    search_max = options.search_max,
     hide = ignored,
   })
   views[api.nvim_get_current_tabpage()] = view

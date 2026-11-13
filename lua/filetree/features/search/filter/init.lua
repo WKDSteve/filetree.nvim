@@ -249,6 +249,14 @@ local function try_native_filter(query)
   if not _adapter then return false end
   if _adapter.name == "neotree" then return neotree_filter(query) end
   if _adapter.name == "nvimtree" then return nvimtree_filter(query) end
+  if _adapter.name == "native" then
+    -- The own tree lays the hits over itself and reaches folders it never opened; an empty query
+    -- shows the tree again exactly as it was (nothing was collapsed, so nothing has to be restored).
+    local view = _adapter.get_state and _adapter.get_state()
+    if not view then return false end
+    view:search(query or "")
+    return true
+  end
   return false
 end
 
