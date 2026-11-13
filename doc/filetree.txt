@@ -1157,6 +1157,7 @@ UI
   Cheatsheet ............................................|filetree-cheatsheet|
   Context Menu ........................................|filetree-context-menu|
   Cursor Hide ..........................................|filetree-cursor-hide|
+  Kit Slot ................................................|filetree-kit-slot|
   Link Marker ..........................................|filetree-link-marker|
   Node Info ..............................................|filetree-node-info|
   Opened-buffer Sync ...................................|filetree-opened-sync|
@@ -2711,6 +2712,27 @@ where you are. Set `force_cursorline = false` to go back to leaving
 Config: `enabled` (default `true`), `force_cursorline` (default `true`)
 
 Module: lua/filetree/features/ui/cursor_hide/
+
+------------------------------------------------------------------------------
+KIT SLOT                                                   *filetree-kit-slot*
+
+A `lib.nvim.ui.kit` sidebar on the left and a tree on the left stand next to
+each other, each unaware of the other. This registers the tree at
+`lib.nvim.ui.kit.sidebar.register_foreign`, so the two agree on one slot:
+opening a kit sidebar where the tree is takes the tree off the screen and
+remembers it, closing that sidebar brings the tree back, and a tree opened by
+hand moves a kit sidebar in its slot out of the way the same way.
+
+Backend-agnostic. Everything goes through the adapter (`get_winid`, `close`,
+`open_cwd`, `get_position`), so it works the same for neo-tree, nvim-tree and
+the others. A tree that is not on a side (`float`, `current`) is not a sidebar
+and takes no slot.
+
+Config: `opts.features.kit_slot` — `enabled` (default true; set `false` to
+        let a sidebar and the tree stand side by side), `name` (default
+        `"filetree"`)
+
+Module: lua/filetree/features/ui/kit_slot/
 
 ------------------------------------------------------------------------------
 LINK MARKER                                             *filetree-link-marker*
