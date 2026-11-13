@@ -44,6 +44,7 @@ M.TREE_FT = {
   ["netrw"] = true,
   ["oil"] = true,
   ["minifiles"] = true,
+  ["filetree"] = true,
 }
 
 -- Buffer-validity cache. Deliberately a TTL + explicit-invalidation cache, NOT

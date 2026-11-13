@@ -599,7 +599,7 @@ end
 ---Re-check state and refresh the live preview at CursorMoved-debounce fire
 ---time (the cursor/tree may have changed since the event fired).
 local function do_cursor_update()
-  if vim.bo.filetype ~= "neo-tree" and vim.bo.filetype ~= "NvimTree" then return end
+  if not require("filetree.util.buffer").is_tree_buffer() then return end
   local node = _adapter and _adapter.get_current_node()
   if not node then return end
 
@@ -867,8 +867,7 @@ function M.setup(config, adapter)
     pattern = "*",
     desc = "[filetree] Follow the tree node under the cursor with the preview (debounced)",
     callback = function()
-      local ft = vim.bo.filetype
-      if ft ~= "neo-tree" and ft ~= "NvimTree" then return end
+      if not require("filetree.util.buffer").is_tree_buffer() then return end
 
       -- Nothing to update unless a preview is actually active.
       if _cfg.mode == "float" then

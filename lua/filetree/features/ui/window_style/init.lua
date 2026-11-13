@@ -64,7 +64,7 @@ local _augroup = nil
 local _adapter = nil
 
 -- Fallbacks used when the active adapter does not declare the capability.
-local DEFAULT_FILETYPES = { "neo-tree", "NvimTree", "netrw", "oil", "minifiles" }
+local DEFAULT_FILETYPES = { "neo-tree", "NvimTree", "netrw", "oil", "minifiles", "filetree" }
 local DEFAULT_HL_GROUPS = {
   NeoTreeNormal = "Normal",
   NeoTreeNormalNC = "NormalNC",

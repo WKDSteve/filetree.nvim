@@ -150,8 +150,9 @@ local function update_winbar(highlighted, target_win)
     if win ~= target_win and vim.api.nvim_win_is_valid(win) then
       local cfg = vim.api.nvim_win_get_config(win)
       if cfg.relative == "" then -- not floating
-        local ft = vim.bo[vim.api.nvim_win_get_buf(win)].filetype
-        if ft ~= "neo-tree" and ft ~= "NvimTree" then set_winbar(win, " " .. highlighted) end
+        local is_tree =
+          require("filetree.util.buffer").is_tree_buffer(vim.api.nvim_win_get_buf(win))
+        if not is_tree then set_winbar(win, " " .. highlighted) end
       end
     end
   end
@@ -247,8 +248,7 @@ function M.setup(config, adapter)
     pattern = "*",
     desc = "[filetree] Follow the tree node under the cursor with the breadcrumb",
     callback = function()
-      local ft = vim.bo.filetype
-      if ft ~= "neo-tree" and ft ~= "NvimTree" then return end
+      if not require("filetree.util.buffer").is_tree_buffer() then return end
       if not _adapter then return end
       local node = _adapter.get_current_node()
       if node then M.update(node.path) end

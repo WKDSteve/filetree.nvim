@@ -444,7 +444,7 @@ function M.show_history()
   kit.viewer({
     lines = lines,
     title = "Trash History",
-    filetype = "filetree",
+    filetype = "filetree-trash",
     width = width,
     height = height,
   })

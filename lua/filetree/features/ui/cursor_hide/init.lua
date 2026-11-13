@@ -61,7 +61,7 @@ M.SCHEMA = {
   force_cursorline = "boolean",
 }
 
-local DEFAULT_FILETYPES = { "neo-tree", "NvimTree", "netrw", "oil", "minifiles" }
+local DEFAULT_FILETYPES = { "neo-tree", "NvimTree", "netrw", "oil", "minifiles", "filetree" }
 
 ---@type integer?
 local _augroup = nil

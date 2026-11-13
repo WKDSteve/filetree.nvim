@@ -66,6 +66,7 @@ local DEFAULTS = {
   ignore_ft = {
     "neo-tree",
     "NvimTree",
+    "filetree",
     "netrw",
     "TelescopePrompt",
     "fzf",
