@@ -3861,6 +3861,8 @@ do
     local platform = require("filetree.util.platform")
     local orig_is_windows = platform.is_windows
     local orig_jobstart = vim.fn.jobstart
+    local orig_jobpid = vim.fn.jobpid
+    local FAKE_JOB = 4242
     local jobs = {}
     platform.is_windows = function()
       return true
@@ -3878,7 +3880,15 @@ do
     ---@diagnostic disable-next-line: duplicate-set-field
     vim.fn.jobstart = function(args)
       jobs[#jobs + 1] = args
-      return 1
+      return FAKE_JOB
+    end
+    -- lib.nvim's run_detached asks jobpid() for the id jobstart returned. The fake id names no
+    -- live channel, so the real jobpid raises E900 (Invalid channel id); answer it here. The pid
+    -- is 0, never a real one, so nothing could ever be recorded or ended under it.
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.fn.jobpid = function(id)
+      if id == FAKE_JOB then return 0 end
+      return orig_jobpid(id)
     end
     preview.setup({
       enabled = true,
@@ -3889,6 +3899,7 @@ do
     preview.toggle_or_open()
     platform.is_windows = orig_is_windows
     vim.fn.jobstart = orig_jobstart
+    vim.fn.jobpid = orig_jobpid
     for key, mod in pairs(lib_saved) do
       package.loaded[key] = mod
     end
@@ -4008,6 +4019,8 @@ do
     local platform = require("filetree.util.platform")
     local orig_is_windows = platform.is_windows
     local orig_jobstart = vim.fn.jobstart
+    local orig_jobpid = vim.fn.jobpid
+    local FAKE_JOB = 4242
     local jobs = {}
     platform.is_windows = function()
       return true
@@ -4025,7 +4038,15 @@ do
     ---@diagnostic disable-next-line: duplicate-set-field
     vim.fn.jobstart = function(args)
       jobs[#jobs + 1] = args
-      return 1
+      return FAKE_JOB
+    end
+    -- lib.nvim's run_detached asks jobpid() for the id jobstart returned. The fake id names no
+    -- live channel, so the real jobpid raises E900 (Invalid channel id); answer it here. The pid
+    -- is 0, never a real one, so nothing could ever be recorded or ended under it.
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.fn.jobpid = function(id)
+      if id == FAKE_JOB then return 0 end
+      return orig_jobpid(id)
     end
 
     local mail_file = tmp .. "/mail.MSG"
@@ -4089,6 +4110,7 @@ do
 
     platform.is_windows = orig_is_windows
     vim.fn.jobstart = orig_jobstart
+    vim.fn.jobpid = orig_jobpid
     for key, mod in pairs(lib_saved) do
       package.loaded[key] = mod
     end
