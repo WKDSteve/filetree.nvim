@@ -33,10 +33,11 @@ jobs:
       - name: luacheck
         run: luacheck lua docs/BINDINGS.lua TESTS
 
-  # Real gate: the headless test suite (smoke, units, menu, cwd_mode, gaps, refs).
-  # lib.nvim is checked out as a sibling so the suites' own sibling-checkout
-  # lookup (../lib.nvim) finds it -- filetree.nvim's command layer and several
-  # features depend on it at runtime.
+  # Real gate: the headless test suite, every spec file .testing.lua selects,
+  # run by testing.nvim (scripts/test.sh). lib.nvim is checked out as a sibling
+  # so the sibling-checkout lookup of TESTS/minimal_init.lua (../lib.nvim)
+  # finds it -- filetree.nvim's command layer and several features depend on
+  # it at runtime.
   #
   # refs/run.lua is fixture-based: it copies TESTS/refs/fixtures/<lang>/ to a
   # scratch dir and renames a module through the real feature, asserting every
@@ -74,10 +75,10 @@ jobs:
       # ui.nvim: filetree.refs.ui does `require("ui.kit")` unconditionally
       # at module load time (not lazy, not pcall'd -- see that file's own
       # header), and filetree.refs is itself required eagerly from
-      # filetree.setup(). So the very first setup() call in ANY of the six
-      # suites below needs ui.nvim resolvable, and TESTS/*.lua's own
-      # candidate search already expects a sibling checkout here -- this
-      # step was simply missing, which is why every suite that calls
+      # filetree.setup(). So the very first setup() call in ANY spec file
+      # needs ui.nvim resolvable, and the candidate search of
+      # TESTS/minimal_init.lua already expects a sibling checkout here -- this
+      # step was once missing, which is why every spec that calls
       # setup() failed on a real `ui.kit` load error, and every later
       # setup() call in the same nvim process then hit Lua's cached
       # "loop or previous error loading module" instead of that real one.
