@@ -10,6 +10,7 @@
 ---@class Filetree.Node : Lib.Tree.Node
 ---@field path? string absolute path, `/`-separated, drive letter upper case
 ---@field data? table belongs to the source; the tree never touches it. `data.chain` (string[]): the ids of the folders a merged line `a/b/c` stands for, outermost first. Read when the node is opened: `data.bufnr` (integer, the buffer to show instead of a file), `data.lnum` and `data.col` (1-based line, 0-based column to go to)
+---@field hl? string highlight group for the name of the node
 ---@field open? boolean the node starts open (once: closed by hand, it stays closed)
 ---@field lazy? boolean the node has children the source answers through its `children(node, ctx, cb)`
 
@@ -23,6 +24,7 @@
 ---@field alt_buf? integer the editor buffer the tree was opened from
 
 ---@class Filetree.Emit : Lib.Tree.Registry.Emit
+---@field focus fun(id: any) put the cursor of the tree on a node of this source, opening what is above it; ignored while the user is in the tree window
 
 ---Supplies the nodes of one view.
 ---@class Filetree.Source : Lib.Tree.Registry.Source

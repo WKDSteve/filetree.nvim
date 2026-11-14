@@ -205,7 +205,7 @@ eq(
   vim.tbl_map(function(v)
     return v.name
   end, view:views()),
-  { "files", "buffers", "git" }
+  { "files", "buffers", "git", "symbols", "diagnostics" }
 )
 eq("the files have no dd", vim.fn.maparg("dd", "n"), "")
 

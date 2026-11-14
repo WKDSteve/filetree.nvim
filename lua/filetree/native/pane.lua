@@ -24,6 +24,7 @@ local M = {}
 ---@field before? fun()  Called before the tree changes outside a call of the view (a source emitted).
 ---@field apply fun(changes: Lib.Tree.Splice[])  Rows changed; read them back from `pane.tree`.
 ---@field redraw fun()  `pane.tree` is another tree now: write every line again.
+---@field focus? fun(id: any)  A source asks for the cursor on one of its nodes.
 
 ---@class Filetree.Pane.Section
 ---@field source string
@@ -369,6 +370,10 @@ function Pane:_emit(source)
       if self._hooks.before then self._hooks.before() end
       self:reload(source)
     end,
+    focus = function(id)
+      if not live() or not tree:node(id) or self._source_of[id] ~= source then return end
+      if self._hooks.focus then self._hooks.focus(id) end
+    end,
   }
 end
 
@@ -378,7 +383,8 @@ function Pane:start()
   if self._started then return end
   self._started = true
   for _, section in ipairs(self._sections) do
-    local entry = section.available and registry.get("source", section.source) or nil
+    -- a source that cannot load right now is followed too: only it knows when that changes
+    local entry = registry.get("source", section.source)
     if entry and type(entry.subscribe) == "function" then
       local ok, stop =
         pcall(entry.subscribe, self._hooks.ctx(section.source), self:_emit(section.source))

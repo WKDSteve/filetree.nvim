@@ -151,7 +151,8 @@ local function icon_of(row)
   -- a source's own glyph for the node wins over what the name would get
   if type(node.icon) == "string" and node.icon ~= "" then return node.icon, nil end
   local nerd = require("lib.nvim.ui.nerd_font").available()
-  if row.expandable or node.kind == "dir" then
+  -- a file that has children (a file and its diagnostics) is drawn as the file it is
+  if (row.expandable and node.kind ~= "file") or node.kind == "dir" then
     -- a group of a source (no path) is no folder: its expander says enough
     if not nerd or not (node.kind == "dir" or node.path) then return nil, nil end
     return row.expanded and "" or "", "FiletreeFolderIcon"
@@ -188,7 +189,11 @@ local function line_of_row(self, row)
   local kind = row.node.kind
   -- the head of a section stands where the root of the files stands
   local head = row.id == self.root or (self._pane ~= nil and row.depth == 0)
-  local whole = (QUIET[kind] and "FiletreeMore") or (head and "FiletreeRoot") or nil
+  local whole = (QUIET[kind] and "FiletreeMore")
+    or (head and "FiletreeRoot")
+    -- the color a source gave the name of its node (the severity of a diagnostic)
+    or (type(row.node.hl) == "string" and row.node.hl)
+    or nil
   if whole then
     for _, span in ipairs(line.spans) do
       if span.col_start >= line.name_start then span.hl = whole end
@@ -1424,6 +1429,15 @@ function View:_pane_of(spec)
       if self._pane ~= pane then return end
       self.tree = pane.tree
       if self.buf and api.nvim_buf_is_valid(self.buf) then self:_draw_all() end
+    end,
+    focus = function(id)
+      -- not while the user is in the tree: the cursor there is theirs
+      if self._pane ~= pane or not self:is_open() then return end
+      if api.nvim_get_current_win() == self.win then return end
+      self:_apply(self.tree:reveal(id))
+      if not self.tree:row_of(id) then return end
+      self.cursor_id = id
+      self:_place_cursor()
     end,
   })
   self._panes[spec.name] = pane

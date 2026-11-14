@@ -15,7 +15,7 @@ local M = {}
 
 --- The built-in sources, in the order of the view bar.
 ---@type string[]
-M.NAMES = { "buffers", "git" }
+M.NAMES = { "buffers", "git", "symbols", "diagnostics" }
 
 ---@type table<string, fun(): boolean>  name -> take our entry out again
 local removers = {}

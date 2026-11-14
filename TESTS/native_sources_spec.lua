@@ -214,7 +214,7 @@ eq(
   vim.tbl_map(function(v)
     return v.name
   end, view:views()),
-  { "files", "buffers", "git", "spec", "other" }
+  { "files", "buffers", "git", "symbols", "diagnostics", "spec", "other" }
 )
 eq(
   "the tree starts on the files",
@@ -224,7 +224,7 @@ eq(
 eq("nothing is asked of a source that is not shown", { #spec.ctx, spec.subscribed }, { 0, 0 })
 eq("an unknown view is refused with the names there are", { view:show("nope") }, {
   false,
-  'no view "nope" (views: files, buffers, git, spec, other)',
+  'no view "nope" (views: files, buffers, git, symbols, diagnostics, spec, other)',
 })
 
 -- ── a source in the tree window ────────────────────────────────────────────────

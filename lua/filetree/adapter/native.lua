@@ -32,7 +32,8 @@ local NS = api.nvim_create_namespace("filetree_native_marks")
 ---@return FiletreeNode
 local function to_node(row, line)
   local node = row.node
-  local is_dir = row.expandable or node.kind == "dir"
+  -- a file that has children (a file and its diagnostics) is a file for the features
+  local is_dir = node.kind == "dir" or (row.expandable and node.kind ~= "file")
   local data = node.data or {}
   local is_expanded = nil
   if is_dir then is_expanded = row.expanded end
