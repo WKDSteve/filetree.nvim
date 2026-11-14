@@ -299,24 +299,29 @@ do
       return result
     end, ...)
   end
+  -- Asked for three times in a row, with nothing changed on disk (so the watcher has nothing to
+  -- add): the second and the third arrive while the first answer is still on its way, and together
+  -- they cost one more read after it, not two.
+  view:refresh_dir(big)
+  view:refresh_dir(big)
+  view:refresh_dir(big)
+  vim.wait(5000, function()
+    return view._reading[big] == nil
+  end, 2)
+  settle(100)
+  eq("changes that arrive while the slices are on their way cost one more read", reads_big, 2)
+  slices[big] = { nodes = {}, merge = {}, nested = 0 }
+
   local rounds = 9
   local last_new
   for round = 1, rounds do
     last_new = ("%s/a_new_%d.txt"):format(big, round)
     vim.fn.writefile({ "x" }, last_new)
     view:refresh_dir(big)
-    if round == 1 then
-      -- asked for again while the first answer is still on its way: one more read after it, not two
-      view:refresh_dir(big)
-      view:refresh_dir(big)
-    end
     local shown = last_new
     vim.wait(5000, function()
       return adapter.get_node_line(shown) ~= nil and view._reading[big] == nil
     end, 2)
-    if round == 1 then
-      eq("changes that arrive while the slices are on their way cost one more read", reads_big, 2)
-    end
   end
   list.list = real_list
   local meter = slices[big]
