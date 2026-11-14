@@ -39,9 +39,14 @@ local M = {}
 ---@field seq? integer  Set by `add`: order of registration.
 
 ---@class Filetree.Action.Ctx
----@field source? string  The source the view shows ("files").
+---@field source? string  The source the node under the cursor came from ("files" in the directory tree).
 ---@field mutable? boolean  false: the source does not let files be changed.
----@field view? table  The view, for actions that act on it.
+---@field view? table  The view itself, for actions that act on it (its name is `view_name`).
+---@field view_name? string  The name of the view on screen.
+---@field root? string  The root directory of the view.
+---@field cwd? string
+---@field win? integer  The tree window.
+---@field alt_buf? integer  The editor buffer the tree belongs to.
 
 ---@type table<Filetree.Action.Origin, integer>
 local ORIGIN_RANK = { source = 0, feature = 1, plugin = 2, builtin = 3 }

@@ -22,6 +22,7 @@ local watch = require("filetree.native.fs.watch")
 local render = require("filetree.native.render.line")
 local columns = require("filetree.native.render.columns")
 local decor = require("filetree.native.decor")
+local pane_mod = require("filetree.native.pane")
 
 local api = vim.api
 
@@ -67,7 +68,12 @@ local text_width = {}
 ---@field hide_ignored boolean
 ---@field cursor_id string?
 ---@field root_error string?  Why the root could not be read, when it could not.
----@field source string?  The source the view shows (default "files").
+---@field view_name string  The view on screen: "files", or the name of a view of registered sources.
+---@field private _panes table<string, Filetree.Pane>  The trees of the other views, by view name.
+---@field private _pane Filetree.Pane?  The one on screen; nil while the files are shown.
+---@field private _files_cursor any  Where the cursor of the files was when another view took over.
+---@field private _deferred (fun())[]  Changes of the file listing asked for while another view was shown.
+---@field private _relist_pending boolean?  One of them is "build the listing again".
 ---@field actions Filetree.Action.Table?  Every key of the buffer (`filetree.native.action`).
 ---@field _feature_maps table<string, table>?  The feature mappings the action table took over, by lhs.
 ---@field _running table<string, table<string, true>>?  Per key, the actions running on it right now.
@@ -117,6 +123,12 @@ View.__index = View
 ---@field watch? boolean  Follow changes on disk while the tree is shown (default true).
 ---@field search_max? integer  Hits a search shows at most (default 1000).
 ---@field search_tier? "fd"|"rg"|"lua"  Force how a search lists files (specs).
+---@field views? fun(): Filetree.View.Spec[]  The views there are, in the order of the view bar (default: the files only).
+
+---One view: a name and the sources it shows, one section each.
+---@class Filetree.View.Spec
+---@field name string
+---@field sources string[]
 
 local function define_highlights()
   for group, link in pairs(M.HL) do
@@ -128,12 +140,18 @@ end
 ---@return string|nil glyph
 ---@return string|nil hl
 local function icon_of(row)
-  if row.node.kind == "more" then return nil, nil end
+  local node = row.node
+  if node.kind == "more" or node.kind == "unavailable" then return nil, nil end
+  -- a source's own glyph for the node wins over what the name would get
+  if type(node.icon) == "string" and node.icon ~= "" then return node.icon, nil end
   local nerd = require("lib.nvim.ui.nerd_font").available()
-  if row.expandable or row.node.kind == "dir" then
-    if not nerd then return nil, nil end
+  if row.expandable or node.kind == "dir" then
+    -- a group of a source (no path) is no folder: its expander says enough
+    if not nerd or not (node.kind == "dir" or node.path) then return nil, nil end
     return row.expanded and "" or "", "FiletreeFolderIcon"
   end
+  -- a leaf that is no file (a symbol, a terminal) has no file type to draw
+  if not node.path then return nil, nil end
   local icons = require("lib.nvim.ui.icons")
   local glyph, color, name = icons.get(row.node.label, nil, { fallback = "" })
   if not glyph or glyph == "" then return nil, nil end
@@ -161,8 +179,11 @@ end
 ---@return Filetree.Line
 local function line_of_row(self, row)
   local line = render.render(row, line_opts(self))
-  local whole = (row.id == self.root and "FiletreeRoot")
-    or (row.node.kind == "more" and "FiletreeMore")
+  local kind = row.node.kind
+  -- the head of a section stands where the root of the files stands
+  local head = row.id == self.root or (self._pane ~= nil and row.depth == 0)
+  local whole = ((kind == "more" or kind == "unavailable") and "FiletreeMore")
+    or (head and "FiletreeRoot")
     or nil
   if whole then
     for _, span in ipairs(line.spans) do
@@ -277,7 +298,7 @@ function View:_build()
   local built
   self.root_error = entries == nil and err or nil
   self._loaded[root] = true
-  self.tree = tree_core.new({
+  built = tree_core.new({
     root = {
       id = root,
       label = root == "/" and "" or list.basename(root),
@@ -290,8 +311,9 @@ function View:_build()
       if self.main == built then self:_apply_main(changes) end
     end,
   })
-  built = self.tree
   self.main = built
+  -- another view on screen stays on screen: the files are rebuilt underneath it
+  if not self._pane then self.tree = built end
   if following then self:_watch() end
 end
 
@@ -415,7 +437,7 @@ function View:_ensure_buf()
   vim.bo[buf].swapfile = false
   vim.bo[buf].modifiable = false
   -- set before FileType, so that whoever reacts to the filetype can already ask which view this is
-  vim.b[buf].filetree_view = "files"
+  vim.b[buf].filetree_view = self.view_name
   require("filetree.native.action").attach(self, buf)
   self:_draw_all()
   vim.bo[buf].filetype = M.FILETYPE
@@ -682,6 +704,11 @@ function View:open(position, focus)
     })
   end
   self:_place_cursor()
+  if self._pane then
+    -- nothing was followed while the window was away: ask the sources again, then follow them
+    if self._seen_closed then self._pane:reload() end
+    self._pane:start()
+  end
   local was_watching = self._unsubscribe_watch ~= nil
   self:_watch()
   if self._seen_closed and not was_watching and self._unsubscribe_watch then
@@ -736,11 +763,16 @@ function View:_window_gone()
   self.win = nil
   self._seen_closed = true
   self:_unwatch()
+  if self._pane then self._pane:stop() end
 end
 
 ---Give up everything this view holds: its handles and its buffer. The view is not usable afterwards.
 function View:dispose()
   self:_window_gone()
+  for _, pane in pairs(self._panes) do
+    pane:stop()
+  end
+  self._panes, self._pane = {}, nil
   local buf = self.buf
   if buf and api.nvim_buf_is_valid(buf) then pcall(api.nvim_buf_delete, buf, { force = true }) end
   self.buf = nil
@@ -752,6 +784,11 @@ end
 ---@param path string  Normalized.
 ---@return string
 function View:id_of(path)
+  if self._pane then
+    local shown = self._pane:id_of(path)
+    if shown ~= nil then return shown end
+    return path
+  end
   local id = self._alias[path]
   -- a merged line that was split or removed since leaves its folders their own ids again
   if id and self.main:node(id) then return id end
@@ -816,6 +853,17 @@ end
 ---@param path string  Normalized; below the root.
 ---@return boolean found
 function View:reveal(path)
+  if self._pane then
+    -- another view: the path is a row where a source shows a node for it, and nowhere else
+    local id = self._pane:id_of(path)
+    if id == nil then return false end
+    self:sync_cursor()
+    self:_apply(self.tree:reveal(id))
+    if not self.tree:row_of(id) then return false end
+    self.cursor_id = id
+    self:_place_cursor()
+    return true
+  end
   if not list.inside(self.root, path) then return false end
   local chain = {}
   local current = path
@@ -842,6 +890,25 @@ end
 ---@param keep? string  Normalized path.
 function View:collapse_all(keep)
   self:sync_cursor()
+  if self._pane then
+    -- the sections stay open: closed, they would hide that the view has anything in it
+    local heads = {}
+    for _, section in ipairs(self._pane:sections()) do
+      heads[section.id] = true
+    end
+    local at = self.cursor_id
+    while at ~= nil and not heads[at] do
+      at = self.tree:parent(at)
+    end
+    self:_apply(self.tree:collapse_all())
+    for _, section in ipairs(self._pane:sections()) do
+      self:_apply(self.tree:expand(section.id))
+    end
+    if at ~= nil then self.cursor_id = at end
+    self:_place_cursor()
+    if keep then self:reveal(keep) end
+    return
+  end
   -- the top-level entry the cursor is under, found while its ancestors are still rows
   local top = nil
   local current = self.cursor_id
@@ -875,6 +942,13 @@ end
 ---Open the given folders (the ones that still exist).
 ---@param paths string[]
 function View:expand_paths(paths)
+  if self._pane then
+    -- folders of the files: opened when the files are shown again
+    self._deferred[#self._deferred + 1] = function()
+      self:expand_paths(paths)
+    end
+    return
+  end
   self:clear_search()
   self:sync_cursor()
   local sorted = vim.list_slice(paths)
@@ -1000,6 +1074,8 @@ function View:search(query)
     self:clear_search()
     return false
   end
+  -- the search lists files below the root; another view has no folder to search
+  if self._pane then return false end
   if not self._search then
     self:sync_cursor()
     self._main_cursor = self.cursor_id
@@ -1096,6 +1172,11 @@ end
 ---Read every folder that was read before again and take over what changed. Open folders stay open.
 function View:refresh()
   self:sync_cursor()
+  if self._pane then
+    self._pane:reload()
+    self:_after_draw()
+    return
+  end
   list.invalidate()
   local ids = vim.tbl_keys(self._loaded)
   table.sort(ids, function(a, b)
@@ -1130,6 +1211,17 @@ end
 ---Build the tree again from the cache: for a change of what is listed (sort order, hidden names).
 ---@private
 function View:_relist()
+  if self._pane then
+    -- once, however often the listing changed meanwhile
+    if not self._relist_pending then
+      self._relist_pending = true
+      self._deferred[#self._deferred + 1] = function()
+        self._relist_pending = nil
+        self:_relist()
+      end
+    end
+    return
+  end
   self:sync_cursor()
   local open = self:expanded_paths()
   local cursor = self.cursor_id
@@ -1150,7 +1242,17 @@ function View:set_root(root)
   if root == self.root then return true end
   local stat = vim.uv.fs_stat(root)
   if not stat or stat.type ~= "directory" then return false end
-  self.root, self.cursor_id = root, nil
+  self.root = root
+  if self._pane then
+    -- a source is asked with the root of the view: the one on screen is asked again now, the others
+    -- when they are shown
+    self._files_cursor = nil
+    self:_build()
+    self:sync_cursor()
+    self._pane:reload()
+    return true
+  end
+  self.cursor_id = nil
   self:_build()
   if self.buf and api.nvim_buf_is_valid(self.buf) then self:_draw_all() end
   return true
@@ -1169,6 +1271,197 @@ function View:set_hide_ignored(hidden)
   if self.hide_ignored == hidden then return end
   self.hide_ignored = hidden
   self:_relist()
+end
+
+-- ── views ──────────────────────────────────────────────────────────────────────
+-- A view is what the window shows: the files, or the nodes of registered sources. Switching replaces
+-- the tree on screen the way a search does and touches neither the window nor the files' tree, so
+-- position and width stay, and the files come back as they were left.
+
+---@type Filetree.View.Spec
+local FILES = { name = "files", sources = { "files" } }
+
+---@param spec Filetree.View.Spec
+---@return boolean
+local function is_files(spec)
+  return #spec.sources == 1 and spec.sources[1] == "files"
+end
+
+---The views there are, in the order of the view bar.
+---@return Filetree.View.Spec[]
+function View:views()
+  local specs = self._opts.views and self._opts.views() or nil
+  if type(specs) ~= "table" or #specs == 0 then return { FILES } end
+  return specs
+end
+
+---The editor buffer the tree belongs to: the one in the window a file would open in.
+---@return integer|nil
+function View:alt_buf()
+  ---@param win integer
+  ---@return integer|nil
+  local function editor_buf(win)
+    if not win or win == 0 or not api.nvim_win_is_valid(win) or win == self.win then return nil end
+    if api.nvim_win_get_config(win).relative ~= "" then return nil end
+    local buf = api.nvim_win_get_buf(win)
+    if by_buf[buf] ~= nil or vim.bo[buf].buftype ~= "" then return nil end
+    return buf
+  end
+  if self.position == "current" and self._prev_buf and api.nvim_buf_is_valid(self._prev_buf) then
+    return self._prev_buf
+  end
+  local buf = editor_buf(api.nvim_get_current_win())
+    or editor_buf(vim.fn.win_getid(vim.fn.winnr("#")))
+  if buf then return buf end
+  for _, win in ipairs(api.nvim_tabpage_list_wins(0)) do
+    buf = editor_buf(win)
+    if buf then return buf end
+  end
+  return nil
+end
+
+---What a source or an action of this view is called with.
+---@param source? string  The source in question.
+---@return Filetree.Ctx
+function View:ctx(source)
+  return {
+    root = self.root,
+    cwd = list.norm(vim.fn.getcwd()),
+    win = self.win or 0,
+    view = self.view_name,
+    source = source,
+    alt_buf = self:alt_buf(),
+  }
+end
+
+---The source a node of the tree on screen came from.
+---@param id any
+---@return string
+function View:source_of(id)
+  if not self._pane then return "files" end
+  return (id ~= nil and self._pane:source_of(id)) or self._pane.sources[1]
+end
+
+---The sources of the view on screen.
+---@return string[]
+function View:sources()
+  if not self._pane then return { "files" } end
+  return vim.list_slice(self._pane.sources)
+end
+
+---The sections of the view on screen: one per source, with whether it could load. Empty for the files.
+---@return Filetree.Pane.Section[]
+function View:sections()
+  return self._pane and self._pane:sections() or {}
+end
+
+---@private
+---@param spec Filetree.View.Spec
+---@return Filetree.Pane
+function View:_pane_of(spec)
+  local pane = self._panes[spec.name]
+  if pane and vim.deep_equal(pane.sources, spec.sources) then
+    -- nothing was followed while another view was shown, and the root directory may be another one:
+    -- ask the sources again, open nodes stay open
+    pane:reload()
+    return pane
+  end
+  if pane then pane:stop() end
+  pane = pane_mod.new(spec.name, spec.sources, {
+    ctx = function(source)
+      return self:ctx(source)
+    end,
+    before = function()
+      if self._pane == pane then self:sync_cursor() end
+    end,
+    apply = function(changes)
+      if self._pane ~= pane then return end
+      self.tree = pane.tree
+      self:_apply(changes)
+    end,
+    redraw = function()
+      if self._pane ~= pane then return end
+      self.tree = pane.tree
+      if self.buf and api.nvim_buf_is_valid(self.buf) then self:_draw_all() end
+    end,
+  })
+  self._panes[spec.name] = pane
+  return pane
+end
+
+---Show another view in this window. The window stays where it is and as wide as it is; every view
+---keeps its own cursor and its open nodes.
+---@param name string
+---@return boolean ok
+---@return string|nil reason
+function View:show(name)
+  local spec = nil
+  local names = {}
+  for _, candidate in ipairs(self:views()) do
+    names[#names + 1] = candidate.name
+    if candidate.name == name then spec = candidate end
+  end
+  if not spec then
+    return false, ("no view %q (views: %s)"):format(tostring(name), table.concat(names, ", "))
+  end
+  if name == self.view_name and (is_files(spec) or self._pane) then return true, nil end
+  self:sync_cursor()
+  self:clear_search()
+  if self._pane then
+    self._pane.cursor_id = self.cursor_id
+    self._pane:stop()
+  else
+    self._files_cursor = self.cursor_id
+  end
+  self.view_name = name
+  if is_files(spec) then
+    self._pane = nil
+    self.tree = self.main
+    self.cursor_id = self._files_cursor
+    local deferred = self._deferred
+    self._deferred = {}
+    for _, fn in ipairs(deferred) do
+      fn()
+    end
+  else
+    local pane = self:_pane_of(spec)
+    self._pane = pane
+    self.tree = pane.tree
+    local first = pane.tree:row(1)
+    self.cursor_id = pane.cursor_id or (first and first.id) or nil
+    if self:is_open() then pane:start() end
+  end
+  local buf = self.buf
+  if buf and api.nvim_buf_is_valid(buf) then
+    vim.b[buf].filetree_view = name
+    self:_draw_all()
+    require("filetree.native.action").reload(self)
+    pcall(api.nvim_exec_autocmds, "User", {
+      pattern = "FiletreeView",
+      modeline = false,
+      data = { buf = buf, view = name },
+    })
+  end
+  return true, nil
+end
+
+---A source was registered, replaced or removed: a view that shows it asks it again.
+---@param source string
+function View:source_changed(source)
+  for _, pane in pairs(self._panes) do
+    if vim.tbl_contains(pane.sources, source) then
+      if pane == self._pane then
+        self:sync_cursor()
+        local started = pane:started()
+        pane:stop()
+        pane:build()
+        if started then pane:start() end
+        self.tree = pane.tree
+        if self.buf and api.nvim_buf_is_valid(self.buf) then self:_draw_all() end
+      end
+      -- a view that is not on screen asks its sources when it is shown
+    end
+  end
 end
 
 -- ── module ─────────────────────────────────────────────────────────────────────
@@ -1193,6 +1486,9 @@ function M.new(opts)
     _known_dirs = {},
     _generation = 0,
     _opts = opts,
+    view_name = "files",
+    _panes = {},
+    _deferred = {},
   }, View)
   self:_build()
   return self
@@ -1254,11 +1550,27 @@ function M.decorate_line(buf, lnum, win)
   end
 
   local node = row.node
-  if node.kind == "more" then return drawn end
+  if node.kind == "more" or node.kind == "unavailable" then return drawn end
   local badges = decor.badges(node, row.expandable or node.kind == "dir")
-  if #badges == 0 then return drawn end
 
   local right = {}
+  -- what the source itself says about the node (a count, a line number), at the far right
+  if type(node.columns) == "table" then
+    for _, text in ipairs(node.columns) do
+      text = tostring(text)
+      if text ~= "" then
+        right[#right + 1] = {
+          text = text,
+          hl = "FiletreeMore",
+          width = vim.fn.strdisplaywidth(text),
+          slot = "column",
+          priority = 0,
+        }
+      end
+    end
+  end
+  if #badges == 0 and #right == 0 then return drawn end
+
   for _, badge in ipairs(badges) do
     if badge.slot == "name" then
       if badge.hl then

@@ -50,6 +50,17 @@ local function to_node(row, line)
   }
 end
 
+---Is the row a file or a folder for the features? The line that says a folder was cut is none, and in
+---a view of other sources neither is a node without a path (a symbol, a terminal, a group): the
+---contract hands out paths, and an id in their place would be trashed, renamed or copied as one.
+---@param row Lib.Tree.Row
+---@return boolean
+local function is_entry(row)
+  local node = row.node
+  if node.kind == "more" or node.kind == "unavailable" then return false end
+  return type(node.path) == "string"
+end
+
 ---@param bufnr? integer
 ---@return Filetree.View|nil
 local function view_of(bufnr)
@@ -106,7 +117,7 @@ end
 function M.get_current_node()
   local view = native.current()
   local row = view and view:current()
-  if not view or not row or row.node.kind == "more" then return nil end
+  if not view or not row or not is_entry(row) then return nil end
   return to_node(row, view.tree:row_of(row.id) or 1)
 end
 
@@ -118,12 +129,11 @@ function M.get_visible_nodes(filter, bufnr)
   if not view then return {} end
   local cap = require("filetree.config").get().max_visible_nodes or 5000
   local out = {}
-  -- line 1 is the root: the label of the tree, not an entry of it
-  for line = 2, view.tree:count() do
+  -- depth 0 is the root (or the head of a section): the label of the tree, not an entry of it
+  for line = 1, view.tree:count() do
     if #out >= cap then break end
     local row = view.tree:row(line)
-    -- the line that says a folder was cut is no entry
-    if row.node.kind ~= "more" then
+    if row.depth > 0 and is_entry(row) then
       local node = to_node(row, line)
       if
         filter == nil
@@ -153,7 +163,7 @@ function M.get_node_at_line(bufnr, linenr)
   local view = native.of_buf(bufnr)
   if not view or linenr < 1 then return nil end
   local row = view.tree:row(linenr + 1)
-  if not row or row.node.kind == "more" then return nil end
+  if not row or row.depth == 0 or not is_entry(row) then return nil end
   return to_node(row, linenr + 1)
 end
 

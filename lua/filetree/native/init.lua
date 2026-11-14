@@ -28,6 +28,12 @@ local M = {}
 ---@field max_entries? integer  Entries shown per folder; a last line says how many more there are (default 20000, 0 = no limit).
 ---@field watch? boolean  Follow changes on disk while the tree is shown and read only the folders that changed (default true).
 ---@field search_max? integer  Hits a search shows at most; a last line says how many more there are (default 1000).
+---@field views? (string|Filetree.Native.ViewSpec)[]  The views of the tree, in the order of the view bar: `{ "files" }` is one view with one source, `{ name = "work", "buffers", "git" }` one view with two sections (default: the files, then one view per registered source).
+
+---One entry of `native.views`: the sources of the view as list items, and its name.
+---@class Filetree.Native.ViewSpec
+---@field name? string  Default: the first source.
+---@field [integer] string  A source name.
 
 ---@type Filetree.Native.Opts
 local DEFAULTS = {
@@ -111,6 +117,37 @@ function M.options()
   return options
 end
 
+---The views of the tree, in the order of the view bar. With `native.views` set, exactly those; without,
+---the files and one view per registered source, in registration order.
+---@return Filetree.View.Spec[]
+function M.views()
+  local out, seen = {}, {}
+  ---@param name any
+  ---@param sources string[]
+  local function add(name, sources)
+    if type(name) ~= "string" or name == "" or seen[name] or #sources == 0 then return end
+    seen[name] = true
+    out[#out + 1] = { name = name, sources = sources }
+  end
+  if type(options.views) == "table" and #options.views > 0 then
+    for _, spec in ipairs(options.views) do
+      local sources = {}
+      for _, source in ipairs(type(spec) == "table" and spec or { spec }) do
+        if type(source) == "string" and source ~= "" then sources[#sources + 1] = source end
+      end
+      add(type(spec) == "table" and spec.name or sources[1], sources)
+    end
+  else
+    add("files", { "files" })
+    local ok, registered = pcall(require("filetree.registry").list, "source")
+    for _, entry in ipairs(ok and registered or {}) do
+      add(entry.name, { entry.name })
+    end
+  end
+  if #out == 0 then add("files", { "files" }) end
+  return out
+end
+
 ---The test for the names the ignore list hides, as it stands now.
 ---@return fun(name: string, path: string): boolean
 local function ignored()
@@ -150,6 +187,7 @@ function M.ensure(root)
     watch = options.watch,
     search_max = options.search_max,
     hide = ignored,
+    views = M.views,
   })
   views[api.nvim_get_current_tabpage()] = view
   return view
@@ -202,22 +240,29 @@ end
 
 ---@type table<string, string>
 local COMMANDS = { edit = "edit", split = "split", vsplit = "vsplit", tab = "tabedit" }
+---@type table<string, string>  The same modes for a buffer that is no file (a terminal).
+local BUFFER_COMMANDS =
+  { edit = "buffer", split = "sbuffer", vsplit = "vertical sbuffer", tab = "tab sbuffer" }
 
----Open a file from the tree.
+---Show a file or a buffer from the tree in an editor window.
 ---@param view Filetree.View
----@param path string
----@param mode? FiletreeOpenMode
----@param win? integer  Open it in this window (a window picker's answer) instead of choosing one.
----@return boolean
-function M.open_path(view, path, mode, win)
-  mode = mode or "edit"
-  local escaped = vim.fn.fnameescape(path)
-  if mode == "tab" then return (pcall(vim.cmd, "tabedit " .. escaped)) end
+---@param commands table<string, string>  Mode -> the Ex command that shows the target.
+---@param arg string  What the command is given: an escaped file name, or a buffer number.
+---@param mode FiletreeOpenMode
+---@param win? integer
+---@return boolean ok
+---@return integer|nil shown_in  The window the target is in now.
+local function open_in_editor(view, commands, arg, mode, win)
+  if mode == "tab" then
+    local ok = pcall(vim.cmd, commands.tab .. " " .. arg)
+    return ok, ok and api.nvim_get_current_win() or nil
+  end
 
   if view.position == "current" and view:is_open() then
     -- the tree sits in an editor window: the file takes its place
     view.win = nil
-    return (pcall(vim.cmd, (COMMANDS[mode] or "edit") .. " " .. escaped))
+    local ok = pcall(vim.cmd, (commands[mode] or commands.edit) .. " " .. arg)
+    return ok, ok and api.nvim_get_current_win() or nil
   end
 
   -- a floating tree is in the way of the file it opens
@@ -228,22 +273,57 @@ function M.open_path(view, path, mode, win)
     local adapter = require("filetree.adapter").get()
     target = require("filetree.util.window").open_editor_window(adapter, { empty = true })
   end
-  if not target then return false end
+  if not target then return false, nil end
 
   if mode == "preview" then
     -- shown in the editor window, the focus stays in the tree
-    return (
-      pcall(api.nvim_win_call, target, function()
-        vim.cmd("keepalt edit " .. escaped)
-      end)
-    )
+    local ok = pcall(api.nvim_win_call, target, function()
+      vim.cmd("keepalt " .. commands.edit .. " " .. arg)
+    end)
+    return ok, ok and target or nil
   end
   -- Leave the tree window first and open the file from the editor window, the order a user's own
   -- `<C-w>l :edit` has: whoever watches for "a file was opened from the tree" (close_on_open) sees
   -- WinLeave of the tree before BufWinEnter of the file.
   api.nvim_set_current_win(target)
-  if not pcall(vim.cmd, (COMMANDS[mode] or "edit") .. " " .. escaped) then return false end
-  return true
+  if not pcall(vim.cmd, (commands[mode] or commands.edit) .. " " .. arg) then return false, nil end
+  return true, api.nvim_get_current_win()
+end
+
+---Open a file from the tree.
+---@param view Filetree.View
+---@param path string
+---@param mode? FiletreeOpenMode
+---@param win? integer  Open it in this window (a window picker's answer) instead of choosing one.
+---@return boolean
+function M.open_path(view, path, mode, win)
+  return (open_in_editor(view, COMMANDS, vim.fn.fnameescape(path), mode or "edit", win))
+end
+
+---Open what a node stands for: its buffer (`data.bufnr`) or its file (`path`), at `data.lnum` /
+---`data.col` when the source gave a place. A node with neither is nothing to open.
+---@param view Filetree.View
+---@param node Filetree.Node
+---@param mode? FiletreeOpenMode
+---@param win? integer
+---@return boolean
+function M.open_node(view, node, mode, win)
+  local data = type(node.data) == "table" and node.data or {}
+  local ok, shown_in = false, nil
+  local bufnr = data.bufnr
+  if type(bufnr) == "number" and api.nvim_buf_is_valid(bufnr) then
+    -- by number: a terminal has no file name, and a file open in a buffer is that buffer
+    ok, shown_in = open_in_editor(view, BUFFER_COMMANDS, tostring(bufnr), mode or "edit", win)
+  elseif type(node.path) == "string" then
+    ok, shown_in =
+      open_in_editor(view, COMMANDS, vim.fn.fnameescape(node.path), mode or "edit", win)
+  end
+  if ok and shown_in and type(data.lnum) == "number" then
+    local last = api.nvim_buf_line_count(api.nvim_win_get_buf(shown_in))
+    local lnum = math.max(1, math.min(data.lnum, last))
+    pcall(api.nvim_win_set_cursor, shown_in, { lnum, math.max(0, tonumber(data.col) or 0) })
+  end
+  return ok
 end
 
 return M

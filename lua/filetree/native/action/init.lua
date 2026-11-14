@@ -47,11 +47,15 @@ function M.activate(view, mode)
     )
     return
   end
+  if row.node.kind == "unavailable" then
+    notify.info(row.node.label)
+    return
+  end
   if row.expandable or row.node.kind == "dir" then
     if row.id ~= view.root then view:toggle(row.id) end
     return
   end
-  if row.node.path then require("filetree.native").open_path(view, row.node.path, mode) end
+  require("filetree.native").open_node(view, row.node, mode)
 end
 
 ---`h`: close the folder under the cursor, or go to the folder the entry lies in.
@@ -151,7 +155,7 @@ function M.builtins()
     {
       name = "refresh",
       key = "R",
-      desc = "Read the folders again",
+      desc = "Read the folders again, or ask the sources of the view again",
       run = function(_, ctx)
         view_of(ctx):refresh()
       end,
@@ -160,6 +164,7 @@ function M.builtins()
       name = "toggle_ignored",
       key = "H",
       desc = "Show or hide the names of the ignore list",
+      needs = { "source:files" },
       run = function(_, ctx)
         local view = view_of(ctx)
         view:set_hide_ignored(not view.hide_ignored)
@@ -169,6 +174,7 @@ function M.builtins()
       name = "up",
       key = "-",
       desc = "Show the parent folder as the root",
+      needs = { "source:files" },
       menu = false,
       run = function(_, ctx)
         local view = view_of(ctx)
@@ -211,18 +217,33 @@ end
 
 -- ── the table of a view ────────────────────────────────────────────────────────
 
+---The node under the cursor, nil on no row.
+---@param view Filetree.View
+---@return table|nil
+local function cursor_node(view)
+  local row = view:current()
+  return row and row.node or nil
+end
+
+---What an action is checked and run with: the source is the one the node under the cursor came from
+---(a view may show several, one section each).
 ---@param view Filetree.View
 ---@return Filetree.Action.Ctx
 function M.ctx(view)
-  local source = view.source or "files"
+  local node = cursor_node(view)
+  local source = view:source_of(node and node.id)
   local mutable = true
   local ok, registry = pcall(require, "lib.nvim.tree.registry")
   local entry = ok and registry.get("source", source) or nil
   if entry and entry.mutable == false then mutable = false end
-  return { source = source, mutable = mutable, view = view }
+  local ctx = view:ctx(source) --[[@as Filetree.Action.Ctx]]
+  ctx.mutable = mutable
+  ctx.view = view
+  ctx.view_name = view.view_name
+  return ctx
 end
 
----Read the actions of other plugins and of the view's source from the registry again.
+---Read the actions of other plugins and of the view's sources from the registry again.
 ---@param view Filetree.View
 local function load_registry(view)
   local t = view.actions
@@ -234,18 +255,17 @@ local function load_registry(view)
   for _, action in ipairs(registry.list("action")) do
     pcall(t.add, t, action, "plugin")
   end
-  local source = registry.get("source", view.source or "files")
-  for _, action in ipairs(source and source.actions or {}) do
-    pcall(t.add, t, action, "source")
+  for _, name in ipairs(view:sources()) do
+    local source = registry.get("source", name)
+    local need = "source:" .. name
+    for _, action in ipairs(source and source.actions or {}) do
+      -- an action a source brought is about that source's nodes: in a view with several sections it
+      -- must not take a key on the rows of another one
+      local own = vim.tbl_extend("force", {}, action)
+      own.needs = vim.list_extend({ need }, action.needs or {})
+      pcall(t.add, t, own, "source")
+    end
   end
-end
-
----The node under the cursor, nil on no row.
----@param view Filetree.View
----@return table|nil
-local function cursor_node(view)
-  local row = view:current()
-  return row and row.node or nil
 end
 
 ---The marked nodes of this view (marks feature), else the node under the cursor. Marked paths
@@ -480,6 +500,13 @@ function M.sync(view)
   end
 end
 
+---The view shows other sources now: take their actions into the table and bind their keys.
+---@param view Filetree.View
+function M.reload(view)
+  load_registry(view)
+  M.sync(view)
+end
+
 ---Build the table of a view and bind its keys on `buf`. Called before the buffer gets its filetype;
 ---the feature keys follow with `sync`, once the features have bound them.
 ---@param view Filetree.View
@@ -535,6 +562,7 @@ function M.listen()
       if ev.kind ~= "action" and ev.kind ~= "source" then return end
       vim.schedule(function()
         for _, view in ipairs(require("filetree.native").all()) do
+          if ev.kind == "source" then view:source_changed(ev.name) end
           load_registry(view)
           M.sync(view)
         end
