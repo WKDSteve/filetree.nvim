@@ -146,5 +146,20 @@ for _, name in ipairs({ "scan", "register", "resolve", "for_delete", "status" })
 end
 ok("refs.status() answers a table with the own tree active", type(refs.status()) == "table")
 
+-- ── debugging: the state of the file layer ─────────────────────────────────────
+local state = require("filetree").fs_state()
+eq("fs_state: the own tree is the active backend", state.active, true)
+-- the bench switches watching off: the state says so, and holds no handle
+eq(
+  "... watch is what native.watch says",
+  state.watch,
+  require("filetree.native").options().watch ~= false
+)
+eq("... a handle only while the tree follows the disk", #state.watchers >= 1, state.watch)
+eq("... the root of the tree is named", #state.roots, 1)
+for _, key in ipairs({ "released", "quarantined", "changed", "reading" }) do
+  ok("... " .. key .. " is a list", type(state[key]) == "table")
+end
+
 eq("nothing at warning level in the whole run", T.loud(), {})
 T.finish()

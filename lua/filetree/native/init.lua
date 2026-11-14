@@ -123,6 +123,26 @@ function M.options()
   return options
 end
 
+---The state of the file layer of the own tree: the watcher handles and their folders, what is held
+---back, what is being read. Plain data, a copy; reading it starts nothing (no handle, no view).
+---@return Filetree.FsState
+function M.fs_state()
+  local adapter = require("filetree.adapter").get()
+  ---@type Filetree.FsState
+  local state = require("filetree.native.fs.watch").state()
+  state.active = adapter ~= nil and adapter.name == "native"
+  state.watch = options.watch ~= false
+  state.reading = require("filetree.native.fs.list").reading()
+  state.roots = {}
+  for _, view in pairs(views) do
+    if view.root and not vim.tbl_contains(state.roots, view.root) then
+      state.roots[#state.roots + 1] = view.root
+    end
+  end
+  table.sort(state.roots)
+  return state
+end
+
 ---The views of the tree, in the order of the view bar. With `native.views` set, exactly those; without,
 ---the files and one view per registered source, in registration order.
 ---@return Filetree.View.Spec[]

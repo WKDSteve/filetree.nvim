@@ -75,6 +75,22 @@
 ---@field trailing_slash? boolean append `/` to a folder: an expandable node, or one of kind "dir" (default false)
 ---@field hl? { guide?: string, expander?: string, name?: string, dir?: string } highlight groups
 
+---What `filetree.native.fs.watch` holds, as plain data.
+---@class Filetree.Fs.WatchState
+---@field recursive boolean one handle per root watches the whole tree below it (Windows, macOS); false: one handle per folder read
+---@field watchers { dir: string, refs: integer, error?: string }[] the open handles, sorted by folder; `refs`: how many times the folder was asked for
+---@field released { dir: string, refs: integer }[] handles closed for a running file operation, to be opened again after it
+---@field quarantined string[] folders held back after an event storm, reported once they went quiet
+---@field changed string[] folders whose listing changed and that are not reported yet
+---@field stats { events: integer, reports: integer, quarantined: integer } counters since Neovim started
+
+---The state of the file layer of the own tree (`require("filetree").fs_state()`).
+---@class Filetree.FsState : Filetree.Fs.WatchState
+---@field active boolean the own tree is the active backend (`adapter = "native"`)
+---@field watch boolean `native.watch`: false = the tree does not follow the disk, and holds no handle
+---@field reading string[] folders being read right now, sorted
+---@field roots string[] the roots of the trees there are (one per tab that opened one), sorted
+
 ---Something that wants room right of the name.
 ---@class Filetree.RightItem
 ---@field text string

@@ -347,6 +347,34 @@ reasons still has `emit`.
 The types are in
 [`lua/filetree/@types/native.lua`](../lua/filetree/@types/native.lua).
 
+### The state of the file layer
+
+What the own tree holds on the disk, as plain data: for a debug command, a
+health check, or the question "is a handle of this Neovim what keeps the
+folder busy?". Reading it starts nothing and changes nothing; the table is a
+copy.
+
+```lua
+local state = require("filetree").fs_state()
+```
+
+| Field | What it says |
+| --- | --- |
+| `active` | the own tree is the active backend (`adapter = "native"`); `false`: the lists below are empty unless a tree was opened before the backend changed |
+| `watch` | `native.watch`; `false`: the tree does not follow the disk and holds no handle |
+| `recursive` | one handle per root watches everything below it (Windows, macOS); `false`: one handle per folder read |
+| `watchers` | `{ dir, refs, error? }[]`, sorted by folder: the open `fs_event` handles; `refs` counts who asked for the folder |
+| `released` | `{ dir, refs }[]`: handles closed for a running file operation, opened again after it |
+| `quarantined` | folders held back after an event storm (more than 200 events a second), reported once they went quiet |
+| `changed` | folders whose listing changed and that are not reported yet (the short quiet before a report) |
+| `reading` | folders being read right now |
+| `roots` | the roots of the trees there are, one per tab that opened one |
+| `stats` | `{ events, reports, quarantined }`, counted since Neovim started |
+
+A folder is covered by a handle when it is in `watchers`, or, with
+`recursive`, when it lies below a folder of `watchers`. Paths are normalized
+(forward slashes, as the tree writes them).
+
 ### For plugin authors: registering without loading filetree.nvim
 
 `require("filetree")` from another plugin makes a plugin manager load

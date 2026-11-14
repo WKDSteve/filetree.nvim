@@ -341,6 +341,15 @@ function M.action(entry)
   return require("filetree.registry").action(entry)
 end
 
+---The state of the file layer of the own tree (backend `native`): watcher handles with their
+---folders, folders held back after an event storm, folders being read. Plain data for a debug
+---command or a health check of another plugin; `active` says whether the own tree is the backend.
+---See docs/api.md.
+---@return Filetree.FsState
+function M.fs_state()
+  return require("filetree.native").fs_state()
+end
+
 ---Register a custom adapter.
 ---Must be called before setup().
 ---@param adapter FiletreeAdapter

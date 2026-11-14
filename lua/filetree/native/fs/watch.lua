@@ -12,7 +12,7 @@
 ---   and fire `User FiletreeFsChanged` (`data.dirs`)
 --- - Quarantine: a folder with an event storm is reported once, after it went quiet
 --- - Every handle is known: `count()`, `release(path)` for an operation that must not find the path
----   held, `stop_all()`
+---   held, `stop_all()`; `state()` is all of it at once, for whoever wants to show it
 ---
 --- Which folders matter (loaded, shown) is the subscriber's business: this module reports all of them.
 
@@ -258,6 +258,39 @@ end
 function M.watched()
   local out = vim.tbl_keys(watchers)
   table.sort(out)
+  return out
+end
+
+---What this module holds right now, as plain data (a copy: changing it changes nothing here).
+---@return Filetree.Fs.WatchState
+function M.state()
+  local out = {
+    recursive = M.recursive,
+    watchers = {},
+    released = {},
+    quarantined = {},
+    changed = {},
+    stats = vim.deepcopy(M.stats),
+  }
+  for dir, entry in pairs(watchers) do
+    out.watchers[#out.watchers + 1] = { dir = dir, refs = entry.refs, error = entry.error }
+  end
+  for dir, refs in pairs(released) do
+    out.released[#out.released + 1] = { dir = dir, refs = refs }
+  end
+  for dir, t in pairs(traffic) do
+    if t.held then out.quarantined[#out.quarantined + 1] = dir end
+  end
+  for dir in pairs(dirty) do
+    out.changed[#out.changed + 1] = dir
+  end
+  local function by_dir(a, b)
+    return a.dir < b.dir
+  end
+  table.sort(out.watchers, by_dir)
+  table.sort(out.released, by_dir)
+  table.sort(out.quarantined)
+  table.sort(out.changed)
   return out
 end
 

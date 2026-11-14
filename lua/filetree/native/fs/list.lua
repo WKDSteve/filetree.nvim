@@ -155,6 +155,14 @@ function M.list(dir, cb)
   end)
 end
 
+---The folders being read right now (a read without blocking that has not answered yet), sorted.
+---@return string[]
+function M.reading()
+  local out = vim.tbl_keys(pending)
+  table.sort(out)
+  return out
+end
+
 ---The cached entries of a directory, or nil when it was not read (or was invalidated).
 ---@param dir string
 ---@return Filetree.Fs.Entry[]|nil

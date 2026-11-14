@@ -53,6 +53,7 @@ local watch = require("filetree.native.fs.watch")
 local native = require("filetree.native")
 require("filetree.config").setup({})
 local adapter = require("filetree.adapter.native")
+local filetree = require("filetree")
 
 -- ── fixture ────────────────────────────────────────────────────────────────────
 local base = list.norm(vim.uv.fs_realpath(vim.fn.tempname():match("^(.*)[/\\]")))
@@ -270,6 +271,8 @@ end
 watch.on_event(dir .. "/calm", "one")
 settle(120)
 eq("the calm folder is reported, the stormy one is not", reports, { dir .. "/calm" })
+eq("state names the folder that is held back", watch.state().quarantined, { dir .. "/storm" })
+eq("... through the public function too", filetree.fs_state().quarantined, { dir .. "/storm" })
 eq("the storm was noticed once", watch.stats.quarantined, quarantined + 1)
 watch.on_event(dir .. "/storm", "more")
 settle(150)
@@ -278,6 +281,57 @@ vim.wait(3000, function()
   return #reports >= 2
 end, 25)
 eq("after it went quiet the folder is reported once", reports[2], dir .. "/storm")
+eq("... and is no longer held back", watch.state().quarantined, {})
+watch.on_event(dir .. "/calm", "pending")
+eq("a change that is not reported yet is named", watch.state().changed, { dir .. "/calm" })
+settle(120)
+eq("... until it was reported", watch.state().changed, {})
+reports[#reports] = nil
+do
+  local state = filetree.fs_state()
+  eq("the state counts what the module counts", state.stats, watch.stats)
+  state.stats.events = -1
+  state.watchers[#state.watchers + 1] = { dir = "x", refs = 1 }
+  ok("the state is a copy", watch.stats.events >= 0 and #watch.state().watchers == watch.count())
+  eq(
+    "every open handle is in it, sorted",
+    vim.tbl_map(function(w)
+      return w.dir
+    end, watch.state().watchers),
+    watch.watched()
+  )
+  ok(
+    "... with its references",
+    vim.iter(watch.state().watchers):all(function(w)
+      return type(w.refs) == "number" and w.refs >= 1
+    end)
+  )
+  eq("recursive says how the system watches", state.recursive, watch.recursive)
+  eq("watch follows native.watch", state.watch, true)
+  eq("the roots of the trees are named", state.roots, { dir })
+  eq("nothing is being read at rest", state.reading, {})
+  eq("without setup no backend is active", state.active, false)
+  local unwatch = watch.watch(dir)
+  local before = #watch.state().watchers
+  ok("a watched folder is a handle in the state", before >= 1)
+  local reopen = watch.release(dir)
+  eq("a handle closed for an operation is listed as released", #watch.state().released, before)
+  eq("... and not as a watcher", #watch.state().watchers, 0)
+  reopen()
+  eq("... and back among the watchers after it", #watch.state().released, 0)
+  eq("... all of them", #watch.state().watchers, before)
+  unwatch()
+  local seen
+  list.invalidate(dir)
+  list.list(dir, function()
+    seen = true
+  end)
+  eq("a folder being read is named", filetree.fs_state().reading, { dir })
+  vim.wait(2000, function()
+    return seen
+  end, 10)
+  eq("... until the read answered", filetree.fs_state().reading, {})
+end
 unsubscribe()
 watch.on_event(dir .. "/calm", "two")
 settle(120)
@@ -289,6 +343,8 @@ eq("reset closes every handle", watch.count(), 0)
 native.setup({ watch = false })
 adapter.toggle_at("left", { dir = dir })
 eq("native.watch = false opens no handle", watch.count(), 0)
+eq("... and the state says that watching is off", filetree.fs_state().watch, false)
+eq("... with no handle in it", filetree.fs_state().watchers, {})
 
 native.reset()
 native.setup({})
