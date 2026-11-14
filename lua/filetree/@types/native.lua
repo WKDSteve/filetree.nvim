@@ -75,6 +75,30 @@
 ---@field trailing_slash? boolean append `/` to a folder: an expandable node, or one of kind "dir" (default false)
 ---@field hl? { guide?: string, expander?: string, name?: string, dir?: string } highlight groups
 
+---What a source or a previewer is asked with for a preview: the context of the view (`Filetree.Ctx`,
+---on the own tree) plus what the preview is.
+---@class Filetree.Preview.Ctx : Filetree.Ctx
+---@field mode "float"|"buffer" `features.preview.mode`: a float next to the tree, or the editor window
+---@field trigger "toggle"|"cursor" `<Tab>` was pressed, or the cursor moved while a preview is shown
+---@field width integer columns the preview may use (`max_width`)
+---@field height integer lines the preview may use (`max_height`)
+
+---What the preview shows in place of the file of a node. One of the three; `title` goes with each.
+---@class Filetree.Preview.Result
+---@field lines? string[] shown in the float, or in a scratch buffer in the editor window
+---@field filetype? string of `lines`, for highlighting
+---@field image? string path of an image: on `<Tab>` it goes to the image viewer as if the node were that image; while the cursor moves only its title is shown
+---@field note? string one line that says why there is nothing to show ("ffmpeg not found")
+---@field title? string the title of the preview (default: the label of the node)
+
+---A preview for nodes another plugin can draw (a frame of a video, a waveform). Registered with
+---`require("filetree").previewer` or `lib.nvim.tree.registry.previewer`.
+---@class Filetree.Previewer
+---@field name string unique among previewers
+---@field priority? integer the highest that matches is asked (default 0)
+---@field match fun(node: Filetree.Node): boolean is this node mine? Table lookups only: it runs on every cursor move while a preview is shown
+---@field preview fun(node: Filetree.Node, ctx: Filetree.Preview.Ctx, done: fun(result?: Filetree.Preview.Result, note?: string)): fun()|nil returns at once; `done` once, now or later (`done(nil, "why")` is a note); may return a cancel function
+
 ---What `filetree.native.fs.watch` holds, as plain data.
 ---@class Filetree.Fs.WatchState
 ---@field recursive boolean one handle per root watches the whole tree below it (Windows, macOS); false: one handle per folder read

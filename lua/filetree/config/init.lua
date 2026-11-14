@@ -42,6 +42,7 @@ local KNOWN_TOP = {
   sources = true,
   decorators = true,
   actions = true,
+  previewers = true,
 }
 
 ---Known sub-keys of the top-level `menu` table (see `DEFAULTS.lua`).

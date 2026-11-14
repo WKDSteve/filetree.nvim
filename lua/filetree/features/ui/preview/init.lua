@@ -19,6 +19,7 @@
 local notify = require("filetree.util.notify").create("[filetree.preview]")
 local line_count = require("filetree.util.line_count")
 local bufutil = require("filetree.util.buffer")
+local custom = require("filetree.features.ui.preview.custom")
 
 local au = require("filetree.util.autocmd")
 local tree_attach = require("filetree.util.tree_attach")
@@ -363,6 +364,14 @@ end
 
 -- ── Preview window ────────────────────────────────────────────────────────────
 
+--- The id of the node whose own preview (of its source, or of a registered previewer) is on
+--- screen; nil while the preview shows a file, or nothing.
+---@type any
+local _custom_id = nil
+--- The scratch buffer the buffer mode shows such a preview in.
+---@type integer?
+local _custom_buf = nil
+
 local function close_preview()
   if _win and vim.api.nvim_win_is_valid(_win) then pcall(vim.api.nvim_win_close, _win, true) end
   if _bufnr and vim.api.nvim_buf_is_valid(_bufnr) then
@@ -370,7 +379,10 @@ local function close_preview()
   end
   _win = nil
   _bufnr = nil
+  _custom_id = nil
 end
+
+local open_float
 
 local function open_preview(node)
   close_preview()
@@ -389,7 +401,14 @@ local function open_preview(node)
     lines = read_text(path)
     ft = vim.filetype.match({ filename = path }) or ""
   end
+  open_float(lines, ft, vim.fn.fnamemodify(path, ":t"))
+end
 
+---The preview float next to the tree window, with these lines.
+---@param lines string[]
+---@param ft string  "" for none.
+---@param title string
+open_float = function(lines, ft, title)
   -- `or <default>` mirrors the defaults above; see watcher_quarantine.
   local max_w = _cfg.max_width or 80
   local content_w = 0
@@ -433,7 +452,7 @@ local function open_preview(node)
     enter = false,
     modifiable = false,
     filetype = ft ~= "" and ft or nil,
-    title = " " .. vim.fn.fnamemodify(path, ":t") .. " ",
+    title = " " .. title .. " ",
     title_pos = "center",
     wo = { wrap = _cfg.wrap },
   })
@@ -578,6 +597,11 @@ local function buf_stop(restore)
   _editor_win = nil
   _saved_buf = nil
   _refused = nil
+  _custom_id = nil
+  if _custom_buf and vim.api.nvim_buf_is_valid(_custom_buf) then
+    pcall(vim.api.nvim_buf_delete, _custom_buf, { force = true })
+  end
+  _custom_buf = nil
 end
 
 ---Start buffer-mode preview for `node`, remembering the editor window's buffer.
@@ -596,12 +620,134 @@ local function buf_start(node)
   end
 end
 
+-- ── A preview of the node's own (its source, a registered previewer) ───────────
+
+---Show lines in place of a file: in the float, or in a scratch buffer in the editor window.
+---@param lines string[]
+---@param ft string?
+---@param title string
+local function show_lines(lines, ft, title)
+  if _cfg.mode == "float" then
+    close_preview()
+    open_float(lines, ft or "", title)
+    return
+  end
+  local win = _editor_win
+  if not (win and vim.api.nvim_win_is_valid(win)) then return end
+  if not (_custom_buf and vim.api.nvim_buf_is_valid(_custom_buf)) then
+    _custom_buf = vim.api.nvim_create_buf(false, true)
+    vim.bo[_custom_buf].buftype = "nofile"
+    vim.bo[_custom_buf].bufhidden = "hide"
+    vim.bo[_custom_buf].swapfile = false
+  end
+  local buf = _custom_buf
+  vim.bo[buf].modifiable = true
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  vim.bo[buf].modifiable = false
+  if vim.bo[buf].filetype ~= (ft or "") then vim.bo[buf].filetype = ft or "" end
+  without_nav_events(function()
+    pcall(vim.api.nvim_win_set_buf, win, buf)
+  end)
+  if ft and ft ~= "" then apply_highlight(buf, ft) end
+end
+
+---@param source string?
+---@param trigger "toggle"|"cursor"
+---@return Filetree.Preview.Ctx
+local function custom_ctx(source, trigger)
+  local ctx = {}
+  if _adapter and _adapter.name == "native" and type(_adapter.get_state) == "function" then
+    local ok, view = pcall(_adapter.get_state)
+    if ok and type(view) == "table" and type(view.ctx) == "function" then ctx = view:ctx(source) end
+  end
+  ctx.source = source
+  ctx.mode = _cfg.mode == "float" and "float" or "buffer"
+  ctx.trigger = trigger
+  ctx.width = _cfg.max_width or 80
+  ctx.height = _cfg.max_height or 25
+  return ctx
+end
+
+---Ask the source of the node under the cursor, then the registered previewers, and show what they
+---answer in place of the file. The answer of a previewer may come later: it is shown only while
+---the cursor is still on that node.
+---@param trigger "toggle"|"cursor"  `<Tab>` was pressed, or the cursor moved while a preview is shown.
+---@return boolean handled  false: nobody has a preview for the node, the file is shown as always.
+local function try_custom(trigger)
+  local node, source = custom.node(_adapter)
+  if not node or not custom.has(node, source) then return false end
+  local id = node.id
+  local label = tostring(node.label or "")
+  local answered = false
+  local asked = custom.resolve(node, source, custom_ctx(source, trigger), function(result)
+    answered = true
+    local now = custom.node(_adapter)
+    if not now or now.id ~= id then return end
+    local title = result.title or label
+    if result.image and trigger == "toggle" then
+      -- as if the node were this image: the image viewer shows it
+      close_preview()
+      open_image(result.image)
+      return
+    end
+    if _cfg.mode ~= "float" and not _buf_active then
+      local win = editor_target()
+      if not win then
+        notify.warn("no editor window to preview into")
+        return
+      end
+      _editor_win = win
+      _saved_buf = vim.api.nvim_win_get_buf(win)
+      _buf_active = true
+    end
+    if result.image then
+      -- while the cursor moves no viewer is opened per line: the name of what `<Tab>` would show
+      show_lines({ title }, nil, title)
+    elseif result.lines then
+      show_lines(result.lines, result.filetype, title)
+    else
+      show_lines({ result.note or "" }, nil, title)
+    end
+    _custom_id = id
+  end)
+  if asked and not answered then
+    -- a previewer is still working, and nothing is on screen that would follow the cursor: the
+    -- cursor leaving the node is what tells it that nobody waits any more
+    local buf = _adapter and _adapter.get_bufnr and _adapter.get_bufnr() or nil
+    if buf and vim.api.nvim_buf_is_valid(buf) then
+      vim.api.nvim_create_autocmd("CursorMoved", {
+        buffer = buf,
+        desc = "[filetree] Call off a preview that is still being made when the cursor leaves its node",
+        callback = function()
+          if answered then return true end
+          local now = custom.node(_adapter)
+          if now and now.id == id then return false end
+          answered = true
+          custom.cancel()
+          return true
+        end,
+      })
+    end
+  end
+  return asked
+end
+
 ---Re-check state and refresh the live preview at CursorMoved-debounce fire
 ---time (the cursor/tree may have changed since the event fired).
 local function do_cursor_update()
   if not require("filetree.util.buffer").is_tree_buffer() then return end
+  local showing = _buf_active
+    or (_cfg.mode == "float" and _win ~= nil and vim.api.nvim_win_is_valid(_win))
+  if showing and try_custom("cursor") then return end
+  -- the cursor left a node with a preview of its own: nobody waits for that answer any more
+  custom.cancel()
   local node = _adapter and _adapter.get_current_node()
-  if not node then return end
+  if not node then
+    -- a row with nothing to show (a group, a case the source has nothing for): the preview of the
+    -- node before must not stand there as if it were this one's
+    if _custom_id ~= nil and _cfg.mode == "float" then close_preview() end
+    return
+  end
 
   if _cfg.mode == "float" then
     if _win and vim.api.nvim_win_is_valid(_win) then open_preview(node) end
@@ -648,7 +794,24 @@ end
 ---Dispatch for <Tab>: image/PDF open, text preview toggle for everything else.
 function M.toggle_or_open()
   if not _adapter then return end
+  -- a node with a preview of its own: `<Tab>` on the node that is shown takes it away again
+  local own = custom.node(_adapter)
+  if own and _custom_id ~= nil and own.id == _custom_id then
+    custom.cancel()
+    if _cfg.mode == "float" then
+      close_preview()
+    else
+      buf_stop(true)
+    end
+    return
+  end
+  if try_custom("toggle") then return end
   local node = _adapter.get_current_node()
+  if (not node or not node.path or node.path == "") and _custom_id ~= nil then
+    -- nothing to show here, and the preview on screen belongs to another node: take it away
+    M.close()
+    return
+  end
   if not node or not node.path or node.path == "" then
     notify.warn("no node under cursor")
     return
@@ -723,6 +886,7 @@ function M.media_kind(path)
 end
 
 function M.close()
+  custom.cancel()
   close_preview()
   buf_stop(true)
 end

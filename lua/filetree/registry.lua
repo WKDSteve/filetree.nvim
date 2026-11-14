@@ -1,5 +1,5 @@
 ---@module 'filetree.registry'
----@brief Register sources, decorators and actions for the tree.
+---@brief Register sources, decorators, actions and previewers for the tree.
 ---@description
 --- A thin re-export of `lib.nvim.tree.registry` (LUA-03): the lists live there, so that a plugin can
 --- register without loading filetree.nvim. This module is the name a user and the docs go by;
@@ -50,14 +50,28 @@ function M.action(entry)
   return lib().action(entry)
 end
 
+---Register a previewer: what the preview shows for a node in place of its file. Needs `name`,
+---`match()` and `preview()`. With a lib.nvim that does not know previewers yet nothing is registered.
+---@param entry Filetree.Previewer
+---@return fun(): boolean unregister
+function M.previewer(entry)
+  local registry = lib()
+  if type(registry.previewer) ~= "function" then
+    return function()
+      return false
+    end
+  end
+  return registry.previewer(entry)
+end
+
 ---The registered entries of one kind, in registration order.
----@param kind "source"|"decorator"|"action"
+---@param kind "source"|"decorator"|"action"|"previewer"
 ---@return table[]
 function M.list(kind)
   return lib().list(kind)
 end
 
----@param kind "source"|"decorator"|"action"
+---@param kind "source"|"decorator"|"action"|"previewer"
 ---@param name string
 ---@return table|nil
 function M.get(kind, name)
@@ -75,7 +89,12 @@ end
 local from_setup = {}
 
 ---@type table<string, fun(entry: table): fun(): boolean>
-local BY_OPTION = { sources = M.source, decorators = M.decorator, actions = M.action }
+local BY_OPTION = {
+  sources = M.source,
+  decorators = M.decorator,
+  actions = M.action,
+  previewers = M.previewer,
+}
 
 ---Register what `setup({ sources, decorators, actions })` lists, replacing what the previous `setup()`
 ---registered. An entry that is refused is skipped and reported; the others still register.

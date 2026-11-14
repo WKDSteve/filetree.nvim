@@ -212,7 +212,8 @@ Optional fields of a source: `title`, `icon`, `children(node, ctx, cb)` (lazy
 children for nodes that carry none), `subscribe(ctx, emit)` (live updates while
 a view shows the source: `emit.push(update)`, `emit.invalidate(id)`,
 `emit.reset()`; return an unsubscribe function), `actions`, `severity` and
-`aggregate` (how statuses add up on a parent), `preview(node, ctx)`,
+`aggregate` (how statuses add up on a parent), `preview(node, ctx)` (what the
+[preview](#a-previewer) shows for one of its nodes),
 `available()` (answer `false, reason` when the source cannot load right now),
 `mutable = false` (actions that need `"mutable"` step back on its nodes).
 
@@ -325,6 +326,66 @@ feature claims keeps that feature's mapping; a key the user or another plugin
 mapped on the tree buffer is left alone. An action that presses its own key while
 it runs (a feature wrapping what was on the key before it) reaches the next
 action of that key, not itself.
+
+### A previewer
+
+The preview (`<Tab>`, [features](FEATURES/UI.md)) shows the file of a node.
+Two kinds of node have something better to show, and both say so here.
+
+**A node of your source that is no file** (a failed test case, a pipeline
+step): the source carries `preview(node, ctx)` and answers what to show, or
+`nil` for "the file of the node, as always":
+
+```lua
+preview = function(node, ctx)
+  local case = cases[node.id]
+  if not case or not case.output then return nil end
+  return { lines = case.output, filetype = "diff", title = case.name }
+end
+```
+
+**A file your plugin can draw** (a frame of a video, the waveform of a
+recording): register a previewer. It is asked for every node, also for the
+files of the directory tree, and with every backend:
+
+```lua
+require("filetree").previewer({
+  name = "media",
+  priority = 0,                         -- the highest that matches is asked
+  match = function(node)                -- table lookups only: runs on every cursor move
+    return node.path ~= nil and VIDEO[node.path:match("%.(%w+)$") or ""] == true
+  end,
+  preview = function(node, ctx, done)   -- returns at once
+    local job = frames.extract(node.path, function(png, err)
+      if png then done({ image = png, title = node.label }) else done(nil, err) end
+    end)
+    return function() job:kill() end    -- optional: nobody waits any more
+  end,
+})
+```
+
+`ctx` is the [context](#registering) of the view plus `mode` (`"float"` or
+`"buffer"`, `features.preview.mode`), `trigger` (`"toggle"`: `<Tab>` was
+pressed; `"cursor"`: the cursor moved while a preview is shown), `width` and
+`height` (what the preview may use).
+
+The answer, from a source or through `done` (once, now or later), is one of:
+
+| Answer | Shown as |
+| --- | --- |
+| `{ lines = { ... }, filetype?, title? }` | the lines, in the float or in a scratch buffer in the editor window |
+| `{ image = "/abs/frame.png", title? }` | on `<Tab>` the image viewer shows it, as if the node were that image; while the cursor moves only the title is shown (no viewer per line) |
+| `{ note = "ffmpeg not found" }`, or `done(nil, "ffmpeg not found")` | that one line; no warning |
+
+An answer for a node the cursor has left is dropped, and the previewer that
+was still working is told (the function it returned). `<Tab>` on the node
+whose preview is shown takes it away again. A previewer or a `preview` of a
+source that raises is named once and not asked again. A file nobody claims is
+previewed as before; `<CR>` is not touched.
+
+Registering one level lower works here too
+(`require("lib.nvim.tree.registry").previewer({ ... })`), and `setup()` takes
+`previewers = { ... }` next to `sources`, `decorators` and `actions`.
 
 ### When files changed
 

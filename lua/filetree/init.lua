@@ -136,9 +136,10 @@ function M.setup(user_config)
   -- place.
   require("filetree.util.env_roots").setup(cfg.env_roots)
 
-  -- Sources, decorators and actions listed in setup() (see filetree.registry). Only touched when one
-  -- of the three is given or was given before, so a setup() without them never needs the registry.
-  if cfg.sources or cfg.decorators or cfg.actions or _registered_from_setup then
+  -- Sources, decorators, actions and previewers listed in setup() (see filetree.registry). Only
+  -- touched when one of them is given or was given before, so a setup() without them never needs
+  -- the registry.
+  if cfg.sources or cfg.decorators or cfg.actions or cfg.previewers or _registered_from_setup then
     _registered_from_setup = true
     for _, issue in ipairs(require("filetree.registry").apply_setup(cfg)) do
       notify.warn(issue)
@@ -342,6 +343,14 @@ end
 ---@return fun(): boolean unregister
 function M.action(entry)
   return require("filetree.registry").action(entry)
+end
+
+---Register a previewer: what the preview (`<Tab>`) shows for a node in place of its file, e.g. a
+---frame of a video. See docs/api.md.
+---@param entry Filetree.Previewer
+---@return fun(): boolean unregister
+function M.previewer(entry)
+  return require("filetree.registry").previewer(entry)
 end
 
 ---The state of the file layer of the own tree (backend `native`): watcher handles with their
