@@ -47,6 +47,7 @@ M.HL = {
   FiletreeOpened = "Special",
   FiletreeModified = "DiagnosticWarn",
   FiletreeNameFloat = "NormalFloat",
+  FiletreeEmbedSelection = "CursorLine",
 }
 
 --- Node kinds that are a line of text and no entry: no icon, no badge, drawn like a comment.
@@ -153,6 +154,10 @@ local function define_highlights()
     api.nvim_set_hl(0, group, { link = link, default = true })
   end
 end
+
+---Define the groups of `M.HL` (links, `default`): for a reader of the groups that draws without a
+---tree window (`filetree.native.embed`). The tree window does it when it opens and on `ColorScheme`.
+M.define_highlights = define_highlights
 
 ---@param row Lib.Tree.Row
 ---@return string|nil glyph

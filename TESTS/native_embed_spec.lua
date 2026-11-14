@@ -243,6 +243,22 @@ eq("hide leaves names out, group_empty = false keeps folders apart", lines(), {
 })
 by_win:close()
 
+-- a hover opens often: the highlight groups are defined while they are missing, not per embed
+do
+  local defined = 0
+  local real_set_hl = vim.api.nvim_set_hl
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.api.nvim_set_hl = function(...)
+    defined = defined + 1
+    return real_set_hl(...)
+  end
+  local again = native.embed(buf, dir)
+  again:expand(dir .. "/lua")
+  again:close()
+  vim.api.nvim_set_hl = real_set_hl
+  eq("a second embed defines no highlight group (each one forces a full redraw)", defined, 0)
+end
+
 -- following the disk
 local live = native.embed(buf, dir, { watch = true })
 ok("watch = true holds a handle", watch.count() >= 1)

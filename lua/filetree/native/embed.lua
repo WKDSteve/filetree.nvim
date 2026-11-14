@@ -35,6 +35,9 @@ local M = {}
 
 local NS = api.nvim_create_namespace("filetree_native_embed")
 
+---@type table<string, string>  icon name -> highlight group, created once
+local icon_groups = {}
+
 ---@class Filetree.Embed.Opts
 ---@field show_root? boolean  Draw the folder itself as the first row (default false: its entries only).
 ---@field icons? boolean  File and folder icons (default true; drawn only with a Nerd Font declared).
@@ -73,7 +76,14 @@ local function icon_of(row)
   local icons = require("lib.nvim.ui.icons")
   local glyph, color, name = icons.get(node.label, nil, { fallback = "" })
   if not glyph or glyph == "" then return nil, nil end
-  return glyph, icons.hl_group(name or "Default", color)
+  local key = name or "Default"
+  local group = icon_groups[key]
+  if not group then
+    -- once per icon name: defining a group forces a full redraw
+    group = icons.hl_group(key, color)
+    icon_groups[key] = group
+  end
+  return glyph, group
 end
 
 ---Write every line and its highlights again. The trees an embed shows are small (a hover float):
@@ -342,12 +352,11 @@ function M.open(buf, root, opts)
   root = list.norm(vim.fn.fnamemodify(root, ":p"))
   local stat = vim.uv.fs_stat(root)
   if not stat or stat.type ~= "directory" then return nil, "not a directory: " .. root end
-  -- the groups the lines are drawn with are the tree window's
-  local view = require("filetree.native.view")
-  for group, link in pairs(view.HL) do
-    api.nvim_set_hl(0, group, { link = link, default = true })
+  -- The groups the lines are drawn with are the tree window's. Defined only while they are missing
+  -- (no tree window was opened yet): defining a group forces a full redraw, and a hover opens often.
+  if vim.tbl_isempty(api.nvim_get_hl(0, { name = "FiletreeEmbedSelection" })) then
+    require("filetree.native.view").define_highlights()
   end
-  api.nvim_set_hl(0, "FiletreeEmbedSelection", { link = "CursorLine", default = true })
 
   ---@type Filetree.Embed
   local self = setmetatable({
