@@ -145,7 +145,7 @@ local remove_spec = registry.source({
     },
   },
 })
-local other_available = true
+local other_available, other_reason = true, "nothing to show right now"
 local remove_other = registry.source({
   name = "other",
   root = function()
@@ -157,7 +157,7 @@ local remove_other = registry.source({
   end,
   available = function()
     if other_available then return true end
-    return false, "nothing to show right now"
+    return false, other_reason
   end,
 })
 
@@ -400,7 +400,10 @@ eq(
   last_note(),
   "[filetree.native] Other  [!] nothing to show right now"
 )
-other_available = true
+other_reason = "still nothing"
+feed("R")
+eq("R asks again: another reason is another line", lines(), { "Other  [!] still nothing" })
+other_available, other_reason = true, "nothing to show right now"
 feed("R")
 eq("R asks again: the source is there now", lines(), { "▾ Other", "x" })
 
@@ -435,6 +438,9 @@ eq("a key of one source does nothing on the rows of another", {
   #spec.marked,
   last_note(),
 }, { 1, "[filetree.native] <F9>: only in the spec view" })
+spec.emit.push({ id = "other:x", label = "taken over" })
+spec.emit.invalidate("other:root")
+eq("a source cannot change the nodes of another section", lines()[5], "x")
 view:expand("spec:group")
 goto_id(view, "spec:two")
 feed("<F9>")

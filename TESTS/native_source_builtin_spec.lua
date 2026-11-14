@@ -270,6 +270,25 @@ eq("<CR> on a terminal shows it in the editor window", {
   vim.api.nvim_get_current_buf(),
 }, { editor_win, term })
 
+-- a scratch buffer of some plugin comes and goes: nothing this view shows, nothing to read again
+local buffers_source = require("filetree.native.source.buffers")
+local real_nodes, reads = buffers_source.nodes, 0
+---@diagnostic disable-next-line: duplicate-set-field
+buffers_source.nodes = function(...)
+  reads = reads + 1
+  return real_nodes(...)
+end
+vim.api.nvim_buf_delete(vim.api.nvim_create_buf(false, true), { force = true })
+settle()
+eq("an unlisted scratch buffer that is wiped does not make the view read the list", reads, 0)
+vim.cmd("badd " .. vim.fn.fnameescape(dir .. "/lua/never_shown.lua"))
+settle()
+eq("a listed buffer that comes does", reads, 1)
+vim.cmd("bwipeout " .. vim.fn.bufnr(dir .. "/lua/never_shown.lua"))
+settle()
+eq("... and one that is wiped", reads, 2)
+buffers_source.nodes = real_nodes
+
 -- dd
 goto_id(view, "buffers:" .. term)
 feed("dd")
@@ -382,6 +401,11 @@ if vim.fn.executable("git") == 1 then
     "README.md",
     "▸ Changes",
   })
+  eq(
+    "the file is found by its path where it stands now",
+    adapter.get_node_line(dir .. "/lua/b.lua"),
+    view.tree:row_of(staged_b)
+  )
   goto_id(view, staged_b)
   ok("a staged file can be unstaged", vim.tbl_contains(names_here(), "git.unstage"))
   feed("gu")

@@ -89,9 +89,9 @@ function Pane:_adopt(source, entry, node, is_root)
     self._opened[id] = true
     self._pending_open[id] = true
   end
-  if type(node.path) == "string" and self._by_path[node.path] == nil then
-    self._by_path[node.path] = id
-  end
+  -- the last node handed over for a path: after a reload that is one of the fresh nodes, also when
+  -- the file moved to another group and its old node is gone
+  if type(node.path) == "string" then self._by_path[node.path] = id end
   local kids = node.children
   if type(kids) == "table" then
     for _, child in ipairs(kids) do
@@ -320,15 +320,14 @@ function Pane:reload(source)
         return
       end
       self._sections[i] = fresh
-      if fresh.available then
-        self:_apply(self.tree:push({
-          id = root.id,
-          label = root.label,
-          status = root.status,
-          columns = root.columns,
-        }))
-        self:_resync(root.id, root)
-      end
+      -- also for a source that still cannot load: its reason may be another one
+      self:_apply(self.tree:push({
+        id = root.id,
+        label = root.label,
+        status = root.status,
+        columns = root.columns,
+      }))
+      if fresh.available then self:_resync(root.id, root) end
     end
   end
 end
@@ -345,6 +344,8 @@ function Pane:_emit(source)
   return {
     push = function(update)
       if not live() or type(update) ~= "table" then return end
+      -- a source speaks for its own nodes: in a view with several sections the others are not its
+      if self._source_of[update.id] ~= source then return end
       if self._hooks.before then self._hooks.before() end
       self:_apply(tree:push(update))
     end,
@@ -358,7 +359,7 @@ function Pane:_emit(source)
         end
       end
       local node = tree:node(id)
-      if not node then return end
+      if not node or self._source_of[id] ~= source then return end
       if self._loaded[id] and self._loaders[id] then
         self:_resync(id, node)
       else

@@ -139,7 +139,13 @@ function M.source()
       }, {
         group = group,
         desc = "[filetree] The buffers view reads the buffer list again",
-        callback = function()
+        callback = function(ev)
+          -- plugins create and wipe unlisted scratch buffers all the time (popups, completion): only
+          -- a buffer this view could show is a reason to read the list again
+          if ev.event == "BufWipeout" and api.nvim_buf_is_valid(ev.buf) then
+            local bo = vim.bo[ev.buf]
+            if not (bo.buflisted or bo.buftype == "terminal") then return end
+          end
           -- once per tick, and after the event: a buffer being deleted is still listed while it fires
           if pending then return end
           pending = true
