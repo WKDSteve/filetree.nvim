@@ -90,15 +90,19 @@ local _adapter = nil
 -- ── Helpers ───────────────────────────────────────────────────────────────────
 
 ---@internal
----Absolute path of the node under the cursor, when it is a file.
+---Absolute path of the node under the cursor, when it is a file. Says so when it is not: a key
+---that does nothing without a word looks broken (a folder, or a line that is no entry at all, like
+---the head of a section in a view of the own tree).
 ---@return string?
 local function current_file_path()
   local adapter = _adapter
   if not adapter then return nil end
   local node = adapter.get_current_node and adapter.get_current_node()
-  if not node or node.type == "directory" then return nil end
-  local p = node.path
-  if not p or p == "" then return nil end
+  local p = node and node.type ~= "directory" and node.path or nil
+  if not p or p == "" then
+    notify.warn("No file under cursor")
+    return nil
+  end
   return p
 end
 

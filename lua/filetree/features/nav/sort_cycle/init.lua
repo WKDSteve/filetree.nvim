@@ -69,7 +69,11 @@ local function apply(kind, descending)
     notify.warn(reason or "sort failed")
     return false
   end
-  notify.info(("sorted by %s (%s)"):format(LABEL[kind], descending and "descending" or "ascending"))
+  local said = ("sorted by %s (%s)"):format(LABEL[kind], descending and "descending" or "ascending")
+  -- the own tree showing another view: the order is the one of the files, the view keeps its own
+  local view = require("filetree.util.other_view")(_adapter)
+  if view then said = ("the files are %s; the view %q keeps its own order"):format(said, view) end
+  notify.info(said)
   return true
 end
 

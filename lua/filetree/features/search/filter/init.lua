@@ -21,6 +21,7 @@
 
 local kit = require("ui.kit")
 local bind = require("filetree.util.bind")
+local notify = require("filetree.util.notify").create("[filetree.filter]")
 local M = {}
 
 ---@type FiletreeFilterConfig
@@ -301,6 +302,17 @@ local function apply(query)
   if not try_native_filter(query) then dim_non_matching(query) end
 end
 
+---Whether there is nothing to filter: the own tree shows a view that is not the files, and the
+---search lists files. Says so once per call, so the key does not look as if it had filtered.
+---@internal
+---@return boolean
+local function nothing_to_filter()
+  local view = require("filetree.util.other_view")(_adapter)
+  if not view then return false end
+  notify.info(("the filter searches the files: nothing to filter in the view %q"):format(view))
+  return true
+end
+
 -- ── Floating input ────────────────────────────────────────────────────────────
 
 ---@type Ui.Kit.Surface|nil
@@ -312,6 +324,7 @@ function M.enter()
     _surf:focus()
     return
   end
+  if nothing_to_filter() then return end
 
   -- Position at bottom of the tree window
   local tree_win = _adapter and _adapter.get_winid and _adapter.get_winid() or -1
@@ -372,6 +385,7 @@ end
 ---Apply a filter query directly (without the floating input).
 ---@param query string
 function M.apply(query)
+  if query and query ~= "" and nothing_to_filter() then return end
   apply(query)
 end
 
