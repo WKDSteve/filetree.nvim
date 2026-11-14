@@ -86,6 +86,7 @@ local text_width = {}
 ---@field width integer
 ---@field height integer  Of a tree at the top or bottom.
 ---@field _alone_size integer?  The width (height) a docked tree had before it became the only window of its tab.
+---@field _ask_again boolean?  The sources of the view are about to be asked again after a file operation.
 ---@field private _sync boolean
 ---@field private _loaded table<string, true>  Folder ids whose children were read.
 ---@field private _alias table<string, string>  A folder inside a merged line -> the id of that line.
@@ -407,6 +408,19 @@ function View:refresh_path(path)
   if not (self._loaded[id] and self.main:node(id)) then return false end
   self:refresh_dir(id)
   return true
+end
+
+---A file operation is done while a view of other sources is on screen: ask its sources again. Once
+---for however many operations ended in this tick (a move of ten marked files announces ten). A
+---source that lists files (tests, bookmarks) would otherwise show the state before the operation
+---until it noticed by itself; the features used to get this through a refresh of everything.
+function View:operation_done()
+  if not self._pane or self._ask_again then return end
+  self._ask_again = true
+  vim.schedule(function()
+    self._ask_again = nil
+    if self._pane and self.win and api.nvim_win_is_valid(self.win) then self:refresh() end
+  end)
 end
 
 ---Read one folder again, without blocking, and take over what changed. At most one read per folder

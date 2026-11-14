@@ -587,6 +587,8 @@ function M.listen()
       for _, view in ipairs(require("filetree.native").all()) do
         if type(data.from) == "string" then view:refresh_path(data.from) end
         if type(data.to) == "string" then view:refresh_path(data.to) end
+        -- a view of other sources has no folder to read: its sources are asked again
+        view:operation_done()
       end
     end,
   })

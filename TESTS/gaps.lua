@@ -689,8 +689,17 @@ do
     eq("backup.create(): the content was actually copied", vim.fn.readfile(dst)[1], "hello")
     check("backup.create(): the backup lands INSIDE the configured dir", vim.startswith(dst, dir))
   end
+  -- One file is copied in-process: `xcopy` asks whether a target that does not exist names a file or
+  -- a directory, so with it the backup of every single file failed on Windows.
+  check("backup: a single file is copied without starting a program", captured_argv == nil)
+
+  local src_dir = tmp .. "/folder"
+  vim.fn.mkdir(src_dir, "p")
+  vim.fn.writefile({ "inside" }, src_dir .. "/inner.txt")
+  local dst_dir = backup.create(src_dir)
+  check("backup.create(): a directory is backed up too", dst_dir ~= nil)
   check(
-    "backup: shells out via the platform-appropriate copy command (xcopy/cp -r)",
+    "backup: a directory goes through the platform-appropriate copy command (xcopy/cp -r)",
     captured_argv ~= nil and (captured_argv[1] == "xcopy" or captured_argv[1] == "cp")
   )
 

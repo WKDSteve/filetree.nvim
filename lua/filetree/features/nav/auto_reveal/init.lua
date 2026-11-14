@@ -359,9 +359,12 @@ end
 ---@return boolean
 local function stepped_into_tree()
   local win = vim.api.nvim_get_current_win()
-  if vim.api.nvim_win_get_config(win).relative ~= "" then return false end
   local tree_win = _adapter and _adapter.get_winid and _adapter.get_winid() or nil
-  if tree_win and tree_win > 0 and vim.api.nvim_win_is_valid(tree_win) and tree_win ~= win then
+  if tree_win and tree_win > 0 and vim.api.nvim_win_is_valid(tree_win) then
+    -- the adapter knows its window (a floating tree is one too): any other only shows the buffer
+    if tree_win ~= win then return false end
+  elseif vim.api.nvim_win_get_config(win).relative ~= "" then
+    -- it cannot say (the tree is being opened right now): a float is taken for a window passing by
     return false
   end
   return not _left_float

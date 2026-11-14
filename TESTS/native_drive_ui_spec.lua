@@ -278,5 +278,34 @@ eq("... the same tree", T.adapter.get_bufnr(), T.buf)
 eq("no prompt went unanswered", T.unanswered, 0)
 eq("no warning or error in the whole run", T.loud(), {})
 
+-- ── auto_reveal: a tree that is itself a floating window is stepped into too ───
+-- (what is ruled out above is a float that only shows the tree buffer for a moment, and focus that
+-- comes back from one; the tree's own window counts whatever kind it is)
+T.adapter.close()
+vim.api.nvim_set_current_win(T.editor_win)
+vim.cmd("edit " .. vim.fn.fnameescape(dir .. "/README.md"))
+T.adapter.toggle_at("float")
+T.settle()
+local float_tree = T.adapter.get_winid()
+ok(
+  "the tree opens as a floating window",
+  float_tree ~= nil and vim.api.nvim_win_get_config(float_tree).relative ~= ""
+)
+T.on("docs/guide.md")
+vim.api.nvim_set_current_win(T.editor_win)
+if T.adapter.is_open() and T.adapter.get_winid() == float_tree then
+  vim.api.nvim_set_current_win(float_tree)
+  eq(
+    "stepping into a floating tree lands on the editor's file",
+    T.adapter.get_current_node().name,
+    "README.md"
+  )
+else
+  T.na("auto_reveal on a floating tree: the float does not stay open without the focus")
+end
+T.adapter.close()
+
+eq("no warning or error after the float", T.loud(), {})
+
 if linked then vim.uv.fs_unlink(dir .. "/docs_link") end
 T.finish()

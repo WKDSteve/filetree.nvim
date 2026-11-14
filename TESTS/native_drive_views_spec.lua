@@ -183,6 +183,44 @@ ok(
 )
 ok("... where the file then is", T.exists("from_view.md"))
 
+-- ── a source of another plugin is asked again after a file operation ───────────
+-- It lists files and has no events of its own: what it shows after a rename done from its view is
+-- right because the tree asks it again when the operation is announced.
+local asked_probe = 0
+local remove_probe = require("lib.nvim.tree.registry").source({
+  name = "probe",
+  title = "Probe",
+  root = function()
+    asked_probe = asked_probe + 1
+    local children = {}
+    for _, name in ipairs(vim.fn.readdir(dir .. "/docs")) do
+      children[#children + 1] =
+        { id = "probe:" .. name, label = name, kind = "item", path = dir .. "/docs/" .. name }
+    end
+    return { id = "probe:root", label = "Probe", children = children }
+  end,
+})
+T.settle(100)
+eq("the view of a registered source can be shown", (view:show("probe")), true)
+T.wait(function()
+  return line_of("guide.md") ~= nil
+end)
+local asked_before = asked_probe
+T.answer("input", "handbook.md")
+press(line_of("guide.md"), "r")
+T.wait(function()
+  return line_of("handbook.md") ~= nil
+end, 5000)
+ok("r on a node of that source renames its file", T.exists("docs/handbook.md"))
+ok("... the source was asked again", asked_probe > asked_before)
+ok(
+  "... and its view shows the new name, not the old one",
+  line_of("handbook.md") ~= nil and line_of("guide.md") == nil
+)
+remove_probe()
+view:show("buffers")
+T.settle(200)
+
 -- ── back in the files view everything is there ─────────────────────────────────
 view:show("files")
 T.settle(200)
