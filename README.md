@@ -89,6 +89,7 @@ MIT — see [LICENSE](LICENSE).
 
 **Uses**
 
+- [gitsuite.nvim](https://github.com/WKDSteve/gitsuite.nvim): In the git view of the own tree of filetree.nvim, `gd` and `gB` open the diff against HEAD and the blame of a changed file through gitsuite.nvim, when it is installed. ([picture](assets/graphs/pair/filetree.nvim--gitsuite.nvim.png))
 - [gopath.nvim](https://github.com/WKDSteve/gopath.nvim): filetree.nvim repairs a broken link with the tail search of gopath.nvim (`gopath.resolvers.common.tailsearch`). ([picture](assets/graphs/pair/filetree.nvim--gopath.nvim.png))
 - [images.nvim](https://github.com/WKDSteve/images.nvim): The preview of filetree.nvim shows a picture through images.nvim when its backend is `images.nvim` or `auto`. ([picture](assets/graphs/pair/filetree.nvim--images.nvim.png))
 - [markdown.nvim](https://github.com/WKDSteve/markdown.nvim): When filetree.nvim renames, moves or deletes a file, it asks markdown.nvim for the markdown links that point at it and rewrites them, when it is installed. ([picture](assets/graphs/pair/filetree.nvim--markdown.nvim.png))
