@@ -143,6 +143,48 @@ for _, tool in ipairs({ "fd", "rg" }) do
   end
 end
 
+-- links: a link to a file is a file, a link to a folder is neither listed nor followed
+do
+  local target = dir .. "/src/alpha.lua"
+  local made = vim.uv.fs_symlink(target, dir .. "/docs/link_to_file.lua")
+    and vim.uv.fs_symlink(dir .. "/src", dir .. "/docs/link_to_dir", { dir = true })
+    and vim.uv.fs_symlink(dir .. "/gone.lua", dir .. "/docs/link_broken.lua")
+  if made then
+    local with_links = vim.list_extend({ "docs/link_broken.lua", "docs/link_to_file.lua" }, by_walk)
+    table.sort(with_links)
+    eq(
+      "the walk lists a link to a file and a broken one, not a link to a folder",
+      (listing("lua")),
+      with_links
+    )
+    if vim.fn.executable("fd") == 1 then
+      local by_fd, fd_ok = listing("fd")
+      eq("fd lists the same links as the walk", by_fd, with_links)
+      eq("... and reports success", fd_ok, true)
+      local calls = 0
+      local cancel = deep.files(dir, function()
+        calls = calls + 1
+      end, function()
+        calls = calls + 1
+      end, { tier = "fd" })
+      cancel()
+      settle(400)
+      eq("a cancelled fd listing calls nothing more, from neither of its runs", calls, 0)
+    else
+      say("  n/a  fd is not installed here")
+    end
+    if vim.fn.executable("rg") == 1 then
+      eq("rg cannot list a link without following it: none of them", (listing("rg")), by_walk)
+    end
+  else
+    say("  n/a  this machine may not create links")
+  end
+  for _, name in ipairs({ "link_to_file.lua", "link_to_dir", "link_broken.lua" }) do
+    vim.uv.fs_unlink(dir .. "/docs/" .. name)
+    vim.uv.fs_rmdir(dir .. "/docs/" .. name)
+  end
+end
+
 -- a cancelled listing calls nothing more
 local calls = 0
 local cancel = deep.files(dir, function()

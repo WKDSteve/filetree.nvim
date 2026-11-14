@@ -11,6 +11,11 @@
 ---
 --- `.git` is never entered. `fd` and `rg` leave out what `.gitignore` names; the walk leaves out the
 --- names of the ignore list, which is the nearest thing it has. A cancelled listing calls nothing more.
+---
+--- Links: a link to a file (and a link whose target is gone) is listed like a file, a link to a folder
+--- is neither listed nor followed. `fd` and the walk agree on that; `fd --type f` alone leaves links
+--- out, so its links come from a second run. `rg --files` cannot list a link without following it:
+--- on a machine that has `rg` and no `fd`, links are not found.
 
 local list = require("filetree.native.fs.list")
 
@@ -37,13 +42,14 @@ end
 ---@param tier Filetree.Fs.Deep.Tier
 ---@param exe string
 ---@param root string
+---@param kind? "f"|"l"  For `fd`: files (default) or links.
 ---@return string[]
-local function command(tier, exe, root)
+local function command(tier, exe, root, kind)
   if tier == "fd" then
     return {
       exe,
       "--type",
-      "f",
+      kind or "f",
       "--hidden",
       "--exclude",
       ".git",
@@ -175,7 +181,30 @@ function M.files(root, on_batch, on_done, opts)
     end
   end
   if tier == "lua" or not exe then return walk(root, on_batch, on_done) end
-  return spawn(command(tier, exe, root), on_batch, on_done)
+  if tier ~= "fd" then return spawn(command(tier, exe, root), on_batch, on_done) end
+
+  -- `fd --type f` leaves every link out; a second run lists the links, and what points at a folder
+  -- is dropped here, as the walk drops it. One run after the other, never both at once: with two
+  -- children started side by side, killing the first left its `fd` behind for good on Windows (a
+  -- scoop shim in between; seen as one stuck `fd.exe` per cancelled search).
+  local cancelled = false
+  local cancel_run
+  cancel_run = spawn(command(tier, exe, root), on_batch, function(files_ok)
+    if cancelled then return end
+    cancel_run = spawn(command(tier, exe, root, "l"), function(paths)
+      local batch = {}
+      for _, path in ipairs(paths) do
+        if (uv.fs_stat(path) or {}).type ~= "directory" then batch[#batch + 1] = path end
+      end
+      if #batch > 0 then on_batch(batch) end
+    end, function(links_ok)
+      on_done(files_ok and links_ok)
+    end)
+  end)
+  return function()
+    cancelled = true
+    cancel_run()
+  end
 end
 
 return M

@@ -155,7 +155,9 @@ flowchart LR
   while it lists stops its listing, and a late answer of it is dropped.
 - **Limits.** At most `search_max` hits are shown, a last line says how many
   more there are. `.git` is never listed; `fd` and `rg` leave out what
-  `.gitignore` names, the Lua walk the names of the ignore list. A new root
+  `.gitignore` names, the Lua walk the names of the ignore list. A link to a
+  file is found like a file, a link to a folder is not followed (`fd` and the
+  walk; `rg --files` lists no links at all). A new root
   (`set_root`) ends a search.
 
 ### Views and sources
