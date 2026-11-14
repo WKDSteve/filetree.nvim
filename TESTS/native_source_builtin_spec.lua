@@ -137,7 +137,9 @@ end
 mkfile("lua/a.lua")
 mkfile("lua/b.lua")
 mkfile("README.md")
-local outside = list.norm(vim.fn.tempname() .. "_outside.txt")
+-- below `base`, which is resolved: a buffer goes by the resolved name of its file (on macOS the temp
+-- folder is a link, /var -> /private/var)
+local outside = ("%s/ft_outside_%d.txt"):format(base, vim.uv.hrtime() % 1e9)
 vim.fn.writefile({ "o" }, outside)
 vim.cmd("cd " .. vim.fn.fnameescape(dir))
 vim.cmd("edit " .. vim.fn.fnameescape(dir .. "/README.md"))

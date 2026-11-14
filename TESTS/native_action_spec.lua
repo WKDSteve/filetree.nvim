@@ -326,8 +326,11 @@ ok("after FiletreeChanged the new file shows", adapter.get_node_line(dir .. "/lu
 eq("... and exactly one folder was read for it", list.stats.scans - scans, 1)
 scans = list.stats.scans
 require("filetree.util.mutate").move(dir .. "/lua/c.lua", dir .. "/docs/c.lua")
+-- two folders are read, each on its own: wait for both answers, whichever comes first (on macOS the
+-- target folder was there before the one the file left)
 vim.wait(2000, function()
   return adapter.get_node_line(dir .. "/docs/c.lua") ~= nil
+    and adapter.get_node_line(dir .. "/lua/c.lua") == nil
 end, 20)
 eq("a move through util.mutate reads the two folders it touched", {
   adapter.get_node_line(dir .. "/lua/c.lua") == nil,
