@@ -91,6 +91,7 @@ MIT — see [LICENSE](LICENSE).
 
 - [gopath.nvim](https://github.com/WKDSteve/gopath.nvim): filetree.nvim repairs a broken link with the tail search of gopath.nvim (`gopath.resolvers.common.tailsearch`). ([picture](assets/graphs/pair/filetree.nvim--gopath.nvim.png))
 - [images.nvim](https://github.com/WKDSteve/images.nvim): The preview of filetree.nvim shows a picture through images.nvim when its backend is `images.nvim` or `auto`. ([picture](assets/graphs/pair/filetree.nvim--images.nvim.png))
+- [markdown.nvim](https://github.com/WKDSteve/markdown.nvim): When filetree.nvim renames, moves or deletes a file, it asks markdown.nvim for the markdown links that point at it and rewrites them, when it is installed. ([picture](assets/graphs/pair/filetree.nvim--markdown.nvim.png))
 - [mdview.nvim](https://github.com/WKDSteve/mdview.nvim): filetree.nvim opens a Markdown file in the preview of mdview.nvim (`features.system.mdview_open`). ([picture](assets/graphs/pair/filetree.nvim--mdview.nvim.png))
 - [pdfport.nvim](https://github.com/WKDSteve/pdfport.nvim): filetree.nvim creates PDF files through pdfport.nvim; without it it says that it cannot (`filetree.util.pdf`). ([picture](assets/graphs/pair/filetree.nvim--pdfport.nvim.png))
 - [pickers.nvim](https://github.com/WKDSteve/pickers.nvim): The create-from-template picker of filetree.nvim uses pickers.nvim (`pickers.engines`) for a preview; without it the kit picker or `ui_select` is used. ([picture](assets/graphs/pair/filetree.nvim--pickers.nvim.png))
