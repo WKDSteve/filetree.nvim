@@ -963,7 +963,13 @@ local function build_routes()
   })
   routes[#routes + 1] = {
     path = { "action" },
-    args = { { name = "name", type = "FILETREE_ACTION" } },
+    args = {
+      {
+        name = "name",
+        type = "FILETREE_ACTION",
+        desc = "An action of the own tree open in this tab (<Tab> lists them)",
+      },
+    },
     desc = "Run an action of the own tree by name, on the selection or the node under the cursor",
     run = function(ctx)
       local args = { ctx.args.name }
