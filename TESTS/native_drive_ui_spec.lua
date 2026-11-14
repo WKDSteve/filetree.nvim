@@ -127,7 +127,7 @@ eq(
 -- buffer it was created from until its own is set, and focus comes back to the tree when it
 -- closes: neither may move the tree's cursor to the editor's file.
 local scratch = vim.api.nvim_create_buf(false, true)
-local float = vim.api.nvim_open_win(
+local scratch_win = vim.api.nvim_open_win(
   scratch,
   true,
   { relative = "editor", row = 2, col = 2, width = 20, height = 3 }
@@ -137,7 +137,7 @@ eq(
   T.adapter.get_current_node().name,
   "guide.md"
 )
-vim.api.nvim_win_close(float, true)
+vim.api.nvim_win_close(scratch_win, true)
 eq("... and so does closing it", T.adapter.get_current_node().name, "guide.md")
 vim.api.nvim_set_current_win(T.editor_win)
 vim.api.nvim_set_current_win(tree_win)
