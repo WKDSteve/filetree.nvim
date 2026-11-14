@@ -114,6 +114,15 @@ the adapter: `get_root_path` / `set_root`, `get_expanded_paths` /
 `expand_paths`, and on the own tree `get_view` / `show_view(name)` for the view
 on screen.
 
+**sessions.nvim.** With sessions.nvim (`restore_tree`, on by default) a named
+session brings the own tree back as it was saved: its root, the open folders
+of the files, and the view on screen. sessions.nvim keeps that in a sidecar
+next to the session file, reads and sets it through the adapter functions
+above, and calls `skip_restore()` first. This feature is the per-project store
+for setups without a session manager; it does not know the view. sessions.nvim
+also registers the decorator `pin`: a sign on every default and pin of its
+marks.
+
 - **Module:** `lua/filetree/features/org/session/`
 
 ## Open In File Manager

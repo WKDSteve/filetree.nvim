@@ -2013,6 +2013,11 @@ api.nvim_create_autocmd("WinClosed", {
   callback = function(ev)
     -- fires before the window is gone: the tree still has the size it had beside it
     local closing = tonumber(ev.match)
+    -- what was noted per window for drawing goes with the window: ids are not reused, so the two
+    -- tables would only ever grow
+    if closing then
+      text_width[closing], left_col[closing] = nil, nil
+    end
     if not closing or not api.nvim_win_is_valid(closing) then return end
     if api.nvim_win_get_config(closing).relative ~= "" then return end
     for _, entry in ipairs(docked()) do
