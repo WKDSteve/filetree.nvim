@@ -235,6 +235,39 @@ eq(
 ok("... the tree drops them", gone("archive/b.lua") and gone("archive/renamed.md"))
 eq("... and the marks are cleared", T.filetree.feature("marks").count(), 0)
 
+-- ── copy_move: c / x stage, p pastes into the folder under the cursor ──────────
+T.on("README.md")
+feed("c")
+T.on("docs")
+feed("p")
+T.wait(function()
+  return T.exists("docs/README.md")
+end, 5000)
+eq(
+  "c then p copies the node into the folder under the cursor",
+  { T.exists("docs/README.md"), T.exists("README.md") },
+  { true, true }
+)
+ok("... the tree shows the copy", appears("docs/README.md"))
+
+T.on("docs/README.md")
+feed("x")
+T.on("lua/sub")
+feed("p")
+T.wait(function()
+  return T.exists("lua/sub/README.md") and not T.exists("docs/README.md")
+end, 5000)
+eq(
+  "x then p moves it",
+  { T.exists("lua/sub/README.md"), T.exists("docs/README.md") },
+  { true, false }
+)
+ok("... the tree drops it from the old folder", gone("docs/README.md"))
+T.on("lua/sub")
+T.adapter.expand_node({ path = dir .. "/lua/sub" })
+ok("... and shows it in the new one", appears("lua/sub/README.md"))
+feed("X")
+
 -- ── rename_batch: <leader>rb ───────────────────────────────────────────────────
 T.on("docs/guide.md")
 feed("\\rb")
