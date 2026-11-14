@@ -6,8 +6,10 @@ How filetree.nvim's scope relates to its closest siblings in the collection.
 
 [fileops.nvim](https://github.com/WKDSteve/fileops.nvim) — the same file
 operations without a tree in front of them, from any buffer. It fires `User
-FileopsChanged`, which this plugin's watcher picks up, so the two stay in
-agreement without depending on each other.
+FileopsChanged` and reloads every tree registered at `lib.nvim.explorer`; the
+own tree (`adapter = "native"`) is registered there and reads the folder the
+operation touched ([backends](FEATURES/BACKENDS.md#after-a-file-operation)),
+so the two stay in agreement without depending on each other.
 
 ## pdfport.nvim
 

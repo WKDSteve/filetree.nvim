@@ -60,6 +60,7 @@ local views = {}
 function M.setup(opts)
   options = vim.tbl_extend("force", vim.deepcopy(DEFAULTS), opts or {})
   require("filetree.native.source").register()
+  require("filetree.native.explorer").register()
   M.hijack_netrw(options.hijack_netrw ~= false)
 end
 
@@ -229,6 +230,7 @@ function M.reset()
   require("filetree.native.decor").stop()
   require("filetree.native.action").reset()
   require("filetree.native.source").unregister()
+  require("filetree.native.explorer").unregister()
 end
 
 ---A window a file can be opened in: not the tree, not a float, not a special buffer.

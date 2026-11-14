@@ -297,6 +297,17 @@ nearest folder above it that the tree shows, so the new folder appears. No
 feature asks the own tree for a refresh of everything afterwards (the other
 backends, which know nothing of the event, still get one).
 
+Other plugins reach the own tree through `lib.nvim.explorer`, where it is
+registered as `filetree` next to neo-tree, nvim-tree, netrw and oil:
+`current_path()` answers the path of the node under the cursor (nil on a row
+without one: a symbol, the head of a section), `reload_all()` reads the tree
+again. [fileops.nvim](../around-it.md#fileopsnvim) says `User FileopsChanged`
+(`{ action, path }`) after each of its operations and reloads every explorer
+right after. Where the path is all that changed (a file made, copied to,
+touched, deleted) the tree reads the folder it lies in and lets that reload
+pass; a rename or a move names only where the file went, so there the reload
+reads the tree.
+
 A file never opens in the tree's own window: it goes to the window you came
 from, else to another editor window, else to a new one beside the tree. Closing
 the tree when it is the only window of its tab leaves the window with an empty
