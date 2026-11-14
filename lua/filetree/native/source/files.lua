@@ -28,6 +28,7 @@ local M = {}
 ---@field group_limit? integer  Folders are only looked into for merging when the listing has at most this many (default 200).
 ---@field dir? string  The folder the entries are of; needed for `max_entries`.
 ---@field max_entries? integer  Show at most this many entries of one folder; a last line says how many more there are (default: no limit).
+---@field keep? table<string, true>  Paths shown although they lie past `max_entries` (an entry that was revealed).
 
 ---@param entry Filetree.Fs.Entry
 ---@param field string  "size" or "mtime".
@@ -120,40 +121,59 @@ function M.nodes(entries, opts)
   local ordered = sorted(visible, opts.sort or { kind = "name" })
   local limit = opts.max_entries
   local cut = (limit and limit > 0 and #ordered > limit) and (#ordered - limit) or 0
+  local keep = cut > 0 and opts.keep or nil
   local out = {}
+  local kept = 0
   for i, entry in ipairs(ordered) do
-    if cut > 0 and i > limit then break end
-    ---@type table
-    local node = {
-      id = entry.path,
-      label = entry.name,
-      kind = entry.is_dir and "dir" or "file",
-      path = entry.path,
-    }
-    if entry.is_link then
-      node.data = { is_link = true, link_to = entry.link_to, link_broken = entry.link_broken }
+    local past = cut > 0 and i > limit
+    -- past the cut only what was asked for by name is still shown; without such an entry the loop
+    -- ends here, as it always did
+    if past and not (keep and next(keep)) then break end
+    if not past or (keep and keep[entry.path]) then
+      if past then kept = kept + 1 end
+      out[#out + 1] = M.node(entry, opts, group, hide)
     end
-    if entry.is_dir then
-      node.children = opts.loader
-      if group then
-        local chain, label = chain_of(entry, hide)
-        if #chain > 1 then
-          node.id, node.path, node.label = chain[#chain], chain[#chain], label
-          node.data = vim.tbl_extend("force", node.data or {}, { chain = chain })
-        end
-      end
-    end
-    out[#out + 1] = node
   end
+  cut = cut - kept
   if cut > 0 then
     out[#out + 1] = {
       -- `//` cannot occur in a normalized path, so the id never collides with an entry
       id = (opts.dir or "") .. "//more",
-      label = ("… %d more (showing %d, native.max_entries)"):format(cut, limit),
+      label = ("… %d more (showing %d, native.max_entries)"):format(cut, limit + kept),
       kind = "more",
     }
   end
   return out
+end
+
+---The node of one entry.
+---@param entry Filetree.Fs.Entry
+---@param opts Filetree.Files.Opts
+---@param group boolean  Merge a chain of folders that hold one folder each into one line.
+---@param hide fun(name: string, path: string): boolean
+---@return Filetree.Node
+function M.node(entry, opts, group, hide)
+  ---@type table
+  local node = {
+    id = entry.path,
+    label = entry.name,
+    kind = entry.is_dir and "dir" or "file",
+    path = entry.path,
+  }
+  if entry.is_link then
+    node.data = { is_link = true, link_to = entry.link_to, link_broken = entry.link_broken }
+  end
+  if entry.is_dir then
+    node.children = opts.loader
+    if group then
+      local chain, label = chain_of(entry, hide)
+      if #chain > 1 then
+        node.id, node.path, node.label = chain[#chain], chain[#chain], label
+        node.data = vim.tbl_extend("force", node.data or {}, { chain = chain })
+      end
+    end
+  end
+  return node
 end
 
 return M

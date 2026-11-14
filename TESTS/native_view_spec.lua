@@ -615,6 +615,53 @@ do
   adapter.scroll_to_line(5)
   eq("... also not as the current node", adapter.get_current_node(), nil)
   eq("visible nodes leave it out", #adapter.get_visible_nodes(), 3)
+
+  -- an entry past the cut that is asked for by name is shown all the same
+  local past = {}
+  for _, entry in ipairs(list.list_sync(dir) or {}) do
+    if not entry.is_dir and not vim.tbl_contains(names(), entry.name) then
+      past[#past + 1] = entry.path
+    end
+  end
+  table.sort(past)
+  ok("the fixture has two files past the cut", #past >= 2)
+  local first, second = past[#past], past[1]
+  local more_before = tonumber(shown[5]:match("… (%d+) more"))
+  ok("reveal of a file past the cut finds it", state:reveal(first))
+  eq("... the cursor is on it", (adapter.get_current_node() or {}).path, first)
+  eq("... it stands behind the entries of the cut", adapter.get_visible_nodes()[4].path, first)
+  shown = lines()
+  eq(
+    "... and the line for the rest counts one less",
+    tonumber(shown[#shown]:match("… (%d+) more")),
+    more_before - 1
+  )
+  ok("... and says how many are shown", shown[#shown]:find("showing 4", 1, true) ~= nil)
+  ok("the next one of the folder takes its place", state:reveal(second))
+  eq("... one kept entry per folder", adapter.get_visible_nodes()[4].path, second)
+  eq("... the first went back behind the cut", state:line_of(first), nil)
+  adapter.refresh()
+  vim.wait(200, function()
+    return false
+  end)
+  ok("a refresh keeps the revealed entry", state:line_of(second) ~= nil)
+  eq("a path that does not exist is still not found", state:reveal(dir .. "/nope.txt"), false)
+  eq("... and leaves the kept entry alone", state:line_of(second) ~= nil, true)
+  -- a file in a folder that is itself past the cut, in a folder cut as well
+  state._opts.max_entries = 1
+  adapter.collapse_all()
+  adapter.refresh()
+  vim.wait(200, function()
+    return false
+  end)
+  ok("reveal through two cuts", state:reveal(dir .. "/chain/only/inner/leaf.txt"))
+  eq(
+    "... lands on the file",
+    (adapter.get_current_node() or {}).path,
+    dir .. "/chain/only/inner/leaf.txt"
+  )
+  ok("... and of a file past the cut of a subfolder", state:reveal(dir .. "/a/a2.lua"))
+  eq("... lands on it too", (adapter.get_current_node() or {}).path, dir .. "/a/a2.lua")
   state._opts.max_entries = nil
   adapter.refresh()
   ok("without the limit everything is back", #lines() > 5)

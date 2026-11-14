@@ -92,6 +92,8 @@ local text_width = {}
 ---@field private _sync boolean
 ---@field private _loaded table<string, true>  Folder ids whose children were read.
 ---@field private _alias table<string, string>  A folder inside a merged line -> the id of that line.
+---@field private _kept table<string, true>  Paths shown although their folder is cut at `max_entries` before them (they were revealed).
+---@field private _kept_in table<string, string>  Folder -> the one path of `_kept` in it.
 ---@field private _prev_buf integer?  The buffer a `current` view replaced.
 ---@field private _watches table<string, fun()>  Watched folder -> give the reference back.
 ---@field private _unsubscribe_watch fun()?
@@ -258,6 +260,7 @@ function View:_nodes(dir, entries, loader)
   local nodes = files.nodes(entries, {
     dir = dir,
     max_entries = self._opts.max_entries,
+    keep = self._kept,
     loader = loader,
     sort = self.sort,
     hide = self:_hide(),
@@ -899,6 +902,28 @@ function View:toggle(id)
   end
 end
 
+---Show `path` although its folder is cut at `max_entries` before it: a revealed entry is the one the
+---person asked for, and "N more" is no answer to that. One such entry per folder, the last one asked
+---for; it stands behind the entries of the cut, before the line that counts the rest.
+---@private
+---@param dir string  The folder `path` lies in.
+---@param path string
+function View:_keep(dir, path)
+  if self.tree ~= self.main then return end
+  local id = self:id_of(dir)
+  local node = self.main:node(id)
+  -- only a folder that was read and cut can hide an entry; anything else that is missing is not there
+  if not node or not node.path or not self._loaded[id] then return end
+  if not self.main:node(node.path .. "//more") or not vim.uv.fs_lstat(path) then return end
+  local before = self._kept_in[node.path]
+  if before then self._kept[before] = nil end
+  self._kept_in[node.path], self._kept[path] = path, true
+  list.invalidate(node.path)
+  local entries = list.list_sync(node.path)
+  if not entries then return end
+  self:_apply_main(self.main:merge_children(id, self:_nodes(node.path, entries, self._loader_fn)))
+end
+
 ---Make a path a row: open every folder on the way from the root, then put the cursor on it.
 ---@param path string  Normalized; below the root.
 ---@return boolean found
@@ -922,9 +947,13 @@ function View:reveal(path)
     current = list.parent(current)
   end
   self:_now(function()
-    for i = 1, #chain - 1 do
+    for i = 1, #chain do
       local id = self:id_of(chain[i])
-      if self.tree:node(id) and not self.tree:is_expanded(id) then
+      if not self.tree:node(id) then
+        self:_keep(i > 1 and chain[i - 1] or self.root, chain[i])
+        id = self:id_of(chain[i])
+      end
+      if i < #chain and self.tree:node(id) and not self.tree:is_expanded(id) then
         self:_apply(self.tree:expand(id))
       end
     end
@@ -1571,6 +1600,8 @@ function M.new(opts)
     _sync = false,
     _loaded = {},
     _alias = {},
+    _kept = {},
+    _kept_in = {},
     _watches = {},
     _reading = {},
     _known = {},

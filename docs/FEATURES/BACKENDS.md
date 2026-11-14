@@ -362,7 +362,10 @@ A folder is read and written in one piece, not in slices: the 10 000 entries
 above block once for those 50 to 80 ms. Measured by hand for the decision: 50 000
 entries take about 250 ms without a limit and about 135 ms with the default
 `max_entries = 20000`, which is what bounds the model and the buffer. A folder
-that is cut ends in a line that says how many entries are not shown.
+that is cut ends in a line that says how many entries are not shown. A file
+past the cut that is revealed (`auto_reveal`, `:Filetree reveal`) is shown all
+the same, behind the entries of the cut: one such entry per folder, the last
+one asked for.
 
 ## neo-tree adapter
 
