@@ -310,9 +310,9 @@ Every feature that is on by default is driven on the own tree by a spec that
 presses its key, clicks, or raises the event it reacts to, on a real tree
 window, and reads the result (`TESTS/native_features_spec.lua` and the
 `TESTS/native_drive_*_spec.lua` files, one per group: paths, file operations,
-search and system, ui, navigation and infrastructure, and the views that are
-not the files). What leaves the editor there (another plugin, a program of the
-system, the trash) is a stand-in.
+search and system, ui, navigation and infrastructure, the views that are not
+the files, and the rest). What leaves the editor there (another plugin, a
+program of the system, the trash) is a stand-in.
 
 ### What it does that the other backends do not
 
