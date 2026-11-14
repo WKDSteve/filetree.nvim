@@ -741,6 +741,8 @@ local function do_cursor_update()
   if showing and try_custom("cursor") then return end
   -- the cursor left a node with a preview of its own: nobody waits for that answer any more
   custom.cancel()
+  -- in the editor window the file of this node replaces it below; the float forgets when it closes
+  if _cfg.mode ~= "float" then _custom_id = nil end
   local node = _adapter and _adapter.get_current_node()
   if not node then
     -- a row with nothing to show (a group, a case the source has nothing for): the preview of the

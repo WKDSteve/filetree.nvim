@@ -32,6 +32,7 @@ local M = {}
 ---@field entry Filetree.Source
 ---@field loaded table<string, true>  Ids of the folders that were read.
 ---@field private _alias table<string, string>  A folder inside a merged line -> the id of that line.
+---@field private _chains table<string, string[]>  Listed folder -> the folders its listing put into `_alias`.
 ---@field private _view Filetree.View
 ---@field private _unwatch table<string, fun()>?  Watched folder -> give the reference back; nil while not followed.
 local Section = {}
@@ -69,11 +70,18 @@ function Section:_nodes(dir, entries, loader)
     hide = view:_hide(),
     group_empty = view._opts.group_empty,
   })
+  -- what this folder's listing merged last time is not merged any more unless it says so again
+  for _, member in ipairs(self._chains[dir] or {}) do
+    self._alias[member] = nil
+  end
+  local members = {}
+  self._chains[dir] = members
   for _, node in ipairs(nodes) do
     local chain = node.data and node.data.chain
     if chain then
       for i = 1, #chain - 1 do
         self._alias[chain[i]] = node.id
+        members[#members + 1] = chain[i]
       end
       if not watch.recursive then
         -- every folder of the line decides what the line is; none of them is loaded
@@ -140,7 +148,7 @@ end
 ---@return Filetree.FilesSection
 function M.new(view)
   ---@type Filetree.FilesSection
-  local self = setmetatable({ loaded = {}, _alias = {}, _view = view }, Section)
+  local self = setmetatable({ loaded = {}, _alias = {}, _chains = {}, _view = view }, Section)
   local loader = self:_loader()
 
   self.entry = {
@@ -190,7 +198,9 @@ function M.new(view)
         pattern = "FiletreeChanged",
         callback = function(ev)
           local data = type(ev.data) == "table" and ev.data or {}
-          for _, path in ipairs({ data.from, data.to }) do
+          -- by key: a create has no `from`, and a list with a hole ends at the hole
+          for _, key in ipairs({ "from", "to" }) do
+            local path = data[key]
             if type(path) == "string" and path ~= "" then
               local dir = list.parent(list.norm(path))
               -- a target folder the operation made itself is new to its parent

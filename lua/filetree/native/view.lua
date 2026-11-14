@@ -96,6 +96,7 @@ local left_col = {}
 ---@field private _sync boolean
 ---@field private _loaded table<string, true>  Folder ids whose children were read.
 ---@field private _alias table<string, string>  A folder inside a merged line -> the id of that line.
+---@field private _chains table<string, string[]>  Listed folder -> the folders its listing put into `_alias`.
 ---@field private _kept table<string, true>  Paths shown although their folder is cut at `max_entries` before them (they were revealed).
 ---@field private _kept_in table<string, string>  Folder -> the one path of `_kept` in it.
 ---@field private _prev_buf integer?  The buffer a `current` view replaced.
@@ -270,6 +271,13 @@ function View:_nodes(dir, entries, loader)
     hide = self:_hide(),
     group_empty = self._opts.group_empty,
   })
+  -- what this folder's listing merged last time is not merged any more unless it says so again: a
+  -- line `a/b` that split leaves `a` its own id (the old line `a/b` is still a node, below `a`)
+  for _, member in ipairs(self._chains[dir] or {}) do
+    self._alias[member] = nil
+  end
+  local members = {}
+  self._chains[dir] = members
   for _, node in ipairs(nodes) do
     if node.path then
       self._known[node.path] = true
@@ -279,6 +287,7 @@ function View:_nodes(dir, entries, loader)
     if chain then
       for i = 1, #chain - 1 do
         self._alias[chain[i]] = node.id
+        members[#members + 1] = chain[i]
       end
       if not watch.recursive then
         -- every folder of the line decides what the line is; none of them is loaded
@@ -306,6 +315,7 @@ end
 function View:_build()
   self:_drop_search()
   self._loaded, self._alias, self._reading = {}, {}, {}
+  self._chains = {}
   self._known, self._known_dirs = {}, {}
   self._generation = (self._generation or 0) + 1
   -- the handles belong to the folders of the old tree; a view that was following keeps following
@@ -407,14 +417,27 @@ end
 ---@param path string
 ---@return boolean reading
 function View:refresh_path(path)
+  -- the ids of the files, whatever view is on screen
+  ---@param dir string
+  ---@return string
+  local function id_of(dir)
+    local line = self._alias[dir]
+    return (line and self.main:node(line)) and line or dir
+  end
   local parent = list.parent(list.norm(path))
-  while parent and list.inside(self.root, parent) and not self.main:node(self:id_of(parent)) do
+  while parent and list.inside(self.root, parent) and not self.main:node(id_of(parent)) do
     local up = list.parent(parent)
     if not up or up == parent then break end
     parent = up
   end
   if not parent or not list.inside(self.root, parent) then return false end
-  local id = self:id_of(parent)
+  local id = id_of(parent)
+  if id ~= parent then
+    -- a folder inside a merged line `a/b/c` got or lost an entry: the line may be another one now,
+    -- and what says so is the listing of the folder the line stands in (as `_changed` reads it)
+    list.invalidate(parent)
+    id = self.main:parent(id) or id
+  end
   if not (self._loaded[id] and self.main:node(id)) then return false end
   self:refresh_dir(id)
   return true
@@ -1315,7 +1338,7 @@ function View:refresh()
     if #a ~= #b then return #a < #b end
     return a < b
   end)
-  self._alias = {}
+  self._alias, self._chains = {}, {}
   local changed = false
   for _, id in ipairs(ids) do
     local node = self.main:node(id)
@@ -1679,6 +1702,7 @@ function M.new(opts)
     _sync = false,
     _loaded = {},
     _alias = {},
+    _chains = {},
     _kept = {},
     _kept_in = {},
     _watches = {},
