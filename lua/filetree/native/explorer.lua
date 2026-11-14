@@ -10,7 +10,8 @@
 --- `{ action, path }`, followed at once by `reload_all()`. The event names one path. Where that path
 --- is all that changed (a file made, copied to, deleted), the folder it lies in is read again and the
 --- reload that follows is skipped: it would read every open folder for the same answer. A rename or a
---- move names only where the file went, so there the reload does the work.
+--- move names only where the file went, so there the reload does the work: once for however many
+--- were asked for in one tick (a bulk rename of fifty files announces fifty).
 
 local api = vim.api
 
@@ -36,6 +37,8 @@ local ONE_PATH = {
 
 ---true between a `FileopsChanged` that was answered by reading one folder and the reload after it.
 local answered = false
+---true while a reload waits for the end of the tick.
+local pending = false
 
 ---The path of the node under the cursor of the tree that draws `buf`. A node without a path (a
 ---symbol, a terminal, a heading) has none to give.
@@ -48,15 +51,22 @@ function M.current_path(buf)
   return type(path) == "string" and path ~= "" and path or nil
 end
 
----Read every tree again, unless the change was answered already (see the module text).
+---Read every tree again, unless the change was answered already (see the module text). The read
+---runs at the end of the tick, one for all reloads asked for until then.
 function M.reload()
   if answered then
     answered = false
     return
   end
-  for _, view in ipairs(require("filetree.native").all()) do
-    pcall(view.refresh, view)
-  end
+  if pending then return end
+  pending = true
+  vim.schedule(function()
+    if not pending then return end
+    pending = false
+    for _, view in ipairs(require("filetree.native").all()) do
+      pcall(view.refresh, view)
+    end
+  end)
 end
 
 ---@param data { action?: string, path?: string }
@@ -102,6 +112,7 @@ end
 ---Leave `lib.nvim.explorer` and stop listening (`native.reset`, a change of backend).
 function M.unregister()
   answered = false
+  pending = false
   pcall(api.nvim_del_augroup_by_name, GROUP)
   local ok, explorer = pcall(require, "lib.nvim.explorer")
   if ok and type(explorer.unregister) == "function" then pcall(explorer.unregister, M.NAME) end

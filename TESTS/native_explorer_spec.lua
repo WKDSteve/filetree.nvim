@@ -110,7 +110,17 @@ vim.api.nvim_exec_autocmds("User", {
 })
 T.settle(50)
 explorer.reload_all()
+T.settle(50)
 eq("a reload some time after an event is a reload", refreshes, 1)
+
+-- a bulk rename announces every file, with a reload each: the tree is read once
+refreshes = 0
+for _, name in ipairs({ "one", "two", "three" }) do
+  fileops("rename", "lua/mod/" .. name .. ".lua")
+end
+eq("three renames in one tick read nothing before the tick ends", refreshes, 0)
+T.settle(50)
+eq("... and the tree once after it", refreshes, 1)
 
 -- ── a view of another source ───────────────────────────────────────────────────
 vim.api.nvim_set_current_win(T.editor_win)
