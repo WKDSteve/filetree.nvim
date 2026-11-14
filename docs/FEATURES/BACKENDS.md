@@ -315,7 +315,9 @@ without one: a symbol, the head of a section), `reload_all()` reads the tree
 again, and `reveal(path)` shows the tree with its cursor on a path (it opens
 when it is closed and takes a root that holds the path; the window the person
 is in stays the current one). That is what "reveal in tree" of a picker
-(pickers.nvim) calls. [fileops.nvim](../around-it.md#fileopsnvim) says `User FileopsChanged`
+(pickers.nvim) calls. With any other backend filetree.nvim signs in under the
+same name for `reveal` alone (through the backend's `open_reveal`); the tree
+buffer itself stays with lib.nvim's own adapter for that plugin. [fileops.nvim](../around-it.md#fileopsnvim) says `User FileopsChanged`
 (`{ action, path }`) after each of its operations and reloads every explorer
 right after. Where the path is all that changed (a file made, copied to,
 touched, deleted) the tree reads the folder it lies in and lets that reload

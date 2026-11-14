@@ -18,7 +18,8 @@ local api = vim.api
 
 local M = {}
 
----The name the tree goes by in `lib.nvim.explorer`.
+---The name the tree goes by in `lib.nvim.explorer` (`filetree.integrations.explorer` uses the same
+---for the other backends: one entry, whoever draws the tree).
 M.NAME = "filetree"
 
 local GROUP = "filetree_native_explorer"

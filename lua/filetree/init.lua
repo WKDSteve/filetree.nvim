@@ -118,6 +118,9 @@ function M.setup(user_config)
   -- fell back from above.
   cfg.adapter = adapter.name
   if adapter.name == "native" then require("filetree.native").setup(cfg.native) end
+  -- "show this path in the tree" of lib.nvim.explorer, whatever the backend (the own tree signs in
+  -- by itself, with the buffer it owns)
+  require("filetree.integrations.explorer").register(adapter)
 
   -- Apply the global debug switch so notifier.debug(...) becomes visible.
   require("filetree.util.notify").set_debug(cfg.debug == true)
