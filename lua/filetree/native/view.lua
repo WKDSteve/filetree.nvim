@@ -23,6 +23,7 @@ local render = require("filetree.native.render.line")
 local columns = require("filetree.native.render.columns")
 local decor = require("filetree.native.decor")
 local pane_mod = require("filetree.native.pane")
+local bar = require("filetree.native.bar")
 
 local api = vim.api
 
@@ -128,6 +129,7 @@ View.__index = View
 ---@field search_max? integer  Hits a search shows at most (default 1000).
 ---@field search_tier? "fd"|"rg"|"lua"  Force how a search lists files (specs).
 ---@field views? fun(): Filetree.View.Spec[]  The views there are, in the order of the view bar (default: the files only).
+---@field view_bar? boolean  Show the views as tabs in the winbar of the tree window (default true).
 
 ---One view: a name and the sources it shows, one section each.
 ---@class Filetree.View.Spec
@@ -557,6 +559,7 @@ end
 function View:_after_draw()
   -- nodes of a source that start open: their rows are written by a call of _apply of their own
   if self._pane then self._pane:open_pending() end
+  bar.update(self)
   self:_place_cursor()
   local buf = self.buf
   for _, fn in ipairs(render_listeners) do
@@ -654,6 +657,7 @@ function View:open(position, focus)
     self:close()
   end
   define_highlights()
+  bar.define_highlights()
   decor.start(redraw_views)
   local buf = self:_ensure_buf()
   local origin = api.nvim_get_current_win()
@@ -696,6 +700,7 @@ function View:open(position, focus)
     window_options(win, "width")
   end
   self.win, self.position = win, position
+  bar.write(self)
   if position ~= "current" then
     -- closed by `:q`, by a closed tab or by another plugin: the same end as close()
     api.nvim_create_autocmd("WinClosed", {
@@ -1353,6 +1358,38 @@ function View:sources()
   return vim.list_slice(self._pane.sources)
 end
 
+---The number the view bar shows next to a view: how many of its nodes carry a status. nil for the
+---files and for a view that was never shown (a source is not asked for the sake of the bar).
+---@param name string
+---@return integer|nil
+function View:count_of(name)
+  local pane = self._panes[name]
+  if not pane then return nil end
+  return pane:count()
+end
+
+---@return boolean
+function View:bar_enabled()
+  return self._opts.view_bar ~= false
+end
+
+---Show the next (`step = 1`) or the previous (`-1`) view, wrapping. A view none of whose sources
+---can load right now is passed over.
+---@param step integer
+---@return boolean switched
+function View:cycle(step)
+  local specs = self:views()
+  local at = 1
+  for i, spec in ipairs(specs) do
+    if spec.name == self.view_name then at = i end
+  end
+  for _ = 1, #specs - 1 do
+    at = ((at - 1 + step) % #specs) + 1
+    if bar.available(specs[at]) then return (self:show(specs[at].name)) end
+  end
+  return false
+end
+
 ---The sections of the view on screen: one per source, with whether it could load. Empty for the files.
 ---@return Filetree.Pane.Section[]
 function View:sections()
@@ -1644,6 +1681,25 @@ api.nvim_set_decoration_provider(NS, {
   end,
 })
 
-api.nvim_create_autocmd("ColorScheme", { group = AUGROUP, callback = define_highlights })
+api.nvim_create_autocmd("ColorScheme", {
+  group = AUGROUP,
+  callback = function()
+    define_highlights()
+    bar.define_highlights()
+  end,
+})
+
+-- the bar cuts its titles to the width of the window
+api.nvim_create_autocmd("WinResized", {
+  group = AUGROUP,
+  callback = function()
+    for _, win in ipairs(vim.v.event.windows or {}) do
+      if api.nvim_win_is_valid(win) then
+        local view = by_buf[api.nvim_win_get_buf(win)]
+        if view and view.win == win then bar.update(view) end
+      end
+    end
+  end,
+})
 
 return M

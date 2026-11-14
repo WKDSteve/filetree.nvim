@@ -28,6 +28,7 @@ local M = {}
 ---@field max_entries? integer  Entries shown per folder; a last line says how many more there are (default 20000, 0 = no limit).
 ---@field watch? boolean  Follow changes on disk while the tree is shown and read only the folders that changed (default true).
 ---@field search_max? integer  Hits a search shows at most; a last line says how many more there are (default 1000).
+---@field view_bar? boolean  Show the views as tabs in the winbar of the tree window, clickable (default true; with one view there is no bar).
 ---@field views? (string|Filetree.Native.ViewSpec)[]  The views of the tree, in the order of the view bar: `{ "files" }` is one view with one source, `{ name = "work", "buffers", "git" }` one view with two sections (default: the files, then one view per registered source).
 
 ---One entry of `native.views`: the sources of the view as list items, and its name.
@@ -46,6 +47,7 @@ local DEFAULTS = {
   max_entries = 20000,
   watch = true,
   search_max = 1000,
+  view_bar = true,
 }
 
 ---@type Filetree.Native.Opts
@@ -196,6 +198,7 @@ function M.ensure(root)
     search_max = options.search_max,
     hide = ignored,
     views = M.views,
+    view_bar = options.view_bar,
   })
   views[api.nvim_get_current_tabpage()] = view
   return view

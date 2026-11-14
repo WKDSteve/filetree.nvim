@@ -204,6 +204,24 @@ function M.builtins()
       end,
     },
     {
+      name = "view_next",
+      key = '"',
+      desc = "Show the next view (files, buffers, git, ...)",
+      menu = false,
+      run = function(_, ctx)
+        view_of(ctx):cycle(1)
+      end,
+    },
+    {
+      name = "view_prev",
+      key = "!",
+      desc = "Show the previous view",
+      menu = false,
+      run = function(_, ctx)
+        view_of(ctx):cycle(-1)
+      end,
+    },
+    {
       name = "close",
       key = "q",
       desc = "Close the tree",

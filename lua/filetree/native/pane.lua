@@ -223,6 +223,20 @@ function Pane:open_pending()
   end
 end
 
+---How many nodes of the view carry a status (changed files, failed tests, problems): the number the
+---view bar shows. Read from the aggregates of the section heads, nothing is walked.
+---@return integer
+function Pane:count()
+  local total = 0
+  for _, section in ipairs(self._sections) do
+    local agg = self.tree:agg(section.id)
+    for _, n in pairs(agg and agg.counts or {}) do
+      total = total + n
+    end
+  end
+  return total
+end
+
 ---@return Filetree.Pane.Section[]
 function Pane:sections()
   return self._sections
