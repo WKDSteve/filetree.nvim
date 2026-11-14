@@ -70,6 +70,7 @@ require("filetree").setup({
   --   watch = true,             -- follow the disk, read only what changed
   --   search_max = 1000,        -- hits a search (filter) shows at most
   --   view_bar = true,          -- the views (files, buffers, git ...) as tabs in the winbar
+  --   name_float = true,        -- full name in a float while the cursor is on a cut name
   --   views = nil,              -- e.g. { { "files" }, { name = "work", "buffers", "git" } }
   -- },
 

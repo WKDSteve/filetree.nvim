@@ -15,6 +15,8 @@
 local M = {}
 
 local ELLIPSIS = "…"
+--- What a cut name ends in.
+M.ELLIPSIS = ELLIPSIS
 
 ---@param item Filetree.RightItem
 ---@return integer

@@ -46,6 +46,7 @@ M.HL = {
   FiletreeMore = "Comment",
   FiletreeOpened = "Special",
   FiletreeModified = "DiagnosticWarn",
+  FiletreeNameFloat = "NormalFloat",
 }
 
 --- Node kinds that are a line of text and no entry: no icon, no badge, drawn like a comment.
@@ -87,6 +88,7 @@ local text_width = {}
 ---@field height integer  Of a tree at the top or bottom.
 ---@field _alone_size integer?  The width (height) a docked tree had before it became the only window of its tab.
 ---@field _ask_again boolean?  The sources of the view are about to be asked again after a file operation.
+---@field _name_win integer?  The float that shows the full name of the cursor line while it is drawn cut.
 ---@field private _sync boolean
 ---@field private _loaded table<string, true>  Folder ids whose children were read.
 ---@field private _alias table<string, string>  A folder inside a merged line -> the id of that line.
@@ -132,6 +134,7 @@ View.__index = View
 ---@field search_tier? "fd"|"rg"|"lua"  Force how a search lists files (specs).
 ---@field views? fun(): Filetree.View.Spec[]  The views there are, in the order of the view bar (default: the files only).
 ---@field view_bar? boolean  Show the views as tabs in the winbar of the tree window (default true).
+---@field name_float? boolean  Show the full name next to the cursor line while that name is drawn cut (default true).
 
 ---One view: a name and the sources it shows, one section each.
 ---@class Filetree.View.Spec
@@ -484,6 +487,14 @@ function View:_ensure_buf()
         local row = self.tree:row(api.nvim_win_get_cursor(self.win)[1])
         self.cursor_id = row and row.id or self.cursor_id
       end
+      self:_name_float()
+    end,
+  })
+  api.nvim_create_autocmd({ "WinLeave", "BufLeave" }, {
+    group = AUGROUP,
+    buffer = buf,
+    callback = function()
+      self:_name_float_close()
     end,
   })
   api.nvim_create_autocmd("BufWipeout", {
@@ -588,6 +599,7 @@ function View:_after_draw()
   if self._pane then self._pane:open_pending() end
   bar.update(self)
   self:_place_cursor()
+  self:_name_float()
   local buf = self.buf
   for _, fn in ipairs(render_listeners) do
     pcall(fn, buf)
@@ -796,6 +808,7 @@ end
 ---The window is off the screen: stop following the disk until it is shown again.
 ---@private
 function View:_window_gone()
+  self:_name_float_close()
   self.win = nil
   self._alone_size = nil
   self._seen_closed = true
@@ -1605,32 +1618,26 @@ redraw_views = function()
   end
 end
 
----Draw the highlights and badges of one buffer line as ephemeral extmarks. Called by the decoration
----provider for each line on screen; nothing is stored in the buffer.
----@param buf integer
----@param lnum integer  0-based.
----@param win? integer  The window being drawn; its width decides which badges fit.
----@return integer drawn  How many highlights and badges were placed (0 for a buffer that is no tree).
-function M.decorate_line(buf, lnum, win)
-  local view = by_buf[buf]
-  local row = view and view.tree:row(lnum + 1)
-  if not view or not row then return 0 end
-  local line = line_of_row(view, row)
-  local drawn = 0
-  local function mark(col, opts)
-    opts.ephemeral = true
-    -- counted whether or not it could be placed: outside a redraw an ephemeral mark is refused
-    drawn = drawn + 1
-    pcall(api.nvim_buf_set_extmark, buf, NS, lnum, col, opts)
+---The columns the text of a window may use.
+---@param win? integer
+---@return integer
+local function width_of(win)
+  local width = win and text_width[win]
+  if width then return width end
+  if win and api.nvim_win_is_valid(win) then
+    local info = vim.fn.getwininfo(win)[1]
+    return api.nvim_win_get_width(win) - (info and info.textoff or 0)
   end
-  for _, span in ipairs(line.spans) do
-    mark(span.col_start, { end_col = span.col_end, hl_group = span.hl, priority = 90 })
-  end
+  return 80
+end
 
+---What stands right of the name of a row, badges first, then columns, each kind in registration
+---order.
+---@param row Lib.Tree.Row
+---@param badges Filetree.Decor.Badge[]
+---@return Filetree.RightItem[]
+local function right_of(row, badges)
   local node = row.node
-  if QUIET[node.kind] then return drawn end
-  local badges = decor.badges(node, row.expandable or node.kind == "dir")
-
   local right = {}
   -- what the source itself says about the node (a count, a line number), at the far right
   if type(node.columns) == "table" then
@@ -1647,7 +1654,115 @@ function M.decorate_line(buf, lnum, win)
       end
     end
   end
-  if #badges == 0 and #right == 0 then return drawn end
+  for _, badge in ipairs(badges) do
+    -- a sign stands over the indent; a row without indent has no room there, and the tree has no
+    -- sign column: there it stands with the badges
+    local own_place = badge.slot == "name"
+      or badge.slot == "line"
+      or (badge.slot == "sign" and row.depth > 0)
+    if not own_place and badge.text and badge.text ~= "" then
+      right[#right + 1] = {
+        text = badge.text,
+        hl = badge.hl,
+        width = vim.fn.strdisplaywidth(badge.text),
+        slot = badge.slot == "column" and "column" or "badge",
+        priority = badge.priority,
+      }
+    end
+  end
+  if #right < 2 then return right end
+  local ordered = {}
+  for _, slot in ipairs({ "badge", "column" }) do
+    for _, item in ipairs(right) do
+      if item.slot == slot then ordered[#ordered + 1] = item end
+    end
+  end
+  return ordered
+end
+
+---@class Filetree.NameCut
+---@field col integer  Byte column where the overlay starts (the first byte that is not drawn).
+---@field text string  The overlay: the ellipsis, padded to where the items right of the name begin.
+---@field name string  The full name, as the buffer line holds it.
+---@field name_col integer  Display column where the name starts.
+
+---Where the name of a line is cut when the line may use `room` columns; nil when it fits.
+---@param line Filetree.Line
+---@param room integer
+---@return Filetree.NameCut?
+local function cut_of(line, room)
+  local sw = vim.fn.strdisplaywidth
+  if sw(line.text) <= room then return nil end
+  local head = line.text:sub(1, line.name_start)
+  local name = line.text:sub(line.name_start + 1)
+  local head_width = sw(head)
+  local short = columns.truncate(name, room - head_width, sw)
+  -- `short` is what stays of the name plus the ellipsis, or nothing at all
+  local kept = short == "" and 0 or (#short - #columns.ELLIPSIS)
+  local mark = short == "" and "" or columns.ELLIPSIS
+  local pad = math.max(0, room - head_width - sw(short))
+  return {
+    col = line.name_start + kept,
+    text = mark .. (" "):rep(pad),
+    name = name,
+    name_col = head_width,
+  }
+end
+
+---One row measured for a window: its line, what is drawn right of the name, and where the name is cut.
+---@param view Filetree.View
+---@param row Lib.Tree.Row
+---@param win? integer
+---@return Filetree.Line line
+---@return Filetree.Decor.Badge[] badges
+---@return Filetree.RightLayout layout
+---@return Filetree.NameCut? cut
+local function measure(view, row, win)
+  local line = line_of_row(view, row)
+  local node = row.node
+  local badges = QUIET[node.kind] and {} or decor.badges(node, row.expandable or node.kind == "dir")
+  local right = QUIET[node.kind] and {} or right_of(row, badges)
+  local layout = columns.layout(width_of(win), vim.fn.strdisplaywidth(line.text), right)
+  return line, badges, layout, cut_of(line, layout.name_width)
+end
+
+---The full name of a line whose name is drawn cut in `win`, and the display column it starts at;
+---nil for a name that fits (and for a buffer that is no tree).
+---@param buf integer
+---@param lnum integer  0-based.
+---@param win? integer
+---@return string? name
+---@return integer? col
+function M.cut_name(buf, lnum, win)
+  local view = by_buf[buf]
+  local row = view and view.tree:row(lnum + 1)
+  if not view or not row then return nil, nil end
+  local _, _, _, cut = measure(view, row, win)
+  if not cut then return nil, nil end
+  return cut.name, cut.name_col
+end
+
+---Draw the highlights and badges of one buffer line as ephemeral extmarks. Called by the decoration
+---provider for each line on screen; nothing is stored in the buffer.
+---@param buf integer
+---@param lnum integer  0-based.
+---@param win? integer  The window being drawn; its width decides which badges fit.
+---@return integer drawn  How many highlights and badges were placed (0 for a buffer that is no tree).
+function M.decorate_line(buf, lnum, win)
+  local view = by_buf[buf]
+  local row = view and view.tree:row(lnum + 1)
+  if not view or not row then return 0 end
+  local line, badges, layout, cut = measure(view, row, win)
+  local drawn = 0
+  local function mark(col, opts)
+    opts.ephemeral = true
+    -- counted whether or not it could be placed: outside a redraw an ephemeral mark is refused
+    drawn = drawn + 1
+    pcall(api.nvim_buf_set_extmark, buf, NS, lnum, col, opts)
+  end
+  for _, span in ipairs(line.spans) do
+    mark(span.col_start, { end_col = span.col_end, hl_group = span.hl, priority = 90 })
+  end
 
   for _, badge in ipairs(badges) do
     if badge.slot == "name" then
@@ -1663,36 +1778,24 @@ function M.decorate_line(buf, lnum, win)
         0,
         { virt_text = { { badge.text, badge.hl } }, virt_text_pos = "overlay", priority = 100 }
       )
-    elseif badge.text and badge.text ~= "" then
-      right[#right + 1] = {
-        text = badge.text,
-        hl = badge.hl,
-        width = vim.fn.strdisplaywidth(badge.text),
-        -- a sign has no column of its own in this tree: it stands with the badges
-        slot = badge.slot == "column" and "column" or "badge",
-        priority = badge.priority,
-      }
     end
   end
-  if #right == 0 then return drawn end
-  -- badges stand next to the name, columns at the far right, each kind in registration order
-  local ordered = {}
-  for _, slot in ipairs({ "badge", "column" }) do
-    for _, item in ipairs(right) do
-      if item.slot == slot then ordered[#ordered + 1] = item end
-    end
-  end
-  right = ordered
 
-  local width = win and text_width[win]
-  if not width then
-    width = 80
-    if win and api.nvim_win_is_valid(win) then
-      local info = vim.fn.getwininfo(win)[1]
-      width = api.nvim_win_get_width(win) - (info and info.textoff or 0)
+  if cut and cut.text ~= "" then
+    -- the buffer line keeps the whole name (`/`, `y` and a search see it); what does not fit is
+    -- drawn over. Not while the window is scrolled sideways: then the person is reading the rest.
+    local info = win and api.nvim_win_is_valid(win) and vim.fn.getwininfo(win)[1] or nil
+    if not info or (info.leftcol or 0) == 0 then
+      local last = line.spans[#line.spans]
+      mark(cut.col, {
+        virt_text = { { cut.text, last and last.hl or nil } },
+        virt_text_pos = "overlay",
+        hl_mode = "combine",
+        priority = 99,
+      })
     end
   end
-  local layout = columns.layout(width, vim.fn.strdisplaywidth(line.text), right)
+
   if #layout.items > 0 then
     local chunks = {}
     for _, item in ipairs(layout.items) do
@@ -1701,6 +1804,55 @@ function M.decorate_line(buf, lnum, win)
     mark(0, { virt_text = chunks, virt_text_pos = "right_align", priority = 100 })
   end
   return drawn
+end
+
+---@private
+function View:_name_float_close()
+  local win = self._name_win
+  self._name_win = nil
+  if win and api.nvim_win_is_valid(win) then pcall(api.nvim_win_close, win, true) end
+end
+
+---Show the full name of the cursor line next to it while that name is drawn cut; take the float away
+---when the cursor is on a name that fits, or the tree is not the window the person is in.
+---@private
+function View:_name_float()
+  self:_name_float_close()
+  local win, buf = self.win, self.buf
+  if self._opts.name_float == false or not win or not buf then return end
+  if not api.nvim_win_is_valid(win) or api.nvim_get_current_win() ~= win then return end
+  if api.nvim_win_get_buf(win) ~= buf then return end
+  local lnum = api.nvim_win_get_cursor(win)[1]
+  -- the width of this very moment: the one noted at the last redraw may be from before a resize
+  text_width[win] = nil
+  local name, col = M.cut_name(buf, lnum - 1, win)
+  if not name or not col then return end
+  local width = math.min(vim.fn.strdisplaywidth(name), math.max(1, vim.o.columns - 2))
+  local float_buf = api.nvim_create_buf(false, true)
+  vim.bo[float_buf].bufhidden = "wipe"
+  api.nvim_buf_set_lines(float_buf, 0, -1, false, { name })
+  -- noautocmd: a new window shows the buffer of the window it came from for a moment and fires
+  -- WinEnter; nobody may take this float for the tree
+  local okay, float = pcall(api.nvim_open_win, float_buf, false, {
+    relative = "win",
+    win = win,
+    bufpos = { lnum - 1, 0 },
+    row = 0,
+    col = col,
+    width = width,
+    height = 1,
+    style = "minimal",
+    focusable = false,
+    noautocmd = true,
+    zindex = 45,
+  })
+  if not okay then
+    pcall(api.nvim_buf_delete, float_buf, { force = true })
+    return
+  end
+  vim.wo[float][0].winhighlight = "NormalFloat:FiletreeNameFloat"
+  vim.wo[float][0].wrap = false
+  self._name_win = float
 end
 
 -- Highlights for the lines on screen only: a status change or a scroll costs the visible rows, never
@@ -1733,7 +1885,10 @@ api.nvim_create_autocmd("WinResized", {
     for _, win in ipairs(vim.v.event.windows or {}) do
       if api.nvim_win_is_valid(win) then
         local view = by_buf[api.nvim_win_get_buf(win)]
-        if view and view.win == win then bar.update(view) end
+        if view and view.win == win then
+          bar.update(view)
+          view:_name_float()
+        end
       end
     end
   end,

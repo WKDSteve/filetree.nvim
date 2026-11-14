@@ -32,6 +32,7 @@ require("filetree").setup({
     watch = true,             -- follow changes on disk and read only the folders that changed
     search_max = 1000,        -- hits a search shows at most; a last line says how many more
     view_bar = true,          -- the views as tabs in the winbar of the tree window
+    name_float = true,        -- the full name next to the cursor line while that name is drawn cut
     views = nil,              -- which views there are; nil: files, the tree's sources, registered ones
   },
 })
@@ -71,6 +72,14 @@ flowchart TB
 - **The buffer line is indent, expander, icon and name.** Highlights are drawn
   for the lines on screen only (a decoration provider with ephemeral extmarks),
   nothing is stored in the buffer for them.
+- **A name too long for the window is drawn cut.** Columns go first, then
+  badges, while the name still has less than 12 columns; after that the name
+  ends in `…` at the column where what is left of them begins. The cut is drawn
+  over the line, the buffer keeps the whole name: `/`, `y` and a search see it.
+  While the cursor is on such a line the full name stands in a small float next
+  to it (`native.name_float = false` turns that off; highlight
+  `FiletreeNameFloat`). A window scrolled sideways (`zl`) shows the text as it
+  is.
 - **State per tab.** What is open, the cursor, the sort order and the position
   belong to the view of a tab and survive closing its window.
 

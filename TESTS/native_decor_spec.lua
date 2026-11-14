@@ -91,7 +91,10 @@ local function drawn(path)
   local real = vim.api.nvim_buf_set_extmark
   ---@diagnostic disable-next-line: duplicate-set-field
   vim.api.nvim_buf_set_extmark = function(_, _, _, _, opts)
-    if opts.virt_text then
+    if opts.virt_text and opts.virt_text[1][1]:find("^…") then
+      -- the overlay that cuts a name too long for the window (`native_truncate_spec.lua`)
+      out.cut = true
+    elseif opts.virt_text then
       for _, chunk in ipairs(opts.virt_text) do
         out.right[#out.right + 1] = vim.trim(chunk[1]) .. (chunk[2] and (":" .. chunk[2]) or "")
       end
