@@ -213,6 +213,19 @@ another plugin's source (tests, tasks) is a view the same way.
 - **Keys of the directory tree** that make no sense elsewhere (`H`, the search)
   step back in another view. A feature key that changes the root (`-`) changes
   the root of the view: the git view then shows the repository of that folder.
+- **Feature keys** are bound on the one tree buffer for all views:
+
+  | Cursor on | A feature key |
+  | --- | --- |
+  | a node with a path (a buffer, a changed file, a file with diagnostics) | acts on that file as in the files view: copy its path, rename, move, trash, open, info ... The view follows what happened to it. |
+  | a node without one (the head of a section, a group, a symbol) | says that there is nothing to act on (`No node under cursor`), asks nothing, changes nothing |
+
+  Three act on the listing of the files and say so here instead of looking as
+  if they had worked: `/` (`filter`) opens no filter line (`nothing to filter in
+  the view "buffers"`), the sort keys sort the files and say that the view
+  keeps its own order (the files show it when they come back), and a create
+  (`a`) on a line without a folder asks with the folder it takes in the prompt
+  (`Create in ./`, the root of the view).
 
 ### The tree buffer
 
@@ -278,12 +291,28 @@ rooted at the folder; `-` goes up, `<CR>` on a file opens it in the same window.
 
 Every file operation of filetree.nvim ends with `User FiletreeChanged`
 (`{ op, from, to }`, [api](../api.md#when-files-changed)); the own tree reads the
-folders `from` and `to` lie in and nothing else, also with `watch = false`.
+folders `from` and `to` lie in and nothing else, also with `watch = false`. A
+target in a folder the operation itself made (`move x new/dir/`) reads the
+nearest folder above it that the tree shows, so the new folder appears. No
+feature asks the own tree for a refresh of everything afterwards (the other
+backends, which know nothing of the event, still get one).
 
 A file never opens in the tree's own window: it goes to the window you came
 from, else to another editor window, else to a new one beside the tree. Closing
 the tree when it is the only window of its tab leaves the window with an empty
-buffer instead of closing the tab.
+buffer instead of closing the tab. A docked tree that was the only window for a
+moment (the last editor window closed, `layout_guard` opened a new one) gets
+the width it had before back, not half the screen.
+
+### The features on it
+
+Every feature that is on by default is driven on the own tree by a spec that
+presses its key, clicks, or raises the event it reacts to, on a real tree
+window, and reads the result (`TESTS/native_features_spec.lua` and the
+`TESTS/native_drive_*_spec.lua` files, one per group: paths, file operations,
+search and system, ui, navigation and infrastructure, and the views that are
+not the files). What leaves the editor there (another plugin, a program of the
+system, the trash) is a stand-in.
 
 ### What it does that the other backends do not
 

@@ -1932,9 +1932,10 @@ Module: lua/filetree/features/nav/quickpick/
 ------------------------------------------------------------------------------
 REVEAL ALT                                               *filetree-reveal-alt*
 
-`B` resolves the alternate buffer (`#`) and calls `adapter.open_reveal()` on
-it, adjusting the tree root if the file lives outside the current one — the
-tree-buffer analogue of `:e #`.
+`B` resolves the alternate file of the editor window (`#` there: the file you
+had open before the current one, not the tree window's own `#`) and calls
+`adapter.open_reveal()` on it, adjusting the tree root if the file lives
+outside the current one — the tree-buffer analogue of `:e #`.
 
 Keymaps: B
 

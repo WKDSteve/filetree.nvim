@@ -53,15 +53,21 @@ already fired — switch buffers and step into the tree quickly enough and the
 reveal found the cursor already in the tree, dropped itself, and left you
 wherever you last were.
 
+Only stepping in from a window beside the tree counts. Focus that comes back
+from a floating window opened from the tree (a menu, a dialog, a prompt, the
+node info) leaves the cursor on the node that float belongs to: a right click
+acts on the node that was clicked, and a rename ends on the node it renamed.
+
 - **Module:** [`features/nav/auto_reveal/init.lua`](../../lua/filetree/features/nav/auto_reveal/init.lua)
 - **Config:** `enabled` (default `true`), `debounce_ms` (150), `ignore_ft`, `only_if_open` (default `true`), `sync_on_enter` (default `true`), `follow_root` (default `true`)
 - **Usercmds:** `:Filetree reveal`, `:Filetree reveal pause [ms]`, `:Filetree reveal resume`
 
 ## Reveal Alt
 
-`B` resolves the alternate buffer (`#`) and calls `adapter.open_reveal()`
-on it, adjusting the tree root if the file lives outside the current one —
-the tree-buffer analogue of `:e #`.
+`B` resolves the alternate file of the editor window (`#` there: the file you
+had open before the current one, not the tree window's own `#`) and calls
+`adapter.open_reveal()` on it, adjusting the tree root if the file lives
+outside the current one — the tree-buffer analogue of `:e #`.
 
 - **Module:** [`features/nav/reveal_alt/init.lua`](../../lua/filetree/features/nav/reveal_alt/init.lua)
 - **Keymaps:** `B` (config field `keymap`)
