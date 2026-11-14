@@ -217,8 +217,17 @@ another plugin's source (tests, tasks) is a view the same way.
   ```
 
   Without `views`: the files, the tree's own sources, then every source another
-  plugin registered. The files cannot be a section next to other sources yet
-  (that section says so).
+  plugin registered.
+- **The files as a section.** A view may list `files` next to other sources
+  (`{ name = "work", "buffers", "files" }`: the open editors above the folder
+  tree). The directory tree is then one section of that view: folders open and
+  close, the watcher and a finished file operation are taken over, reveal,
+  `get_expanded_paths` / `expand_paths`, the sort order, hidden names and the
+  search act on it as they do in the files view. It reads through the same
+  listing cache and shares the watcher handles; what is open belongs to the
+  view, so the files view next to it keeps its own open folders. While a
+  search is shown its hits take the place of all sections; leaving the search
+  brings them back.
 - **`source_switcher`** ([navigation](NAVIGATION.md)) drives the views here:
   `:Filetree source [<name>|next|prev|pick]`, its pick key and its API.
 - **Keys of the directory tree** that make no sense elsewhere (`H`, the search)

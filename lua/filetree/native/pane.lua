@@ -21,6 +21,7 @@ local M = {}
 
 ---@class Filetree.Pane.Hooks
 ---@field ctx fun(source?: string): Filetree.Ctx  The context a source is called with.
+---@field entry? fun(source: string): Filetree.Source|nil  A source the view brings itself (the files); nil: ask the registry.
 ---@field before? fun()  Called before the tree changes outside a call of the view (a source emitted).
 ---@field apply fun(changes: Lib.Tree.Splice[])  Rows changed; read them back from `pane.tree`.
 ---@field redraw fun()  `pane.tree` is another tree now: write every line again.
@@ -127,13 +128,23 @@ function Pane:_adopt(source, entry, node, is_root)
   node.children = wrapper
 end
 
+---The entry of a source: the one the view brings itself, else the registered one.
+---@private
+---@param name string
+---@return Filetree.Source|nil
+function Pane:_entry(name)
+  local own = self._hooks.entry and self._hooks.entry(name) or nil
+  if own then return own end
+  return registry.get("source", name)
+end
+
 ---The root node of one source, adopted; a placeholder when the source is unknown, unavailable or raises.
 ---@private
 ---@param name string
 ---@return Filetree.Node root
 ---@return Filetree.Pane.Section section
 function Pane:_root_of(name)
-  local entry = registry.get("source", name)
+  local entry = self:_entry(name)
   local title = title_of(entry, name)
   ---@param reason string
   local function unavailable(reason)
@@ -141,7 +152,6 @@ function Pane:_root_of(name)
     self._source_of[node.id] = name
     return node, { source = name, id = node.id, available = false, reason = reason, title = title }
   end
-  if name == "files" then return unavailable("the files cannot be a section yet") end
   if not entry then return unavailable("no source of this name is registered") end
   if type(entry.available) == "function" then
     local ok, can, reason = pcall(entry.available)
@@ -166,7 +176,7 @@ function Pane:build()
     local root, section = self:_root_of(name)
     roots[#roots + 1] = root
     self._sections[#self._sections + 1] = section
-    local entry = registry.get("source", name)
+    local entry = self:_entry(name)
     -- one tree has one severity order: the first source that names one decides
     if entry and not severity then severity = entry.severity end
     if entry and not aggregate and #self.sources == 1 then aggregate = entry.aggregate end
@@ -293,7 +303,7 @@ function Pane:_resync(id, node)
     self._loaders[id](node, function(list)
       if type(list) ~= "table" then return end
       local source = self._source_of[id]
-      local entry = source and registry.get("source", source)
+      local entry = source and self:_entry(source)
       if entry then
         for _, child in ipairs(list) do
           self:_adopt(source, entry, child)
@@ -385,7 +395,7 @@ function Pane:start()
   self._started = true
   for _, section in ipairs(self._sections) do
     -- a source that cannot load right now is followed too: only it knows when that changes
-    local entry = registry.get("source", section.source)
+    local entry = self:_entry(section.source)
     if entry and type(entry.subscribe) == "function" then
       local ok, stop =
         pcall(entry.subscribe, self._hooks.ctx(section.source), self:_emit(section.source))

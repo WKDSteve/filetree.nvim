@@ -79,6 +79,7 @@ local left_col = {}
 ---@field view_name string  The view on screen: "files", or the name of a view of registered sources.
 ---@field private _panes table<string, Filetree.Pane>  The trees of the other views, by view name.
 ---@field private _pane Filetree.Pane?  The one on screen; nil while the files are shown.
+---@field private _file_sections table<string, Filetree.FilesSection>  The files as a section of a view of sections, by view name.
 ---@field private _files_cursor any  Where the cursor of the files was when another view took over.
 ---@field private _deferred (fun())[]  Changes of the file listing asked for while another view was shown.
 ---@field private _relist_pending boolean?  One of them is "build the listing again".
@@ -843,6 +844,9 @@ function View:id_of(path)
   if self._pane then
     local shown = self._pane:id_of(path)
     if shown ~= nil then return shown end
+    local section = self:_files_section()
+    -- a folder inside a merged line of the files section is shown under that line
+    if section then return section:id_of(path) end
     return path
   end
   local id = self._alias[path]
@@ -937,6 +941,25 @@ function View:reveal(path)
   if self._pane then
     -- another view: the path is a row where a source shows a node for it, and nowhere else
     local id = self._pane:id_of(path)
+    if id == nil and self:_files_section() and list.inside(self.root, path) then
+      -- the files are a section of this view: open the folders on the way, as in the files view
+      local chain = {}
+      local current = path
+      while current and current ~= self.root do
+        table.insert(chain, 1, current)
+        current = list.parent(current)
+      end
+      self:sync_cursor()
+      self:_now(function()
+        for i = 1, #chain - 1 do
+          local folder = self:id_of(chain[i])
+          if self.tree:node(folder) and not self.tree:is_expanded(folder) then
+            self:_apply(self.tree:expand(folder))
+          end
+        end
+      end)
+      id = self._pane:id_of(path)
+    end
     if id == nil then return false end
     self:sync_cursor()
     self:_apply(self.tree:reveal(id))
@@ -1011,9 +1034,12 @@ end
 ---@return string[]
 function View:expanded_paths()
   local out = {}
-  for id in pairs(self._loaded) do
-    if id ~= self.root and self.main:is_expanded(id) then
-      local node = self.main:node(id)
+  local section = self:_files_section()
+  -- the files on screen: the files view, or the files section of a view of sections
+  local tree = section and self._pane.tree or self.main
+  for id in pairs(section and section.loaded or self._loaded) do
+    if id ~= self.root and tree:is_expanded(id) then
+      local node = tree:node(id)
       if node then out[#out + 1] = node.path end
     end
   end
@@ -1027,6 +1053,26 @@ end
 ---Open the given folders (the ones that still exist).
 ---@param paths string[]
 function View:expand_paths(paths)
+  if self._pane and self:_files_section() then
+    self:clear_search()
+    self:sync_cursor()
+    local sorted = vim.list_slice(paths)
+    table.sort(sorted, function(a, b)
+      if #a ~= #b then return #a < #b end
+      return a < b
+    end)
+    self:_now(function()
+      for _, path in ipairs(sorted) do
+        local id = self:id_of(path)
+        local node = self.tree:node(id)
+        if node and node.kind == "dir" and not self.tree:is_expanded(id) then
+          self:_apply(self.tree:expand(id))
+        end
+      end
+    end)
+    self:_place_cursor()
+    return
+  end
   if self._pane then
     -- folders of the files: opened when the files are shown again
     self._deferred[#self._deferred + 1] = function()
@@ -1159,8 +1205,8 @@ function View:search(query)
     self:clear_search()
     return false
   end
-  -- the search lists files below the root; another view has no folder to search
-  if self._pane then return false end
+  -- the search lists files below the root; a view without the files has no folder to search
+  if self._pane and not self:_files_section() then return false end
   if not self._search then
     self:sync_cursor()
     self._main_cursor = self.cursor_id
@@ -1237,7 +1283,8 @@ function View:clear_search()
   self._search = nil
   self._search_gen = (self._search_gen or 0) + 1
   if search.cancel then search.cancel() end
-  self.tree = self.main
+  -- back to what the search was laid over: the files, or the view of sections it was started in
+  self.tree = self._pane and self._pane.tree or self.main
   self.cursor_id = self._main_cursor
   self._main_cursor = nil
   if self.buf and api.nvim_buf_is_valid(self.buf) then self:_draw_all() end
@@ -1297,6 +1344,11 @@ end
 ---@private
 function View:_relist()
   if self._pane then
+    -- the files section of the view on screen lists with the new order at once
+    if self:_files_section() then
+      self:sync_cursor()
+      self._pane:reload("files")
+    end
     -- once, however often the listing changed meanwhile
     if not self._relist_pending then
       self._relist_pending = true
@@ -1423,7 +1475,8 @@ end
 ---@param id any
 ---@return string
 function View:source_of(id)
-  if not self._pane then return "files" end
+  -- the hits of a search are files, whatever view the search was started in
+  if not self._pane or self._search then return "files" end
   return (id ~= nil and self._pane:source_of(id)) or self._pane.sources[1]
 end
 
@@ -1472,6 +1525,15 @@ function View:sections()
   return self._pane and self._pane:sections() or {}
 end
 
+---The files as a section of the view on screen, when that view is one of sections and lists them.
+---@private
+---@return Filetree.FilesSection|nil
+function View:_files_section()
+  local pane = self._pane
+  if not pane or not vim.tbl_contains(pane.sources, "files") then return nil end
+  return self._file_sections[pane.name]
+end
+
 ---@private
 ---@param spec Filetree.View.Spec
 ---@return Filetree.Pane
@@ -1488,16 +1550,27 @@ function View:_pane_of(spec)
     ctx = function(source)
       return self:ctx(source)
     end,
+    entry = function(source)
+      if source ~= "files" then return nil end
+      local section = self._file_sections[spec.name]
+      if not section then
+        section = require("filetree.native.source.files_section").new(self)
+        self._file_sections[spec.name] = section
+      end
+      return section.entry
+    end,
     before = function()
-      if self._pane == pane then self:sync_cursor() end
+      if self._pane == pane and not self._search then self:sync_cursor() end
     end,
     apply = function(changes)
-      if self._pane ~= pane then return end
+      -- the hits of a search lie over the view: its tree changes underneath, the lines are
+      -- written when the search is left
+      if self._pane ~= pane or self._search then return end
       self.tree = pane.tree
       self:_apply(changes)
     end,
     redraw = function()
-      if self._pane ~= pane then return end
+      if self._pane ~= pane or self._search then return end
       self.tree = pane.tree
       if self.buf and api.nvim_buf_is_valid(self.buf) then self:_draw_all() end
     end,
@@ -1616,6 +1689,7 @@ function M.new(opts)
     _opts = opts,
     view_name = "files",
     _panes = {},
+    _file_sections = {},
     _deferred = {},
   }, View)
   self:_build()

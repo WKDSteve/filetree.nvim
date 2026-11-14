@@ -9,7 +9,8 @@
 --- - `register()` / `unregister()`: put the built-in sources into the registry, and take them out
 --- - `NAMES`: their order in the view bar
 ---
---- The directory tree (`files`) is not in this list: `filetree.native.view` owns it.
+--- The directory tree (`files`) is not in this list: `filetree.native.view` owns it, and brings it as
+--- a section of a view of several sources itself (`filetree.native.source.files_section`).
 
 local M = {}
 
