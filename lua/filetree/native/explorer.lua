@@ -1,10 +1,11 @@
 ---@module 'filetree.native.explorer'
 ---@brief The own tree as an explorer of `lib.nvim.explorer`, and its answer to fileops.nvim.
 ---@description
---- Two things other plugins ask "whatever tree is open", without knowing this one:
+--- Three things other plugins ask "whatever tree is open", without knowing this one:
 ---
 ---   require("lib.nvim.explorer").current_path()  -- the path under the cursor of the tree window
 ---   require("lib.nvim.explorer").reload_all()    -- read the tree again
+---   require("lib.nvim.explorer").reveal(path)    -- show the tree with its cursor on a path
 ---
 --- and one thing fileops.nvim says after each of its operations: `User FileopsChanged` with
 --- `{ action, path }`, followed at once by `reload_all()`. The event names one path. Where that path
@@ -49,6 +50,14 @@ function M.current_path(buf)
   local row = view and view:current()
   local path = row and row.node and row.node.path
   return type(path) == "string" and path ~= "" and path or nil
+end
+
+---Show the tree with its cursor on `path`: it opens when it is closed, and takes a root that holds
+---the path when the one it has does not. The window the person is in stays the current one.
+---@param path string  Absolute.
+---@return boolean shown
+function M.reveal(path)
+  return require("filetree.adapter.native").open_reveal(path) == true
 end
 
 ---Read every tree again, unless the change was answered already (see the module text). The read
@@ -97,6 +106,8 @@ function M.register()
     filetypes = { require("filetree.native.view").FILETYPE },
     current_path = M.current_path,
     reload = M.reload,
+    -- a lib.nvim without `reveal` ignores the field
+    reveal = M.reveal,
   })
   local group = api.nvim_create_augroup(GROUP, { clear = true })
   api.nvim_create_autocmd("User", {

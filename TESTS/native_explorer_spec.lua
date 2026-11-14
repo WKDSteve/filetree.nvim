@@ -146,6 +146,32 @@ end
 view:show("files")
 T.settle(100)
 
+-- ── show a path (a picker's "reveal in tree") ──────────────────────────────────
+if type(explorer.reveal) == "function" then
+  local target = T.norm(dir .. "/lua/mod/a.lua")
+  eq("the own tree can reveal", explorer.can_reveal(), true)
+  T.on("README.md")
+  vim.cmd("wincmd p")
+  local editor = vim.api.nvim_get_current_win()
+  ok("... asked from an editor window", editor ~= T.adapter.get_winid())
+  eq(
+    "reveal names the tree that showed the path",
+    { explorer.reveal(target) },
+    { true, "filetree" }
+  )
+  eq("... the cursor of the tree is on it", T.norm(explorer.current_path(T.buf)), target)
+  eq("... and the editor window stays the current one", vim.api.nvim_get_current_win(), editor)
+  T.adapter.close()
+  eq("reveal opens a closed tree", { explorer.reveal(target) }, { true, "filetree" })
+  ok("... it is on screen again", T.adapter.is_open())
+  eq("... with the cursor on the path", T.norm(T.adapter.get_current_node().path), target)
+  eq("... still without taking the focus", vim.api.nvim_get_current_win(), editor)
+  eq("an empty path is refused", { explorer.reveal("") }, { false })
+  vim.api.nvim_set_current_win(T.adapter.get_winid())
+else
+  T.na("this lib.nvim has no explorer.reveal yet")
+end
+
 -- ── gone with the tree ─────────────────────────────────────────────────────────
 view.refresh = real_refresh
 eq("nothing at warning level in the whole run", T.loud(), {})
@@ -154,6 +180,9 @@ local names = vim.tbl_map(function(adapter)
   return adapter.name
 end, explorer.adapters())
 ok("after native.reset the explorer `filetree` is gone", not vim.tbl_contains(names, "filetree"))
+if type(explorer.can_reveal) == "function" then
+  eq("... and with it the tree that could reveal", explorer.can_reveal(), false)
+end
 eq(
   "... and FileopsChanged has no listener left",
   #vim.api.nvim_get_autocmds({ event = "User", pattern = "FileopsChanged" }),
