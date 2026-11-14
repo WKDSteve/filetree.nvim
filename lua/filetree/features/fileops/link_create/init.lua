@@ -285,7 +285,9 @@ local function do_create(target, link_path, kind, is_dir)
     msg = msg .. " (hardlink not possible across drives/filesystems, used a symlink instead)"
   end
   notify.info(msg)
-  if _adapter and _adapter.refresh then pcall(_adapter.refresh) end
+  local changed = require("filetree.util.changed")
+  changed.emit("create", nil, link_path)
+  changed.refresh(_adapter)
 end
 
 ---Prompt for a target path and create a link to it inside the current tree

@@ -562,7 +562,7 @@ local function do_paste_impl(dst_dir, conflict_mode, overrides)
       _cut_prefetch = nil
 
       render_clipboard()
-      if _adapter and _adapter.refresh then pcall(_adapter.refresh) end
+      require("filetree.util.changed").refresh(_adapter)
     end
 
     -- One chooser for every reference across every moved item, rather than one

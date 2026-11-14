@@ -184,7 +184,7 @@ local function do_rename(old_path, new_path, scan_result)
     buffer.relocate(old_path, new_path)
 
     local function finish()
-      if _adapter and _adapter.refresh then _adapter.refresh() end
+      require("filetree.util.changed").refresh(_adapter)
       notify.info(
         string.format(
           "%s → %s",

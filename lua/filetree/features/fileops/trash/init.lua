@@ -636,7 +636,7 @@ local function finalize(ok_count, total, cancelled)
   if ok_count > 0 then
     local ok_m, marks = require("filetree.features").load("marks")
     if ok_m and marks then pcall(marks.clear_all) end
-    if _adapter then pcall(_adapter.refresh) end
+    require("filetree.util.changed").refresh(_adapter)
   end
   local parts = { summary_line(ok_count, total) }
   if cancelled > 0 then parts[#parts + 1] = string.format("(%d skipped)", cancelled) end
@@ -830,7 +830,7 @@ function M.delete(path, on_done, require_symlink)
   end
   if _cfg.confirm and not confirm(path) then return done(false) end
   do_trash(path, function(ok)
-    if ok and _adapter then pcall(_adapter.refresh) end
+    if ok then require("filetree.util.changed").refresh(_adapter) end
     done(ok)
   end, require_symlink)
 end

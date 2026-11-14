@@ -114,6 +114,7 @@ local function report(results)
   for _, r in ipairs(results) do
     if r.status == "ok" then
       ok_count = ok_count + 1
+      if r.output then require("filetree.util.changed").emit("create", nil, r.output) end
     elseif r.status == "skipped" then
       skip_count = skip_count + 1
     else
@@ -128,7 +129,7 @@ local function report(results)
   end
   notify.info(table.concat(parts, ", "))
 
-  if ok_count > 0 and _adapter and _adapter.refresh then pcall(_adapter.refresh) end
+  if ok_count > 0 then require("filetree.util.changed").refresh(_adapter) end
 end
 
 ---@internal Run pdf.create() for `paths`, no further prompting.

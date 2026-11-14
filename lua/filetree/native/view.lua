@@ -389,11 +389,18 @@ function View:_changed(dirs)
 end
 
 ---Read the folder `path` lies in again, when this view has read it (an operation on `path` is done).
----A folder the view never read has nothing on screen to bring up to date.
+---A folder the view never read has nothing on screen to bring up to date. A folder the view has no
+---line for at all was made by the operation itself (`move x new/dir/`): there the listing that changed
+---is the one of the nearest folder above it that the view knows.
 ---@param path string
 ---@return boolean reading
 function View:refresh_path(path)
   local parent = list.parent(list.norm(path))
+  while parent and list.inside(self.root, parent) and not self.main:node(self:id_of(parent)) do
+    local up = list.parent(parent)
+    if not up or up == parent then break end
+    parent = up
+  end
   if not parent or not list.inside(self.root, parent) then return false end
   local id = self:id_of(parent)
   if not (self._loaded[id] and self.main:node(id)) then return false end

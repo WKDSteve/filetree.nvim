@@ -218,7 +218,7 @@ local function run(plan, resolution, scan_result)
   -- that runs before the rewrite is on disk would show the tree mid-apply.
   refs.handle_result(scan_result, moves, { op = "move" }, function()
     clear_marks()
-    if _adapter and _adapter.refresh then pcall(_adapter.refresh) end
+    require("filetree.util.changed").refresh(_adapter)
   end)
 end
 

@@ -171,7 +171,7 @@ local function run_plan(plan, on_done)
       op = "rename",
       title = "References across the renamed batch",
     }, function()
-      if _adapter and _adapter.refresh then pcall(_adapter.refresh) end
+      require("filetree.util.changed").refresh(_adapter)
       on_done(errors == 0)
     end)
   end)

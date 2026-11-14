@@ -864,7 +864,9 @@ function M.open(dest_dir)
         local function proceed()
           if create_from(tmpl.path, dest) then
             notify.info("Created: " .. name .. " (from " .. tmpl.name .. ")")
-            if _adapter and _adapter.refresh then pcall(_adapter.refresh) end
+            local changed = require("filetree.util.changed")
+            changed.emit("create", nil, dest)
+            changed.refresh(_adapter)
             if _cfg.open_after then
               -- Open in a real editor window, never the tree window itself (loading
               -- a buffer into the tree's own window fights its window-management

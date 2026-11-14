@@ -119,7 +119,7 @@ local function run(tool, jobs)
     if not job then
       if #made > 0 then
         notify.info(string.format("Created %d zip(s): %s", #made, table.concat(made, ", ")))
-        if _adapter and _adapter.refresh then pcall(_adapter.refresh) end
+        require("filetree.util.changed").refresh(_adapter)
       end
       if #failed > 0 then notify.error("Could not compress: " .. table.concat(failed, "; ")) end
       return
@@ -129,6 +129,7 @@ local function run(tool, jobs)
         failed[#failed + 1] = path.basename(job.out) .. " (" .. err .. ")"
       else
         made[#made + 1] = path.basename(job.out)
+        require("filetree.util.changed").emit("create", nil, job.out)
       end
       step()
     end)

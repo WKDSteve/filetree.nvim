@@ -25,4 +25,20 @@ function M.emit(op, from, to)
   })
 end
 
+---Bring the tree up to date after a file operation that was announced with `emit`.
+---
+---The own tree answers `FiletreeChanged` itself and reads the folders `from` and `to` lie in; asking
+---it for a refresh on top would read every folder it has open again. Every other backend knows
+---nothing of the event, so there the refresh of everything is the way.
+---
+---A feature that calls this has to have announced what it did (`emit` here, a move through
+---`util.mutate`, a copy or a delete through `util.hooks`), or the own tree hears of the change
+---only from its watcher.
+---@param adapter FiletreeAdapter?
+function M.refresh(adapter)
+  if not adapter or type(adapter.refresh) ~= "function" then return end
+  if adapter.name == "native" then return end
+  pcall(adapter.refresh)
+end
+
 return M
