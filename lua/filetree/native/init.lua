@@ -123,6 +123,29 @@ function M.options()
   return options
 end
 
+---Draw the directory tree of a folder into a buffer another plugin owns (its own float): the layout
+---`embed`. No keys, no autocmds, no view bar; a handle with `move`, `select`, `expand`, `collapse`,
+---`toggle`, `current`, `rows`, `refresh` and `close` (`filetree.native.embed`). Works without
+---`setup()` and whatever backend is active.
+---@param target integer|{ buf?: integer, win?: integer, root?: string }  A buffer, or a table that names the buffer or a window showing it (and may carry `root` and the options).
+---@param root? string  A directory.
+---@param opts? Filetree.Embed.Opts
+---@return Filetree.Embed|nil handle
+---@return string|nil err
+function M.embed(target, root, opts)
+  local buf = target
+  if type(target) == "table" then
+    opts = vim.tbl_extend("keep", opts or {}, target)
+    root = root or target.root
+    buf = target.buf
+    if buf == nil and type(target.win) == "number" and api.nvim_win_is_valid(target.win) then
+      buf = api.nvim_win_get_buf(target.win)
+    end
+  end
+  ---@cast buf integer
+  return require("filetree.native.embed").open(buf, root or "", opts)
+end
+
 ---The state of the file layer of the own tree: the watcher handles and their folders, what is held
 ---back, what is being read. Plain data, a copy; reading it starts nothing (no handle, no view).
 ---@return Filetree.FsState

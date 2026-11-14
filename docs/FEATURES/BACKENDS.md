@@ -307,6 +307,18 @@ the tree buffer (`adapter_keymaps`) or another plugin mapped stays theirs.
 as a buffer, `nvim <dir>` or `:edit <dir>`, shows the tree in that window,
 rooted at the folder; `-` goes up, `<CR>` on a file opens it in the same window.
 
+### In another plugin's window (`embed`)
+
+`require("filetree.native").embed(buf, dir)` draws the directory tree of a
+folder into a buffer another plugin owns: the picture of the tree, without its
+window. The directory hover of hover.nvim is drawn that way, in a float that
+cannot take the focus. Same listing cache, same order, same merged lines and
+icons as the tree window; no key, no autocmd, no view bar, no option of the
+window is touched, and it follows the disk only with `watch = true`. The
+caller drives it through the handle it gets back (`move`, `select`, `expand`,
+`collapse`, `toggle`, `current`, `rows`, `refresh`, `close`); see
+[the API](../api.md#the-tree-in-your-own-window).
+
 ### After a file operation
 
 Every file operation of filetree.nvim ends with `User FiletreeChanged`

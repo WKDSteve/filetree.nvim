@@ -436,6 +436,46 @@ A folder is covered by a handle when it is in `watchers`, or, with
 `recursive`, when it lies below a folder of `watchers`. Paths are normalized
 (forward slashes, as the tree writes them).
 
+### The tree in your own window
+
+A plugin that wants the picture of the directory tree in a window of its own
+(a hover float, a side panel) asks for the layout `embed`:
+
+```lua
+local tree, err = require("filetree.native").embed(buf, "/path/to/dir", {
+  show_root = false,   -- the folder itself as the first row
+  icons = true,        -- drawn only with a Nerd Font declared
+  max_entries = 200,   -- per folder; a last line says how many more (0 = no limit)
+  group_empty = true,  -- a/b/c as one line
+  sort = { kind = "name" },
+  hide = nil,          -- fun(name, path): boolean
+  watch = false,       -- follow the disk until close()
+  select = true,       -- keep a selection and highlight its line (FiletreeEmbedSelection)
+  on_change = nil,     -- fun(handle): the lines were written again (fit your window here)
+})
+```
+
+`buf` is yours and stays yours: the embed writes its lines and highlights and
+nothing else. It maps no key, creates no autocmd, sets no option of any
+window, and opens none; whether the float is focusable is your business. The
+first argument may also be a table (`{ buf = b, root = dir, ... }` or
+`{ win = w, root = dir }`). It works without `setup()` and with any backend.
+`err` says why there is no handle (no such buffer, not a directory).
+
+| On the handle | Does |
+| --- | --- |
+| `tree:move(delta)` | move the selection by rows, stopping at the ends; returns the row |
+| `tree:select(line_or_path)` | put the selection on a line or on the row of a path; `nil` for a path that is no row |
+| `tree:current()` | the row of the selection: `{ id, path, kind, label, line, expandable, expanded }` |
+| `tree:expand(path?)` / `tree:collapse(path?)` / `tree:toggle(path?)` | open or close a folder (default: under the selection); `false` when nothing changed |
+| `tree:rows()` | every row on screen, top to bottom |
+| `tree:refresh()` | read the folders again; open folders and the selection stay |
+| `tree:close()` | give the watcher handles back and clear the highlights; safe twice. The buffer keeps its lines |
+
+`kind` is `"dir"`, `"file"`, or `"more"` for the line that counts what
+`max_entries` left out (it has no `path`). Folders are read when they are
+opened, at once, so `rows()` right after `expand()` has the new rows.
+
 ### For plugin authors: registering without loading filetree.nvim
 
 `require("filetree")` from another plugin makes a plugin manager load
