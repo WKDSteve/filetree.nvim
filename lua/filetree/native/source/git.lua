@@ -144,7 +144,7 @@ local function run_on(verb, args, nodes, ctx)
         notify.warn(("git %s %s: %s"):format(verb, node.label, vim.trim(result.stderr or "failed")))
       end
       left = left - 1
-      if left == 0 and ctx.view and ctx.view.refresh then ctx.view:refresh() end
+      if left == 0 and ctx.tree and ctx.tree.refresh then ctx.tree:refresh() end
     end)
   end
 end
@@ -174,7 +174,7 @@ end
 ---@param ctx table
 ---@param fn fun()
 local function in_editor(node, ctx, fn)
-  if require("filetree.native").open_node(ctx.view, { path = node.path }, "edit") then fn() end
+  if require("filetree.native").open_node(ctx.tree, { path = node.path }, "edit") then fn() end
 end
 
 ---@return Filetree.Action[]

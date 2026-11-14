@@ -89,7 +89,7 @@ end
 ---@param ctx Filetree.Action.Ctx
 ---@return Filetree.View
 local function view_of(ctx)
-  return ctx.view --[[@as Filetree.View]]
+  return ctx.tree --[[@as Filetree.View]]
 end
 
 ---The tree's own actions. Every one acts on the node under the cursor; a feature on the same key
@@ -256,8 +256,8 @@ function M.ctx(view)
   if entry and entry.mutable == false then mutable = false end
   local ctx = view:ctx(source) --[[@as Filetree.Action.Ctx]]
   ctx.mutable = mutable
-  ctx.view = view
-  ctx.view_name = view.view_name
+  -- `view` is the name of the view, as for a source; the view itself is `tree`
+  ctx.tree = view
   return ctx
 end
 

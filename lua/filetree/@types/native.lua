@@ -19,8 +19,8 @@
 ---@field root string the root directory of the view
 ---@field cwd string
 ---@field win integer the tree window
----@field view string|table for a source: the name of the view shown in it. For an action: the view itself (`ctx.view:refresh()`), its name is `view_name`
----@field view_name? string the name of the view (actions)
+---@field view string the name of the view shown in it
+---@field tree? table the tree view itself, handed to an action (not to a source): `ctx.tree:refresh()`, `ctx.tree:show(name)`
 ---@field mutable? boolean false: the source of the node does not let files be changed (actions)
 ---@field source? string the source the node in question came from
 ---@field alt_buf? integer the editor buffer the tree was opened from

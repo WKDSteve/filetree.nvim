@@ -220,8 +220,12 @@ A registered source is a view of the tree window: a tab of its
 [view bar](FEATURES/BACKENDS.md#views-and-sources), reachable with `"` / `!`
 and `:Filetree source <name>`, and usable as a section through `native.views`.
 `root(ctx)` is called when the view is shown, with
-`ctx = { root, cwd, win, view, source, alt_buf }` (`alt_buf`: the editor buffer
-the tree belongs to); `subscribe` runs only while the window is on screen.
+`ctx = { root, cwd, win, view, source, alt_buf }` (`view`: the name of the
+view; `alt_buf`: the editor buffer the tree belongs to); `subscribe` runs only
+while the window is on screen. An action's `run(nodes, ctx)` and `when(node,
+ctx)` get the same fields and two more: `ctx.mutable`, and `ctx.tree`, the tree
+view itself (`ctx.tree:refresh()` after the action changed what the view
+shows).
 
 What a node may carry besides `id`, `label`, `kind`, `status`, `columns`,
 `children`, `path` and `data`:

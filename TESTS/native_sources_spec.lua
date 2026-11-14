@@ -140,7 +140,8 @@ local remove_spec = registry.source({
       desc = "Mark the item",
       needs = { "kind:item" },
       run = function(nodes, ctx)
-        spec.marked[#spec.marked + 1] = { nodes[1].id, ctx.source, ctx.view_name }
+        spec.marked[#spec.marked + 1] = { nodes[1].id, ctx.source, ctx.view }
+        spec.tree = ctx.tree
       end,
     },
   },
@@ -301,9 +302,19 @@ eq(
 -- ── actions ────────────────────────────────────────────────────────────────────
 goto_id(view, "spec:two")
 feed("<F9>")
-eq("a key of the source runs on its node, with the source in ctx", spec.marked, {
-  { "spec:two", "spec", "spec" },
-})
+eq(
+  "a key of the source runs on its node, with the source and the name of the view in ctx",
+  spec.marked,
+  {
+    { "spec:two", "spec", "spec" },
+  }
+)
+ok("... and the tree view itself as ctx.tree", spec.tree == view)
+eq(
+  "a source is told the name of the view under the same field, and no tree",
+  { type(spec.ctx[1].view), spec.ctx[1].tree },
+  { "string", nil }
+)
 goto_id(view, "spec:group")
 feed("<F9>")
 eq(
