@@ -358,15 +358,23 @@ if vim.fn.executable("git") == 1 then
     list.norm(vim.api.nvim_buf_get_name(0)),
   }, { editor_win, dir .. "/lua/b.lua" })
 
-  -- live: a write is answered by another status, without a key
+  -- stage and unstage
+  local untracked_b = "git:untracked:" .. dir .. "/lua/b.lua"
+  local staged_b = "git:staged:" .. dir .. "/lua/b.lua"
+  local function names_here()
+    return vim.tbl_map(function(item)
+      return item.action.name
+    end, action.applicable(view))
+  end
+  goto_id(view, untracked_b)
+  ok("an untracked file can be staged", vim.tbl_contains(names_here(), "git.stage"))
+  ok("... and not unstaged", not vim.tbl_contains(names_here(), "git.unstage"))
   view:collapse("git:changes")
-  vim.cmd("silent write")
-  vim.fn.system({ "git", "-C", dir, "add", "lua/b.lua" })
-  vim.cmd("doautocmd BufWritePost")
+  feed("ga")
   vim.wait(5000, function()
-    return not vim.tbl_contains(lines(), "▾ Untracked")
+    return view.tree:node(staged_b) ~= nil
   end)
-  eq("after a write the status is asked again; a group closed by hand stays closed", lines(), {
+  eq("ga stages the file; a group closed by hand stays closed", lines(), {
     "▾ Git",
     "▾ Staged",
     "lua/a.lua",
@@ -374,6 +382,57 @@ if vim.fn.executable("git") == 1 then
     "README.md",
     "▸ Changes",
   })
+  goto_id(view, staged_b)
+  ok("a staged file can be unstaged", vim.tbl_contains(names_here(), "git.unstage"))
+  feed("gu")
+  vim.wait(5000, function()
+    return view.tree:node(untracked_b) ~= nil
+  end)
+  eq("gu takes it out of the index again", {
+    view.tree:node(staged_b),
+    view.tree:node(untracked_b).label,
+  }, { nil, "lua/b.lua" })
+
+  -- diff and blame are gitsuite.nvim's: offered when it is installed
+  view:expand("git:changes")
+  goto_id(view, "git:changes:" .. dir .. "/lua/a.lua")
+  ok("without gitsuite.nvim no diff is offered", not vim.tbl_contains(names_here(), "git.diff"))
+  local called = {}
+  package.loaded["gitsuite.features.diff"] = {
+    head = function()
+      called[#called + 1] = "diff " .. list.norm(vim.api.nvim_buf_get_name(0))
+    end,
+  }
+  package.loaded["gitsuite.features.blame"] = {
+    full = function()
+      called[#called + 1] = "blame " .. list.norm(vim.api.nvim_buf_get_name(0))
+    end,
+  }
+  git._forget_gitsuite()
+  ok(
+    "with it, diff and blame are",
+    vim.tbl_contains(names_here(), "git.diff") and vim.tbl_contains(names_here(), "git.blame")
+  )
+  feed("gd")
+  goto_id(view, "git:changes:" .. dir .. "/lua/a.lua")
+  feed("gB")
+  eq("gd and gB open the file in the editor window and hand over to gitsuite", {
+    called,
+    vim.api.nvim_get_current_win(),
+  }, { { "diff " .. dir .. "/lua/a.lua", "blame " .. dir .. "/lua/a.lua" }, editor_win })
+  package.loaded["gitsuite.features.diff"], package.loaded["gitsuite.features.blame"] = nil, nil
+  git._forget_gitsuite()
+
+  -- live: a write is answered by another status, without a key
+  vim.fn.writefile({ "x", "changed" }, dir .. "/README.md")
+  vim.cmd("doautocmd BufWritePost")
+  vim.wait(5000, function()
+    return view.tree:node("git:changes:" .. dir .. "/README.md") ~= nil
+  end)
+  ok(
+    "after a write the status is asked again",
+    view.tree:node("git:changes:" .. dir .. "/README.md") ~= nil
+  )
   vim.fn.delete(dir .. "/.git", "rf")
 else
   say("  n/a  git: no git on this machine")

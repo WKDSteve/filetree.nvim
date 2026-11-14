@@ -11,6 +11,9 @@
 --- - `subscribe`: ask again after a write, on focus, after a file operation and when files came or went
 ---
 --- A root outside a repository and a failed `git status` show one line that says so.
+---
+--- Actions on a changed file: `ga` stages it, `gu` takes it out of the index (plain `git`, through
+--- `lib.nvim.git`); with gitsuite.nvim installed, `gd` shows its diff against HEAD and `gB` its blame.
 
 local list = require("filetree.native.fs.list")
 
@@ -117,12 +120,132 @@ function M.groups(map, repo, root)
   return out
 end
 
+---The git state of a node of this source.
+---@param node Filetree.Node
+---@return { group: string, code: string }|nil
+local function state_of(node)
+  local data = type(node.data) == "table" and node.data.git or nil
+  return type(data) == "table" and data or nil
+end
+
+---Run one git command per file in the repository it lies in, then have the view read the status again.
+---@param verb string  For the message.
+---@param args string[]  What comes before `-- <path>`.
+---@param nodes Filetree.Node[]
+---@param ctx table
+local function run_on(verb, args, nodes, ctx)
+  local notify = require("filetree.util.notify").create("[filetree.native]")
+  local left = #nodes
+  for _, node in ipairs(nodes) do
+    local repo = M.repo_of(list.parent(node.path) or node.path)
+    local argv = vim.list_extend(vim.list_slice(args), { "--", node.path })
+    require("lib.nvim.git").run_async(argv, { dir = repo }, function(result)
+      if (result.code or 1) ~= 0 then
+        notify.warn(("git %s %s: %s"):format(verb, node.label, vim.trim(result.stderr or "failed")))
+      end
+      left = left - 1
+      if left == 0 and ctx.view and ctx.view.refresh then ctx.view:refresh() end
+    end)
+  end
+end
+
+---@type table|false|nil  gitsuite's modules, false when it is not installed, nil before the first look.
+local gitsuite = nil
+
+---gitsuite.nvim's diff and blame, when it is installed. Looked up once: with a lazy-loading plugin
+---manager the first look loads the plugin.
+---@return { diff: table, blame: table }|nil
+local function suite()
+  if gitsuite == nil then
+    local ok_diff, diff = pcall(require, "gitsuite.features.diff")
+    local ok_blame, blame = pcall(require, "gitsuite.features.blame")
+    gitsuite = (ok_diff and ok_blame) and { diff = diff, blame = blame } or false
+  end
+  return gitsuite or nil
+end
+
+---Forget whether gitsuite.nvim is there (specs).
+function M._forget_gitsuite()
+  gitsuite = nil
+end
+
+---Open the file of a node in an editor window and call `fn` there: gitsuite acts on the current buffer.
+---@param node Filetree.Node
+---@param ctx table
+---@param fn fun()
+local function in_editor(node, ctx, fn)
+  if require("filetree.native").open_node(ctx.view, { path = node.path }, "edit") then fn() end
+end
+
+---@return Filetree.Action[]
+local function actions()
+  return {
+    {
+      name = "git.stage",
+      key = "ga",
+      desc = "Stage the file",
+      needs = { "path" },
+      mutates = true,
+      when = function(node)
+        local state = state_of(node)
+        return state ~= nil and state.group ~= "staged"
+      end,
+      run = function(nodes, ctx)
+        run_on("add", { "add" }, nodes, ctx)
+      end,
+    },
+    {
+      name = "git.unstage",
+      key = "gu",
+      desc = "Take the file out of the index (the change itself stays)",
+      needs = { "path" },
+      mutates = true,
+      when = function(node)
+        local state = state_of(node)
+        return state ~= nil and state.group == "staged"
+      end,
+      run = function(nodes, ctx)
+        run_on("reset", { "reset", "-q" }, nodes, ctx)
+      end,
+    },
+    {
+      name = "git.diff",
+      key = "gd",
+      desc = "Show the diff of the file against HEAD (gitsuite.nvim)",
+      needs = { "file" },
+      when = function(node)
+        return state_of(node) ~= nil and suite() ~= nil
+      end,
+      run = function(nodes, ctx)
+        in_editor(nodes[1], ctx, function()
+          suite().diff.head()
+        end)
+      end,
+    },
+    {
+      name = "git.blame",
+      key = "gB",
+      desc = "Show who changed the lines of the file (gitsuite.nvim)",
+      needs = { "file" },
+      when = function(node)
+        return state_of(node) ~= nil and suite() ~= nil
+      end,
+      run = function(nodes, ctx)
+        in_editor(nodes[1], ctx, function()
+          suite().blame.full()
+        end)
+      end,
+    },
+  }
+end
+
 local subscriptions = 0
 
 ---@return Filetree.Source
 function M.source()
   return {
     name = "git",
+    actions = actions(),
     title = "Git",
     severity = M.SEVERITY,
     available = function()
@@ -169,7 +292,7 @@ function M.source()
           "FiletreeChanged",
           "GitsuiteBranchSwitched",
           "GitsuiteConflictsResolved",
-          "GitsuiteIndexChanged",
+          "GitsuiteStatusChanged",
         },
         desc = "[filetree] The git view asks for the status again",
         callback = function()

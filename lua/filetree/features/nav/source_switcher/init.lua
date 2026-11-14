@@ -1,5 +1,5 @@
 ---@module 'filetree.features.nav.source_switcher'
----@brief Switch between neo-tree's sources: a picker, a cycle, and their names.
+---@brief Switch between the sources of the tree: a picker, a cycle, and their names.
 ---@description
 --- neo-tree renders a filesystem, a buffer list, a git status, a symbol
 --- outline, a diagnostics list and (with neo-tree-tests-source) a test tree
@@ -7,8 +7,12 @@
 --- re-open the tree at the *configured* position, which is not where it is
 --- when you pressed the key in a float. This feature keeps the position.
 ---
---- Three ways in, all neo-tree only -- the other adapters have one tree and
---- nothing to switch:
+--- On the own tree (`adapter = "native"`) the same three ways in drive its
+--- views (`native.views`, the tabs of its view bar): a view is what a source is
+--- there, the window is never touched, so there is no position to keep. The
+--- other foreign adapters have one tree and nothing to switch.
+---
+--- Three ways in:
 ---
 ---   * `pick()` -- a floating list (ui.kit when present, `vim.ui.select`
 ---     otherwise) with each source's icon and name, the current one marked,
@@ -155,13 +159,33 @@ M.ICONS = {
   },
 }
 
+---The views of the own tree under the names the icon tables know.
+---@type table<string, string>
+local NATIVE_NAMES = { files = "filesystem", git = "git_status", symbols = "document_symbols" }
+
 ---@internal
----Normalise a source name to its icon key: `netman.ui.neo-tree` -> `netman`.
+---@return boolean
+local function on_native()
+  return _adapter ~= nil and _adapter.name == "native"
+end
+
+---@internal
+---The views of the own tree, in the order of its bar.
+---@return Filetree.View.Spec[]
+local function native_views()
+  local native = require("filetree.native")
+  local view = native.current()
+  return view and view:views() or native.views()
+end
+
+---@internal
+---Normalise a source name to its icon key: `netman.ui.neo-tree` -> `netman`, the own
+---tree's `git` -> `git_status`.
 ---@param source string
 ---@return string
 local function icon_key(source)
   if source:find("netman", 1, true) then return "netman" end
-  return source
+  return NATIVE_NAMES[source] or source
 end
 
 ---@internal
@@ -293,6 +317,12 @@ end
 ---optional source modules are installed.
 ---@return string[]
 function M.sources()
+  if on_native() then
+    -- the views of the tree are the list: `native.views` decides it, not this feature
+    return vim.tbl_map(function(spec)
+      return spec.name
+    end, native_views())
+  end
   if type(_cfg.sources) == "table" and #_cfg.sources > 0 then return vim.deepcopy(_cfg.sources) end
   local configured = configured_sources()
   if configured then return vim.deepcopy(configured) end
@@ -306,6 +336,10 @@ end
 ---The source shown in the current window, or nil when it is not a tree.
 ---@return string|nil
 function M.current()
+  if on_native() then
+    local view = require("filetree.native").current()
+    return view and view.view_name or nil
+  end
   if vim.bo.filetype ~= "neo-tree" then return nil end
   local s = vim.b.neo_tree_source
   return type(s) == "string" and s or nil
@@ -316,6 +350,12 @@ end
 ---@return boolean ok
 ---@return string|nil why
 function M.loadable(source)
+  if on_native() then
+    for _, spec in ipairs(native_views()) do
+      if spec.name == source then return require("filetree.native.bar").available(spec) end
+    end
+    return false, "no view of this name"
+  end
   if source == "document_symbols" then
     if #vim.lsp.get_clients({ bufnr = 0 }) == 0 then
       return false, "no LSP client attached to the current buffer"
@@ -351,6 +391,15 @@ function M.switch(source, opts)
   if not vim.tbl_contains(M.sources(), source) then
     return false, ("unknown source %q (known: %s)"):format(source, table.concat(M.sources(), ", "))
   end
+  if on_native() then
+    -- a view that cannot load is shown all the same: its one line says why, and it comes alive
+    -- when its source can load (a language server attaches)
+    local view = require("filetree.native").ensure()
+    local shown, why = view:show(source)
+    if not shown then return false, why end
+    if not view:is_open() then view:open(opts.position, false) end
+    return true, nil
+  end
   local ok, why = M.loadable(source)
   if not ok then return false, ("cannot show %s: %s"):format(source, why) end
   local cmd = commands()
@@ -384,6 +433,11 @@ end
 ---@internal
 ---@param step integer  +1 or -1
 local function cycle(step)
+  if on_native() then
+    local view = require("filetree.native").current()
+    if not view or not view:cycle(step) then notify.warn("no other view to switch to") end
+    return
+  end
   local list = M.sources()
   if #list == 0 then
     notify.warn("no sources to switch between")
@@ -430,7 +484,8 @@ function M.pick()
       ok and "" or " [!]"
     )
   end
-  require("filetree.util.select")(items, { prompt = "neo-tree source" }, function(_, idx)
+  local prompt = on_native() and "tree view" or "neo-tree source"
+  require("filetree.util.select")(items, { prompt = prompt }, function(_, idx)
     local name = idx and list[idx] or nil
     if not name then return end
     if name == current then
@@ -453,7 +508,8 @@ function M.info()
   end
   return {
     sources = M.sources(),
-    source_list_from = (type(_cfg.sources) == "table" and #_cfg.sources > 0) and "config"
+    source_list_from = (on_native() and "native.views")
+      or (type(_cfg.sources) == "table" and #_cfg.sources > 0) and "config"
       or (configured_sources() and "neo-tree")
       or "fallback",
     current = M.current(),
@@ -477,9 +533,9 @@ function M.setup(config, adapter)
   _cfg = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS), config or {})
   if not _cfg.enabled then return end
   _adapter = adapter
-  if adapter.name ~= "neotree" then
+  if adapter.name ~= "neotree" and adapter.name ~= "native" then
     -- One tree, nothing to switch. Silent: the feature is on by default and
-    -- a warning on every start for every non-neo-tree user is noise.
+    -- a warning on every start for every user of such a tree is noise.
     return
   end
 

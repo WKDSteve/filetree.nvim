@@ -33,9 +33,9 @@ at runtime with `:lua vim.print(require("filetree.bindings").live())` —
 | `gm` | marks | `keymap_goto` | Go to the Nth marked node in render order (`Ngm`; a too-large count clamps to the last) |
 | `]M` | marks | `keymap_next` | Next marked node, wrapping |
 | `[M` | marks | `keymap_prev` | Previous marked node, wrapping |
-| `"` | source_switcher | `keymap_next` | Next neo-tree source, keeping the tree's position. **neo-tree only** |
-| `!` | source_switcher | `keymap_prev` | Previous neo-tree source, keeping the tree's position. **neo-tree only** |
-| — | source_switcher | `keymap_pick` | **global**, unset by default: pick a neo-tree source from a list |
+| `"` | source_switcher | `keymap_next` | Next source (neo-tree) or view (own tree), keeping the tree's position. **neo-tree and native** |
+| `!` | source_switcher | `keymap_prev` | Previous source (neo-tree) or view (own tree), keeping the tree's position. **neo-tree and native** |
+| — | source_switcher | `keymap_pick` | **global**, unset by default: pick a source (neo-tree) or view (own tree) from a list |
 | `<M-c>` | tree_toggle | `keymap_current` | **global**, opt-in feature: toggle the tree in the current window, revealing the file |
 | `<M-f>` | tree_toggle | `keymap_float` | **global**, opt-in feature: toggle the tree as a float |
 | `<M-l>` | tree_toggle | `keymap_left` | **global**, opt-in feature: toggle the tree on the left |

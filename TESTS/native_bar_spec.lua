@@ -260,6 +260,31 @@ eq("a click on the first tab: the files", view.view_name, "files")
 vim.fn.getmousepos = real_mousepos
 checks.available = true
 
+-- the feature source_switcher drives the views of the own tree
+local switcher = filetree.feature("source_switcher")
+eq("its sources are the views", switcher.sources(), { "files", "checks", "gone" })
+eq("its current one is the view on screen", switcher.current(), "files")
+eq("it says where the list comes from", switcher.info().source_list_from, "native.views")
+eq("switch() shows a view", { switcher.switch("checks"), view.view_name }, { true, "checks" })
+eq("... and refuses a name that is none", { switcher.switch("nope") }, {
+  false,
+  'unknown source "nope" (known: files, checks, gone)',
+})
+checks.available = false
+eq("it knows which view cannot load", { switcher.loadable("gone") }, { false, "not today" })
+checks.available = true
+eq("loadable again", { switcher.loadable("gone") }, { true })
+vim.cmd("Filetree source files")
+eq(":Filetree source <name> shows a view", view.view_name, "files")
+vim.cmd("Filetree source next")
+eq(":Filetree source next cycles", view.view_name, "checks")
+view:show("files")
+eq("the views of the own tree have the icons of their neo-tree twins", {
+  switcher.icon("git", { family = "common" }),
+  switcher.icon("files", { family = "common" }),
+  switcher.icon("symbols", { family = "common" }),
+}, { "[GIT]", "[DIR]", "[SYM]" })
+
 -- narrow
 vim.api.nvim_win_set_width(win, 16)
 vim.cmd("doautocmd WinResized")

@@ -43,7 +43,7 @@ Default: `Filetree`, with `Ft` registered automatically as an alias.
 ### Source (neo-tree)
 | Command | Action |
 |---------|--------|
-| `:Filetree source` | Pick a neo-tree source from a floating list |
+| `:Filetree source` | Pick a source (neo-tree) or view (own tree) from a floating list |
 | `:Filetree source <name>` | Switch to that source, keeping the tree's position |
 | `:Filetree source next` / `prev` | Cycle, wrapping |
 | `:Filetree source debug` | Print the source list, where it came from, and which sources can load |

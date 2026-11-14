@@ -85,13 +85,13 @@ return {
     },
     {
       lhs = '"',
-      desc = "Next neo-tree source, keeping the tree's position",
+      desc = "Next tree source (neo-tree) or view (own tree), keeping the tree's position",
       feature = "source_switcher",
       scope = "tree",
     },
     {
       lhs = "!",
-      desc = "Previous neo-tree source, keeping the tree's position",
+      desc = "Previous tree source (neo-tree) or view (own tree), keeping the tree's position",
       feature = "source_switcher",
       scope = "tree",
     },

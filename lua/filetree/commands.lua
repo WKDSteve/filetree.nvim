@@ -363,7 +363,7 @@ local TREE = {
     end,
   },
 
-  -- ── source_switcher (neo-tree only) ─────────────────────────────────────────
+  -- ── source_switcher (neo-tree's sources, the own tree's views) ──────────────
   -- :Filetree source            pick from a list
   -- :Filetree source <name>     switch to a source by name
   -- :Filetree source next|prev  cycle
