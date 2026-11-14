@@ -26,6 +26,12 @@ local is_subpath = require("lib.nvim.fs.is_subpath")
 local normkey = require("lib.nvim.fs.normkey")
 local M = {}
 
+--- Counts the restores asked for and the ones called off: a restore waits 100 ms for the tree, and
+--- runs only when nothing newer came in between.
+local _restore_gen = 0
+--- The restore on the first attach of the tree has run, or was called off.
+local _auto_restored = false
+
 ---@type FiletreeSessionConfig
 local DEFAULTS = {
   enabled = false,
@@ -223,7 +229,11 @@ function M.restore()
   -- Only restore if adapter matches
   if entry.adapter and entry.adapter ~= _adapter.name then return end
 
+  _restore_gen = _restore_gen + 1
+  local gen = _restore_gen
   vim.defer_fn(function()
+    -- called off (`skip_restore`) or overtaken by a later restore while it waited
+    if gen ~= _restore_gen or not _adapter then return end
     -- Restore tree root -- same invariant as M.save(): a root outside the
     -- project it was saved under is stale or foreign data, not something to
     -- act on. Guards entries written before this check existed, and any
@@ -271,6 +281,15 @@ function M.restore()
       end
     end
   end, 100)
+end
+
+---Somebody else restores the tree (a named session of sessions.nvim): call off a restore of this
+---feature that is still waiting, and do not run the one on the first attach of the tree. Root and open
+---folders from the per-project store would otherwise land on top of what the other side just set.
+---`:FiletreeSessionRestore` and `restore()` keep working: this only stops what nobody asked for.
+function M.skip_restore()
+  _restore_gen = _restore_gen + 1
+  _auto_restored = true
 end
 
 function M.clear()
@@ -323,10 +342,10 @@ function M.setup(config, adapter)
 
   if _cfg.auto_restore then
     -- Restore after the tree is opened, once per setup.
-    local restored = false
+    _auto_restored = false
     tree_attach.on_attach(function()
-      if restored then return end
-      restored = true
+      if _auto_restored then return end
+      _auto_restored = true
       M.restore()
     end)
   end

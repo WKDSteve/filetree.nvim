@@ -111,6 +111,70 @@ check(
   vim.inspect(entry)
 )
 
+-- A restore somebody else took over is called off --------------------------------------------
+do
+  expanded = { "a" }
+  session.save()
+  local restores = 0
+  adapter.expand_paths = function()
+    restores = restores + 1
+    return true
+  end
+  local function settle()
+    vim.wait(250, function()
+      return false
+    end)
+  end
+  session.restore()
+  settle()
+  check("restore: the open folders reach the adapter", restores == 1, tostring(restores))
+  session.restore()
+  session.skip_restore()
+  settle()
+  check(
+    "skip_restore: a restore that was still waiting does not run",
+    restores == 1,
+    tostring(restores)
+  )
+  session.restore()
+  settle()
+  check("skip_restore: a restore asked for afterwards runs", restores == 2, tostring(restores))
+  session.restore()
+  session.restore()
+  settle()
+  check("two restores in a row: only the last one runs", restores == 3, tostring(restores))
+
+  -- the restore on the first attach of the tree
+  local attach = require("filetree.util.tree_attach")
+  local real_on_attach = attach.on_attach
+  local on_attach
+  attach.on_attach = function(fn)
+    on_attach = fn
+  end
+  session.setup(
+    { enabled = true, auto_save = false, auto_restore = true, max_sessions = 10 },
+    adapter
+  )
+  session.skip_restore()
+  on_attach()
+  settle()
+  check(
+    "skip_restore before the tree attaches: no restore on attach",
+    restores == 3,
+    tostring(restores)
+  )
+  session.setup(
+    { enabled = true, auto_save = false, auto_restore = true, max_sessions = 10 },
+    adapter
+  )
+  on_attach()
+  on_attach()
+  settle()
+  check("without it the first attach restores, once", restores == 4, tostring(restores))
+  attach.on_attach = real_on_attach
+  adapter.expand_paths = nil
+end
+
 vim.fn.stdpath = real_stdpath
 vim.fn.delete(data_dir, "rf")
 

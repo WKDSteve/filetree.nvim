@@ -288,6 +288,12 @@ eq(
 -- ── expanded paths, collapse_all ───────────────────────────────────────────────
 adapter.expand_node({ path = dir .. "/chain/only/inner" })
 eq("get_expanded_paths", adapter.get_expanded_paths(), { dir .. "/a", dir .. "/chain/only/inner" })
+eq("get_view names the view on screen", adapter.get_view(), "files")
+eq("show_view of the view on screen answers true", adapter.show_view("files"), true)
+eq("show_view of a name no view has answers false", adapter.show_view("no-such-view"), false)
+eq("... and leaves the view alone", adapter.get_view(), "files")
+---@diagnostic disable-next-line: param-type-mismatch
+eq("show_view of something that is no name answers false", adapter.show_view(nil), false)
 ok("collapse_all with a path to keep", adapter.collapse_all(dir .. "/a/a2.lua"))
 eq(
   "only the chain to it stays open",

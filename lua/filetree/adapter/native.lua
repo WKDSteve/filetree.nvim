@@ -412,6 +412,22 @@ function M.expand_paths(paths)
   return true
 end
 
+---The view on screen: "files", or the name of a view of registered sources.
+---@return string|nil
+function M.get_view()
+  local view = native.current()
+  return view and view.view_name or nil
+end
+
+---Show a view by name (see `native.views`).
+---@param name string
+---@return boolean shown  false for a name no view has, and without a tree.
+function M.show_view(name)
+  local view = native.current()
+  if not view or type(name) ~= "string" then return false end
+  return (view:show(name)) == true
+end
+
 ---@param callback fun(bufnr: integer?)
 ---@return fun() unsubscribe
 function M.on_render(callback)

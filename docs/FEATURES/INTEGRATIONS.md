@@ -104,6 +104,16 @@ Persists and restores tree state (root, expanded nodes, marks) across
 Neovim sessions, so reopening a project brings the tree back roughly
 where you left it rather than starting fresh every time.
 
+When another plugin restores the tree itself (a named session of
+sessions.nvim), it calls `require("filetree").feature("session").skip_restore()`
+before it does: a restore of this feature that is still waiting is called off,
+and the one on the first attach of the tree does not run. Without that, root
+and open folders of the per-project store land on top of what the other side
+just set. `:FiletreeSessionRestore` keeps working. What to save and set is on
+the adapter: `get_root_path` / `set_root`, `get_expanded_paths` /
+`expand_paths`, and on the own tree `get_view` / `show_view(name)` for the view
+on screen.
+
 - **Module:** `lua/filetree/features/org/session/`
 
 ## Open In File Manager
