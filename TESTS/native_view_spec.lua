@@ -698,6 +698,28 @@ do
   ok("without the limit everything is back", #lines() > 5)
 end
 
+-- ── a Nerd Font declared after the lines were written ──────────────────────────
+do
+  if not adapter.is_open() then adapter.toggle_at("left") end
+  local file_line = adapter.get_node_line(dir .. "/c.txt")
+  local plain = lines()[file_line]
+  vim.g.have_nerd_font = true
+  adapter.redraw()
+  local with_icon = lines()[adapter.get_node_line(dir .. "/c.txt")]
+  ok(
+    "a line written without icons is written again once a Nerd Font is declared: "
+      .. tostring(with_icon),
+    with_icon ~= plain and #with_icon > #plain
+  )
+  vim.g.have_nerd_font = false
+  adapter.redraw()
+  eq(
+    "... and without them again when it is taken back",
+    lines()[adapter.get_node_line(dir .. "/c.txt")],
+    plain
+  )
+end
+
 -- ── opening a tree whose folders are cached ────────────────────────────────────
 do
   adapter.close()

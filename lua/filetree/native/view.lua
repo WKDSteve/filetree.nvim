@@ -603,7 +603,10 @@ function View:_texts(from, count)
     end
     return out
   end
-  local icons = self._opts.icons ~= false and 1 or 0
+  -- asked once per call, not per row: a Nerd Font declared after the first lines were written (a
+  -- config that sets `vim.g.have_nerd_font` late) makes every remembered text another one
+  local nerd = require("lib.nvim.ui.nerd_font").available()
+  local icons = (self._opts.icons ~= false and nerd) and 1 or 0
   for i = from, from + count - 1 do
     local row = tree:row(i)
     if not row then
