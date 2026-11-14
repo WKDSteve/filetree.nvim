@@ -7,7 +7,8 @@
 ---
 ---   1. A live `uv.fs_rename` probe, so "is it locked *now*" is a fact.
 ---   2. The processes holding the file, via the Windows Restart Manager.
----   3. Neo-tree's own `fs_event` watchers covering the file's folder.
+---   3. The `fs_event` watchers of this Neovim covering the file's folder: the own tree's
+---      (`adapter = "native"`, read through `filetree.fs_state()`) and neo-tree's.
 ---
 --- (1) and (2) live in `lib.nvim.cross.fs.lock`. What this module adds is (3),
 --- and that it works on *any* path with no buffer needed: it tells a foreign
@@ -103,6 +104,89 @@ local function watcher_lines(path)
   return lines
 end
 
+---The own tree's watcher handles that hold the folder `path` lies in: a handle on that folder itself,
+---or, where one handle watches a whole tree (Windows, macOS), a handle on a folder above it.
+---@param path string
+---@return { status: "inactive"|"off"|"ok", total?: integer, recursive?: boolean, entries?: table[], released?: table[] }
+local function own_tree_data(path)
+  local ok, state = pcall(function()
+    return require("filetree").fs_state()
+  end)
+  if not ok or type(state) ~= "table" then return { status = "inactive" } end
+  -- handles of a tree opened before the backend changed are still handles of this Neovim
+  if not state.active and #state.watchers == 0 and #state.released == 0 then
+    return { status = "inactive" }
+  end
+  if not state.watch and #state.watchers == 0 then return { status = "off" } end
+
+  local dir = norm(fn.fnamemodify(path, ":p:h"))
+  ---@param watched string
+  ---@return boolean
+  local function covers(watched)
+    local w = norm(watched)
+    return w == dir or (state.recursive and dir:sub(1, #w + 1) == w .. "/")
+  end
+  local entries, released = {}, {}
+  for _, watcher in ipairs(state.watchers) do
+    if covers(watcher.dir) then
+      entries[#entries + 1] = {
+        folder = watcher.dir,
+        references = watcher.refs,
+        same_folder = norm(watcher.dir) == dir,
+        error = watcher.error or vim.NIL,
+      }
+    end
+  end
+  for _, watcher in ipairs(state.released) do
+    if covers(watcher.dir) then
+      released[#released + 1] = { folder = watcher.dir, references = watcher.refs }
+    end
+  end
+  return {
+    status = "ok",
+    total = #state.watchers,
+    recursive = state.recursive,
+    entries = entries,
+    released = released,
+  }
+end
+
+---Human-readable counterpart of `own_tree_data`.
+---@param path string
+---@return string[]
+local function own_tree_lines(path)
+  local data = own_tree_data(path)
+  if data.status == "inactive" then
+    return { "  the own tree is not the active backend and holds no handle" }
+  end
+  if data.status == "off" then return { "  native.watch = false: the own tree holds no handle" } end
+  local lines = {
+    ("  %d handle(s) open (%s), %d holding this file's folder"):format(
+      data.total,
+      data.recursive and "one per root, watching everything below it" or "one per folder read",
+      #data.entries
+    ),
+  }
+  for _, e in ipairs(data.entries) do
+    lines[#lines + 1] = ("  %s: %s (references=%d)"):format(
+      e.same_folder and "WATCHES THIS FOLDER" or "WATCHES A FOLDER ABOVE",
+      e.folder,
+      e.references
+    )
+  end
+  for _, e in ipairs(data.released) do
+    lines[#lines + 1] = ("  released for a running operation: %s (references=%d)"):format(
+      e.folder,
+      e.references
+    )
+  end
+  if #data.entries > 0 then
+    lines[#lines + 1] =
+      "  a file operation of filetree.nvim closes these first; an operation from outside does not"
+  end
+  return lines
+end
+
 ---Diagnose `path` (default: the current buffer's file).
 ---@param path? string
 ---@param as_json? boolean
@@ -133,6 +217,7 @@ function M.run(path, as_json)
         or { open = false },
       probe = { renameable = probe_ok, error = probe_ok and vim.NIL or probe_err },
       watchers = watcher_data(path),
+      own_tree = own_tree_data(path),
     }
     if not lock.supported() then
       report.holders = { supported = false }
@@ -159,8 +244,15 @@ function M.run(path, as_json)
         )
     )
     lines[#lines + 1] = ""
-    lines[#lines + 1] = "neo-tree fs_event watchers:"
-    vim.list_extend(lines, watcher_lines(path))
+    lines[#lines + 1] = "own tree fs_event watchers:"
+    vim.list_extend(lines, own_tree_lines(path))
+    -- neo-tree's section only where neo-tree can be the holder: on the own tree with neo-tree not
+    -- loaded it said "not loaded" and nothing else
+    if package.loaded["neo-tree"] or own_tree_data(path).status == "inactive" then
+      lines[#lines + 1] = ""
+      lines[#lines + 1] = "neo-tree fs_event watchers:"
+      vim.list_extend(lines, watcher_lines(path))
+    end
 
     local text = table.concat(lines, "\n")
     notify.info(text)

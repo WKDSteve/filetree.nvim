@@ -711,9 +711,13 @@ together.
 Diagnoses a Windows file lock (`EBUSY`/`EPERM`/`EACCES`) on any path, right
 after a file operation failed. It measures instead of guessing: a live
 `uv.fs_rename` probe, the processes holding the file (Windows Restart Manager,
-via `lib.nvim.cross.fs.lock`), and neo-tree's own `fs_event` watchers covering
-the file's folder — the local suspect the Restart Manager would only ever
-report as "nvim". Works without a buffer; an open buffer is never the cause.
+via `lib.nvim.cross.fs.lock`), and the `fs_event` watchers of this Neovim
+covering the file's folder — the local suspect the Restart Manager would only
+ever report as "nvim". With `adapter = "native"` those are the own tree's
+handles (on the folder itself, or on a root above it where one handle watches
+a whole tree; read through `filetree.fs_state()`), otherwise neo-tree's. Works
+without a buffer; an open buffer is never the cause. `--json` carries them as
+`own_tree` and `watchers`.
 
 - **Module:** [`features/infra/who_locks/init.lua`](../../lua/filetree/features/infra/who_locks/init.lua) (`M.run`)
 - **Config:** none — a plain command, loaded on demand

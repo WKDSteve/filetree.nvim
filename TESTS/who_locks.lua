@@ -122,6 +122,147 @@ _G.print = real_print
 local ok3, d3 = pcall(vim.json.decode, printed[#printed] or "")
 check("json: not_loaded reported", ok3 and d3.watchers.status == "not_loaded")
 
+-- ── the own tree's watchers ───────────────────────────────────────────────────
+---Run who_locks on `file` and return what it printed last: the JSON object decoded, or the text.
+---@param as_json boolean
+local function ran(as_json)
+  printed = {}
+  _G.print = function(...)
+    printed[#printed + 1] = table.concat(vim.tbl_map(tostring, { ... }), " ")
+  end
+  local real_notify = vim.notify
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.notify = function() end
+  who.run(file, as_json)
+  vim.notify = real_notify
+  _G.print = real_print
+  local last = printed[#printed] or ""
+  if not as_json then return last end
+  local decodes, value = pcall(vim.json.decode, last)
+  return decodes and value or {}
+end
+---The state `filetree.fs_state()` answers, for the length of `fn`.
+---@param state table
+---@param fn fun()
+local function with_state(state, fn)
+  local real = package.loaded["filetree"]
+  package.loaded["filetree"] = {
+    fs_state = function()
+      return vim.tbl_extend("keep", state, {
+        active = true,
+        watch = true,
+        recursive = false,
+        watchers = {},
+        released = {},
+        quarantined = {},
+        changed = {},
+        reading = {},
+        roots = {},
+        stats = { events = 0, reports = 0, quarantined = 0 },
+      })
+    end,
+  }
+  local okay, err = pcall(fn)
+  package.loaded["filetree"] = real
+  if not okay then error(err, 0) end
+end
+local slashed = (tmp:gsub("\\", "/"))
+local parent = vim.fn.fnamemodify(slashed, ":h")
+
+check("own tree: not the backend, no handle -> inactive", ran(true).own_tree.status == "inactive")
+do
+  local text = ran(false)
+  check(
+    "text: says that the own tree holds nothing",
+    text:find("not the active backend", 1, true) ~= nil
+  )
+  check(
+    "text: neo-tree's section stays while the own tree is not the backend",
+    text:find("neo-tree fs_event watchers:", 1, true) ~= nil
+  )
+end
+
+with_state({ watchers = { { dir = slashed, refs = 2 }, { dir = parent, refs = 1 } } }, function()
+  local data = ran(true).own_tree
+  check("own tree: status ok, both handles counted", data.status == "ok" and data.total == 2)
+  check(
+    "own tree: one handle per folder -> only the folder itself holds it",
+    #data.entries == 1 and data.entries[1].same_folder == true
+  )
+  check("own tree: with its references", data.entries[1].references == 2)
+  local text = ran(false)
+  check(
+    "text: the own tree's section names the folder",
+    text:find("WATCHES THIS FOLDER: " .. slashed, 1, true) ~= nil
+  )
+  check(
+    "text: no neo-tree section on the own tree without neo-tree",
+    text:find("neo-tree fs_event", 1, true) == nil
+  )
+end)
+
+with_state({ recursive = true, watchers = { { dir = parent, refs = 1 } } }, function()
+  local data = ran(true).own_tree
+  check(
+    "own tree: a recursive handle above holds the folder",
+    #data.entries == 1 and data.entries[1].same_folder == false
+  )
+  check(
+    "text: ... and is named as a folder above",
+    ran(false):find("WATCHES A FOLDER ABOVE: " .. parent, 1, true) ~= nil
+  )
+end)
+
+with_state(
+  {
+    recursive = true,
+    watchers = { { dir = slashed .. "x", refs = 1 }, { dir = slashed .. "/sub", refs = 1 } },
+  },
+  function()
+    check(
+      "own tree: a sibling with the same prefix and a folder below hold nothing",
+      #ran(true).own_tree.entries == 0
+    )
+  end
+)
+
+with_state({ watchers = { { dir = slashed:upper(), refs = 1 } } }, function()
+  check(
+    "own tree: the comparison ignores case, as the neo-tree one does",
+    #ran(true).own_tree.entries == 1
+  )
+end)
+
+with_state({ released = { { dir = slashed, refs = 1 } } }, function()
+  local data = ran(true).own_tree
+  check(
+    "own tree: a handle released for a running operation is listed apart",
+    #data.entries == 0 and #data.released == 1
+  )
+  check("text: ... and named", ran(false):find("released for a running operation", 1, true) ~= nil)
+end)
+
+with_state({ watch = false }, function()
+  check("own tree: native.watch = false -> off", ran(true).own_tree.status == "off")
+  check("text: ... says so", ran(false):find("native.watch = false", 1, true) ~= nil)
+end)
+
+with_state({ active = false, watchers = { { dir = slashed, refs = 1 } } }, function()
+  check(
+    "own tree: a handle left from before the backend changed is still reported",
+    #ran(true).own_tree.entries == 1
+  )
+end)
+
+package.loaded["neo-tree"] = {}
+with_state({ watchers = { { dir = slashed, refs = 1 } } }, function()
+  check(
+    "text: with neo-tree loaded both sections are there",
+    ran(false):find("neo-tree fs_event watchers:", 1, true) ~= nil
+  )
+end)
+package.loaded["neo-tree"] = nil
+
 vim.fn.delete(tmp, "rf")
 real_print(("\n%d passed, %d failed"):format(passed, failed))
 vim.cmd(failed == 0 and "qa!" or "cq!")
