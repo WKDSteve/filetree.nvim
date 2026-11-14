@@ -213,18 +213,15 @@ with_state({ recursive = true, watchers = { { dir = parent, refs = 1 } } }, func
   )
 end)
 
-with_state(
-  {
-    recursive = true,
-    watchers = { { dir = slashed .. "x", refs = 1 }, { dir = slashed .. "/sub", refs = 1 } },
-  },
-  function()
-    check(
-      "own tree: a sibling with the same prefix and a folder below hold nothing",
-      #ran(true).own_tree.entries == 0
-    )
-  end
-)
+with_state({
+  recursive = true,
+  watchers = { { dir = slashed .. "x", refs = 1 }, { dir = slashed .. "/sub", refs = 1 } },
+}, function()
+  check(
+    "own tree: a sibling with the same prefix and a folder below hold nothing",
+    #ran(true).own_tree.entries == 0
+  )
+end)
 
 with_state({ watchers = { { dir = slashed:upper(), refs = 1 } } }, function()
   check(
