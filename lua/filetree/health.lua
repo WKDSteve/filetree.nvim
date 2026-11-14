@@ -14,7 +14,7 @@ local function note(msg)
   vim.health.info("ℹ️ INFO " .. msg)
 end
 
----The own tree (adapter "native"): its watcher handles and how a search lists files.
+---The own tree (adapter "native"): its watcher handles, how a search lists files, and its views.
 ---@private
 function M._native_lines()
   local watch = require("filetree.native.fs.watch")
@@ -39,6 +39,18 @@ function M._native_lines()
     note("native: search lists files with a Lua walk (install fd or ripgrep for faster searches)")
   else
     vim.health.ok(("native: search lists files with %s"):format(exe or tier))
+  end
+  -- the views of the tree window, and which of them has nothing to show right now and why
+  local bar = require("filetree.native.bar")
+  local names, cannot = {}, {}
+  for _, spec in ipairs(require("filetree.native").views()) do
+    names[#names + 1] = spec.name
+    local available, reason = bar.available(spec)
+    if not available then cannot[#cannot + 1] = ("%s (%s)"):format(spec.name, reason or "?") end
+  end
+  vim.health.ok(("native: %d view(s): %s"):format(#names, table.concat(names, ", ")))
+  if #cannot > 0 then
+    vim.health.info("native: cannot load right now: " .. table.concat(cannot, "; "))
   end
 end
 

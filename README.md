@@ -31,7 +31,9 @@ of it.
 
 **And a tree of its own.** `adapter = "native"` is filetree.nvim's own tree, with
 no tree plugin behind it: lazy, one read per folder shared by every tab, the
-cursor bound to its entry. It is new and chosen by name; see
+cursor bound to its entry. Its window shows more than files: open buffers, git
+changes, document symbols and diagnostics are views of it, one key or one click
+apart. It is new and chosen by name; see
 [the native adapter](docs/FEATURES/BACKENDS.md#native-adapter-the-own-tree).
 
 **Screenshots, readable.** `<CR>` on an image opens an

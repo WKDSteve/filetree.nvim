@@ -318,6 +318,87 @@ vim.api.nvim_set_current_win(view.win)
 feed('"')
 eq("... the keys still switch", view.view_name, "checks")
 
+-- ── :checkhealth names the views ───────────────────────────────────────────────
+checks.available = false
+local health_lines = {}
+local real_health = vim.health
+---@diagnostic disable-next-line: duplicate-set-field
+vim.health = setmetatable({
+  ok = function(msg)
+    health_lines[#health_lines + 1] = "ok " .. msg
+  end,
+  info = function(msg)
+    health_lines[#health_lines + 1] = "info " .. msg
+  end,
+}, { __index = real_health })
+native.setup({ watch = false, views = { { "files" }, { "checks" }, { "gone" } } })
+require("filetree.health")._native_lines()
+vim.health = real_health
+checks.available = true
+eq(
+  "the health check lists the views, and the one that cannot load with its reason",
+  vim.tbl_filter(function(entry)
+    return entry:find("view", 1, true) ~= nil or entry:find("cannot load", 1, true) ~= nil
+  end, health_lines),
+  {
+    "ok native: 3 view(s): files, checks, gone",
+    "info native: cannot load right now: gone (not today)",
+  }
+)
+
+-- ── a real click ───────────────────────────────────────────────────────────────
+-- Without a UI the editor draws no winbar and knows no click regions (the clicks above call the
+-- handler). A child editor with a UI attached is clicked on for real: this is what proves the
+-- `%N@v:lua...@` items of the bar.
+local child = vim.fn.jobstart(
+  { vim.v.progpath, "--embed", "--clean", "-u", "NONE", "-n", "-i", "NONE" },
+  { rpc = true }
+)
+local function in_child(code)
+  return vim.rpcrequest(child, "nvim_exec_lua", code, {})
+end
+vim.rpcrequest(child, "nvim_ui_attach", 100, 30, { rgb = true })
+vim.rpcrequest(child, "nvim_set_option_value", "runtimepath", vim.o.runtimepath, {})
+ok(
+  "a child editor with a UI shows a tree with two views",
+  in_child(([[
+    vim.g.have_nerd_font = false
+    vim.o.mouse = "a"
+    vim.cmd("cd " .. vim.fn.fnameescape(%q))
+    vim.cmd("edit README.md")
+    require("filetree").setup({
+      adapter = "native",
+      deps_popup = false,
+      native = { watch = false, width = 40, views = { { "files" }, { "buffers" } } },
+      features = {
+        session = { enabled = false },
+        auto_reveal = { enabled = false },
+        close_on_open = { enabled = false },
+      },
+    })
+    _G.view = require("filetree.native").ensure(%q)
+    return _G.view:open("left", true)
+  ]]):format(dir, dir))
+)
+---Click on a column of the bar of the child's tree window and answer the view it shows then.
+local function click(col, want)
+  local pos = in_child("vim.cmd('redraw'); return vim.fn.win_screenpos(_G.view.win)")
+  for _, action in ipairs({ "press", "release" }) do
+    vim.rpcrequest(child, "nvim_input_mouse", "left", action, "", 0, pos[1] - 1, pos[2] - 1 + col)
+  end
+  vim.wait(3000, function()
+    return in_child("return _G.view.view_name") == want
+  end, 30)
+  return in_child("return _G.view.view_name")
+end
+vim.wait(3000, function()
+  return in_child("return vim.wo[_G.view.win].winbar ~= ''")
+end, 30)
+-- the bar reads " Files  Buffers ": column 9 lies in the second tab, column 2 in the first
+eq("a mouse click on the second tab shows that view", click(9, "buffers"), "buffers")
+eq("... and one on the first tab the files again", click(2, "files"), "files")
+vim.fn.jobstop(child)
+
 eq("nothing at warning level in the whole run", loud(), {})
 remove_checks()
 remove_gone()
