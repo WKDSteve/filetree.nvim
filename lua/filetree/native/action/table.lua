@@ -49,12 +49,40 @@ local ORIGIN_RANK = { source = 0, feature = 1, plugin = 2, builtin = 3 }
 ---@class Filetree.Action.Table
 ---@field private _by_name table<string, Filetree.Action>
 ---@field private _seq integer
+---@field private _canon fun(lhs: string): string
 local Table = {}
 Table.__index = Table
 
+---@param lhs string
+---@return string
+local function same(lhs)
+  return lhs
+end
+
+---@param canon? fun(lhs: string): string  One spelling per key (`<C-f>` and `<C-F>` are one key);
+---  keys are compared through it. Default: as written.
 ---@return Filetree.Action.Table
-function M.new()
-  return setmetatable({ _by_name = {}, _seq = 0 }, Table)
+function M.new(canon)
+  return setmetatable({ _by_name = {}, _seq = 0, _canon = canon or same }, Table)
+end
+
+---Whether `action` claims the key `lhs`, whichever way either is spelled.
+---@param action Filetree.Action
+---@param lhs string
+---@return boolean
+function Table:claims(action, lhs)
+  local want = self._canon(lhs)
+  for _, key in ipairs(M.keys_of(action)) do
+    if self._canon(key) == want then return true end
+  end
+  return false
+end
+
+---The one spelling of a key this table compares by.
+---@param lhs string
+---@return string
+function Table:canon(lhs)
+  return self._canon(lhs)
 end
 
 ---The left-hand sides of an action, as a list.
@@ -133,14 +161,15 @@ function Table:list()
   return out
 end
 
----Every left-hand side some action claims, sorted.
+---Every key some action claims, once each (in the spelling of the action of highest rank), sorted.
 ---@return string[]
 function Table:keys()
   local seen, out = {}, {}
-  for _, entry in pairs(self._by_name) do
+  for _, entry in ipairs(self:list()) do
     for _, lhs in ipairs(M.keys_of(entry)) do
-      if not seen[lhs] then
-        seen[lhs] = true
+      local id = self._canon(lhs)
+      if not seen[id] then
+        seen[id] = true
         out[#out + 1] = lhs
       end
     end
@@ -207,7 +236,7 @@ end
 function Table:resolve(lhs, node, ctx, skip)
   local first_reason = nil
   for _, entry in ipairs(self:list()) do
-    if vim.tbl_contains(M.keys_of(entry), lhs) and not (skip and skip[entry.name]) then
+    if self:claims(entry, lhs) and not (skip and skip[entry.name]) then
       local ok, reason = M.check(entry, node, ctx)
       if ok then return entry, nil end
       first_reason = first_reason or reason

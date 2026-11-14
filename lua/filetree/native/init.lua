@@ -98,6 +98,12 @@ function M.hijack_netrw(on)
       end)
     end,
   })
+  -- `nvim <dir>` with filetree set up later (a lazy-loading plugin manager): that BufEnter is over,
+  -- the folder buffer is already on screen
+  vim.schedule(function()
+    local adapter = require("filetree.adapter").get()
+    if adapter and adapter.name == "native" then M.show_dir_buffer(api.nvim_get_current_buf()) end
+  end)
 end
 
 ---@return Filetree.Native.Opts

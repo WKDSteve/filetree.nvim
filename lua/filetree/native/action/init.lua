@@ -185,12 +185,16 @@ function M.builtins()
       key = "sw",
       desc = "Open the file in a window you pick",
       needs = { "file" },
-      run = function(nodes, ctx)
+      run = function(_, ctx)
         local view = view_of(ctx)
+        -- the file under the cursor, also with nodes marked: one window is picked for one file
+        local row = view:current()
+        local path = row and row.node.path
+        if not path then return end
         local ok, picker = pcall(require, "ui.windowpicker")
         local win = ok and picker.pick() or nil
         if ok and not win then return end -- the pick was cancelled
-        require("filetree.native").open_path(view, nodes[1].path, "edit", win)
+        require("filetree.native").open_path(view, path, "edit", win)
       end,
     },
     {
@@ -343,7 +347,9 @@ function M.applicable(view)
     local reached = nil
     for _, lhs in ipairs(tbl.keys_of(action)) do
       -- a key the user or another plugin mapped over reaches none of the table's actions
-      if not (view._foreign and view._foreign[lhs]) and t:reaches(lhs, action, node, ctx) then
+      if
+        not (view._foreign and view._foreign[t:canon(lhs)]) and t:reaches(lhs, action, node, ctx)
+      then
         reached = lhs
         break
       end
@@ -363,7 +369,7 @@ local function bind(view, buf, lhs)
   local t = view.actions --[[@as Filetree.Action.Table]]
   local first = nil
   for _, action in ipairs(t:list()) do
-    if vim.tbl_contains(tbl.keys_of(action), lhs) then
+    if t:claims(action, lhs) then
       first = action
       break
     end
@@ -419,19 +425,25 @@ function M.sync(view)
   -- a mapping that is filetree's is a feature's: it becomes an entry of the table. Anything else that
   -- is not ours (the user's `adapter_keymaps`, another plugin) is foreign: that key stays as it is.
   local foreign = {}
+  ---@type table<string, string>  canonical key -> the lhs of the dispatcher mapping on it
+  local dispatched = {}
   for _, m in ipairs(api.nvim_buf_get_keymap(buf, "n")) do
     local desc = m.desc or ""
     local lhs = lhs_of(m)
+    local id = t:canon(lhs)
     if desc:sub(1, #FEATURE_PREFIX) == FEATURE_PREFIX then
-      maps[lhs] = m
-    elseif desc:sub(1, #M.PREFIX) ~= M.PREFIX then
-      foreign[lhs] = true
-      maps[lhs] = nil
+      maps[id] = m
+    elseif desc:sub(1, #M.PREFIX) == M.PREFIX then
+      dispatched[id] = lhs
+    else
+      foreign[id] = true
+      maps[id] = nil
     end
   end
   view._foreign = foreign
   t:remove_origin("feature")
-  for lhs, m in pairs(maps) do
+  for _, m in pairs(maps) do
+    local lhs = lhs_of(m)
     t:add({
       name = "feature:" .. lhs,
       key = lhs,
@@ -444,14 +456,27 @@ function M.sync(view)
   -- every key of another origin goes through the dispatcher; a key only a feature claims keeps its
   -- own mapping (nothing to decide)
   for _, lhs in ipairs(t:keys()) do
+    local id = t:canon(lhs)
     local others = false
     for _, action in ipairs(t:list()) do
-      if action.origin ~= "feature" and vim.tbl_contains(tbl.keys_of(action), lhs) then
+      if action.origin ~= "feature" and t:claims(action, lhs) then
         others = true
         break
       end
     end
-    if others and not foreign[lhs] then bind(view, buf, lhs) end
+    if others and not foreign[id] then
+      bind(view, buf, lhs)
+      dispatched[id] = nil
+    end
+  end
+  -- a dispatcher left on a key no other action claims any more (an action was unregistered): the
+  -- feature's own mapping comes back, or the key is free again
+  for id, lhs in pairs(dispatched) do
+    pcall(vim.keymap.del, "n", lhs, { buffer = buf })
+    local m = maps[id]
+    if m then api.nvim_buf_call(buf, function()
+      vim.fn.mapset("n", false, m)
+    end) end
   end
 end
 
@@ -460,7 +485,7 @@ end
 ---@param view Filetree.View
 ---@param buf integer
 function M.attach(view, buf)
-  local t = tbl.new()
+  local t = tbl.new(require("filetree.util.key_conflicts").canon)
   view.actions = t
   for _, action in ipairs(M.builtins()) do
     t:add(action, "builtin")
@@ -473,6 +498,8 @@ function M.attach(view, buf)
 end
 
 local listening = false
+---@type fun()|nil
+local unsubscribe = nil
 
 ---Follow the registry and the features' attach, once for every view.
 function M.listen()
@@ -504,7 +531,7 @@ function M.listen()
   })
   local ok, registry = pcall(require, "lib.nvim.tree.registry")
   if ok then
-    registry.subscribe(function(ev)
+    unsubscribe = registry.subscribe(function(ev)
       if ev.kind ~= "action" and ev.kind ~= "source" then return end
       vim.schedule(function()
         for _, view in ipairs(require("filetree.native").all()) do
@@ -520,6 +547,10 @@ end
 function M.reset()
   listening = false
   pcall(api.nvim_del_augroup_by_name, "filetree_native_actions")
+  if unsubscribe then
+    unsubscribe()
+    unsubscribe = nil
+  end
 end
 
 return M

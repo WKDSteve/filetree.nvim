@@ -404,6 +404,64 @@ eq(
 vim.cmd("Filetree action no.such")
 eq("... an unknown name too", last_note(), '[filetree.native] no action "no.such" in this tree')
 
+-- ── review of a9c4415 ──────────────────────────────────────────────────────────
+-- one key, two spellings: a feature's <C-k> (Neovim reports it as <C-K>) and a plugin's <c-k>
+local fake_runs = 0
+vim.keymap.set("n", "<C-k>", function()
+  fake_runs = fake_runs + 1
+end, { buffer = view.buf, desc = "filetree: fake ctrl-k" })
+local ctrl_runs = 0
+local remove_ctrl = registry.action({
+  name = "spec.ctrl",
+  key = "<c-k>",
+  desc = "Ctrl-k on folders",
+  needs = { "dir" },
+  priority = 10, -- above the feature on the same key, where it applies
+  run = function()
+    ctrl_runs = ctrl_runs + 1
+  end,
+})
+settle(100)
+goto_path(dir .. "/lua")
+feed("<C-k>")
+goto_path(dir .. "/lua/a.lua")
+feed("<C-k>")
+eq(
+  "<c-k> and <C-K> are one key: the plugin's on a folder, the feature's on a file",
+  { ctrl_runs, fake_runs },
+  { 1, 1 }
+)
+remove_ctrl()
+settle(100)
+eq(
+  "an action that goes gives the key back to the feature",
+  vim.fn.maparg("<C-k>", "n", false, true).desc,
+  "filetree: fake ctrl-k"
+)
+feed("<C-k>")
+eq("... which runs it again", fake_runs, 2)
+
+-- sw opens the file under the cursor, also with other nodes marked
+marks.toggle(dir .. "/docs/guide.md")
+goto_path(dir .. "/lua/a.lua")
+vim.api.nvim_win_call(editor_win, function()
+  vim.cmd("enew")
+end)
+package.loaded["ui.windowpicker"] = {
+  pick = function()
+    return editor_win
+  end,
+}
+action.run(view, "open_picked")
+package.loaded["ui.windowpicker"] = nil
+eq(
+  "sw with a marked node opens the file under the cursor",
+  list.norm(vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(editor_win))),
+  dir .. "/lua/a.lua"
+)
+marks.clear_all()
+settle()
+
 -- ── a folder opened as a buffer shows the tree (netrw replacement) ─────────────
 adapter.close()
 vim.api.nvim_set_current_win(editor_win)
@@ -419,6 +477,45 @@ eq(
 eq("... rooted at the folder", view.root, dir .. "/docs")
 eq("... in the place of the window", view.position, "current")
 ok("... and the folder buffer is gone", vim.fn.bufexists(dir .. "/docs") == 0)
+
+-- `nvim <dir>` with filetree set up after the folder buffer was entered (lazy loading)
+adapter.close()
+vim.api.nvim_set_current_win(editor_win)
+-- what closing scheduled runs first: the empty buffer it left is reused by the :edit below, and a
+-- check still queued for it would find the folder there (not what this case is about)
+settle()
+vim.cmd("noautocmd edit " .. vim.fn.fnameescape(dir .. "/lua"))
+require("filetree.native").hijack_netrw(true)
+-- without its BufEnter: only the look at what is already on screen can show the tree now
+vim.api.nvim_clear_autocmds({ group = "filetree_native_netrw" })
+vim.wait(1000, function()
+  return vim.bo[vim.api.nvim_win_get_buf(editor_win)].filetype == "filetree"
+end, 20)
+eq(
+  "a folder buffer already on screen when the replacement starts shows the tree",
+  { vim.bo[vim.api.nvim_win_get_buf(editor_win)].filetype, view.root },
+  { "filetree", dir .. "/lua" }
+)
+
+-- the registry is followed once, however often the tree was reset
+local native = require("filetree.native")
+for _ = 1, 2 do
+  native.reset()
+  adapter.toggle_at("left", { dir = dir })
+  settle()
+end
+local syncs = 0
+local real_sync = action.sync
+---@diagnostic disable-next-line: duplicate-set-field
+action.sync = function(v)
+  syncs = syncs + 1
+  return real_sync(v)
+end
+local remove_late = registry.action({ name = "spec.late", key = "gL", run = function() end })
+settle(100)
+action.sync = real_sync
+eq("a registered action is read once per view after two resets", syncs, 1)
+remove_late()
 
 eq("nothing at warning level in the whole run", loud(), {})
 remove_count()
