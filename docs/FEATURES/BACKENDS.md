@@ -380,15 +380,26 @@ On the development machine (Windows 11, NVMe), by `TESTS/native_view_spec.lua`:
 | --- | --- |
 | open the tree again (its folders are cached) | about 2 ms |
 | open a new tree (read the root, build, buffer, window) | about 15 ms |
-| open a folder with 10 000 entries (read, sort, model, 10 000 buffer lines) | 50 to 80 ms |
-| close and open that folder again from the model | about 30 ms |
+| open a folder with 10 000 entries (read, sort, model, 10 000 buffer lines) | 85 to 110 ms (measured on 2026-11-14, the machine not idle) |
+| close and open that folder again from the model | about 11 ms |
 | draw the highlights of 50 visible lines | under 1 ms |
 | a status change of one node with 10 000 lines in the tree (`native_perf_spec.lua`) | about 0.05 ms, no buffer write |
-| five new files a second in a folder of 2000 entries, 6 s | one read of it at a time, each answer (merge, write) 20 to 35 ms |
+| five new files a second in a folder of 2000 entries, 6 s | one read of it at a time; each answer in two slices: sorting and nodes about 2.5 ms, merge and lines about 3.5 ms |
+| one new file in a folder of 10 000 entries | two slices of 11 to 15 ms each |
 
-A folder is read and written in one piece, not in slices: the 10 000 entries
-above block once for those 50 to 80 ms. Measured by hand for the decision: 50 000
-entries take about 250 ms without a limit and about 135 ms with the default
+**A change in a large folder is taken over in slices.** A folder of 1000
+entries or more that is read again answers in three ticks of the editor: the
+read ends in one, sorting and making nodes takes the next, the merge and the
+lines a third. A change that arrives while they are on their way waits for
+them and costs one more read. Two things keep the last slice small: the lines
+that did not change are not written again (the tree reports the whole folder
+as changed; only the rows between the first and the last that differ reach the
+buffer), and the text of an entry's line is remembered while the row looks the
+same. Before that, one new file in 2000 entries cost 27 to 31 ms in one piece.
+
+Opening a folder for the first time is still one piece: the 10 000 entries
+above block once. Measured by hand for the decision: 50 000 entries take about
+250 ms without a limit and about 135 ms with the default
 `max_entries = 20000`, which is what bounds the model and the buffer. A folder
 that is cut ends in a line that says how many entries are not shown. A file
 past the cut that is revealed (`auto_reveal`, `:Filetree reveal`) is shown all

@@ -54,6 +54,11 @@ M.HL = {
 ---@type table<string, true>
 local QUIET = { more = true, unavailable = true, note = true }
 
+--- Entries from which a folder that is read again is taken over in slices (one tick each for the
+--- read, for sorting and nodes, for the merge and the lines). Below it the whole answer costs a few
+--- milliseconds and a tick more would only delay it.
+local SLICE_FROM = 1000
+
 ---@type table<integer, Filetree.View>  buffer -> view
 local by_buf = {}
 ---@type table<string, string>  icon name -> highlight group, created once
@@ -196,6 +201,25 @@ local function line_opts(self)
     icon = self._opts.icons ~= false and icon_of or nil,
     trailing_slash = true,
   }
+end
+
+--- The text of a line of the files, as it was rendered last, and what of the row it was rendered from
+--- (depth, open or closed, expander, icons, as one number). A folder that is read again reports all
+--- its rows as changed, and rendering a line costs many times what looking one up does: a row that
+--- still looks the same hands its text back. Only for the entries of the disk in the tree of the
+--- files: such a node never changes in place (another name is another path and so another node),
+--- which a node of a source may, and the line that counts the rest of a cut folder does. Keyed by the node table (the tree keeps it across a re-read), weak: a node that left the
+--- tree takes its text with it. Two flat tables, no table per row: ten thousand of those made the
+--- first open of a large folder a fifth slower.
+---@type table<table, string>
+local text_of = setmetatable({}, { __mode = "k" })
+---@type table<table, integer>
+local state_of = setmetatable({}, { __mode = "k" })
+
+---Forget every remembered line: something a line depends on changed that no row says (the icon font).
+function M.forget_lines()
+  text_of = setmetatable({}, { __mode = "k" })
+  state_of = setmetatable({}, { __mode = "k" })
 end
 
 ---@param self Filetree.View
@@ -478,17 +502,36 @@ function View:refresh_dir(id)
   list.list(dir, function(entries)
     -- the view shows another tree by now: this answer belongs to none of its folders
     if generation ~= self._generation then return end
-    local again = self._reading[id]
-    self._reading[id] = nil
-    if not self.main:node(id) then return end
-    self:sync_cursor()
-    if entries then
-      self:_apply_main(self.main:merge_children(id, self:_nodes(dir, entries, self._loader_fn)))
-    elseif id ~= self.root then
-      self._loaded[id] = nil
-      self:_apply_main(self.main:remove(id))
+    ---Take the answer over. Until here the folder counts as being read: a change that arrives while
+    ---the slices below are still on their way waits for them and is answered by one more read.
+    ---@param nodes Filetree.Node[]|nil
+    local function finish(nodes)
+      if generation ~= self._generation then return end
+      local again = self._reading[id]
+      self._reading[id] = nil
+      if not self.main:node(id) then return end
+      self:sync_cursor()
+      if nodes then
+        self:_apply_main(self.main:merge_children(id, nodes))
+      elseif id ~= self.root then
+        self._loaded[id] = nil
+        self:_apply_main(self.main:remove(id))
+      end
+      if again then self:refresh_dir(id) end
     end
-    if again then self:refresh_dir(id) end
+    if not entries or #entries < SLICE_FROM then
+      finish(entries and self:_nodes(dir, entries, self._loader_fn) or nil)
+      return
+    end
+    -- A large folder in slices, so that no tick of the editor carries all of it: the read has just
+    -- ended in this one, sorting and making nodes takes the next, the merge and the lines a third.
+    vim.schedule(function()
+      if generation ~= self._generation then return end
+      local nodes = self:_nodes(dir, entries, self._loader_fn)
+      vim.schedule(function()
+        finish(nodes)
+      end)
+    end)
   end)
 end
 
@@ -551,9 +594,40 @@ end
 ---@return string[]
 function View:_texts(from, count)
   local out = {}
+  local tree = self.tree
+  if tree ~= self.main then
+    -- a view of sources, the hits of a search: rendered as they are now
+    for i = from, from + count - 1 do
+      local row = tree:row(i)
+      out[#out + 1] = row and line_of_row(self, row).text or ""
+    end
+    return out
+  end
+  local icons = self._opts.icons ~= false and 1 or 0
   for i = from, from + count - 1 do
-    local row = self.tree:row(i)
-    out[#out + 1] = row and line_of_row(self, row).text or ""
+    local row = tree:row(i)
+    if not row then
+      out[#out + 1] = ""
+    else
+      local node = row.node
+      local state = row.depth * 16
+        + (row.expanded and 8 or 0)
+        + (row.expandable and 4 or 0)
+        + (row.loading and 2 or 0)
+        + icons
+      -- an entry of the disk only: the line that counts the rest ("N more") keeps its id and changes
+      -- its text, and a merged line `a/b/c` is rare enough to render every time
+      if node.path == nil or node.data ~= nil then
+        out[#out + 1] = line_of_row(self, row).text
+      else
+        local text = state_of[node] == state and text_of[node] or nil
+        if not text then
+          text = line_of_row(self, row).text
+          text_of[node], state_of[node] = text, state
+        end
+        out[#out + 1] = text
+      end
+    end
   end
   return out
 end
@@ -601,6 +675,10 @@ function View:_drop_search()
   self._main_cursor = nil
 end
 
+--- Rows a change has to span before the lines it replaces are compared with the ones it brings: for a
+--- handful of rows the comparison would cost more than it saves.
+local TRIM_FROM = 16
+
 ---Write the rows the tree reported as changed.
 ---@private
 ---@param changes Lib.Tree.Splice[]
@@ -612,13 +690,30 @@ function View:_apply(changes)
     for _, c in ipairs(changes) do
       -- rows are read back from the tree as it is now; a later splice of the same batch corrects what an
       -- earlier one read too early, and the line count is checked below
-      api.nvim_buf_set_lines(
-        buf,
-        c.from - 1,
-        c.from - 1 + c.old_count,
-        false,
-        self:_texts(c.from, c.new_count)
-      )
+      local fresh = self:_texts(c.from, c.new_count)
+      local first, old_count = c.from - 1, c.old_count
+      -- A folder that was read again comes back as one block, "its rows out, its rows in", also when
+      -- one file was added to ten thousand. Writing a line costs far more than comparing one: only
+      -- the rows between the first and the last that differ are written.
+      if old_count >= TRIM_FROM and #fresh >= TRIM_FROM then
+        local stale = api.nvim_buf_get_lines(buf, first, first + old_count, false)
+        local head, limit = 0, math.min(#stale, #fresh)
+        while head < limit and stale[head + 1] == fresh[head + 1] do
+          head = head + 1
+        end
+        local tail = 0
+        limit = limit - head
+        while tail < limit and stale[#stale - tail] == fresh[#fresh - tail] do
+          tail = tail + 1
+        end
+        if head > 0 or tail > 0 then
+          first, old_count = first + head, #stale - head - tail
+          fresh = vim.list_slice(fresh, head + 1, #fresh - tail)
+        end
+      end
+      if old_count > 0 or #fresh > 0 then
+        api.nvim_buf_set_lines(buf, first, first + old_count, false, fresh)
+      end
     end
   end)
   if api.nvim_buf_line_count(buf) ~= math.max(1, self.tree:count()) then
