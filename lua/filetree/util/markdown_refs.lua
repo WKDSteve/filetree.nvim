@@ -24,7 +24,7 @@ local M = {}
 ---so no reason to defer a delete/rename/move by an event-loop tick.
 ---@return boolean
 function M.available()
-  local ok_md, md = pcall(require, "markdown_nvim")
+  local ok_md, md = pcall(require, "markdown")
   return ok_md and type(md.find_references) == "function"
 end
 
@@ -53,7 +53,7 @@ end
 ---@param opts? { root?: string }  `root` defaults to the nearest project root.
 ---@return table[]  MarkdownFileRef[] — { file, line, target, display, base_dir, ... }
 function M.find(path, opts)
-  local ok_md, md = pcall(require, "markdown_nvim")
+  local ok_md, md = pcall(require, "markdown")
   if not ok_md or type(md.find_references) ~= "function" then return {} end
   local ok_refs, refs = pcall(md.find_references, path, { root = resolve_root(path, opts) })
   if not ok_refs or type(refs) ~= "table" then return {} end
@@ -66,7 +66,7 @@ end
 ---@param opts? { root?: string }
 ---@param callback fun(refs: table[])
 function M.find_async(path, opts, callback)
-  local ok_md, md = pcall(require, "markdown_nvim")
+  local ok_md, md = pcall(require, "markdown")
   if not ok_md or type(md.find_references_async) ~= "function" then
     vim.schedule(function()
       callback({})
@@ -150,7 +150,7 @@ end
 ---@param new_path string  New absolute path of the moved/renamed file.
 ---@return string
 function M.retarget(ref, new_path)
-  local ok_md, md = pcall(require, "markdown_nvim")
+  local ok_md, md = pcall(require, "markdown")
   if ok_md and type(md.retarget) == "function" then
     local ok_t, t = pcall(md.retarget, ref, new_path)
     if ok_t and type(t) == "string" and t ~= "" then return t end

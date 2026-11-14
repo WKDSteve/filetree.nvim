@@ -373,6 +373,35 @@ do
     awaited2 ~= nil and #awaited2 == 0
   )
 
+  -- markdown.nvim is found by its module name, `markdown` (lua/markdown/ of that repo). A stub under that
+  -- name stands for it; under any other name (it once was `markdown_nvim`) the soft dependency never loads.
+  do
+    local stub_ref = { file = "/p/linker.md", line = 1, target = "nope.md" }
+    local saved = package.loaded["markdown"]
+    package.loaded["markdown"] = {
+      find_references = function(path)
+        return path == "/nope.md" and { stub_ref } or {}
+      end,
+      retarget = function()
+        return "moved/nope.md"
+      end,
+    }
+    local ok_run, err = pcall(function()
+      check(
+        "markdown_refs.available(): true with markdown.nvim's module `markdown` loaded",
+        refs_util.available()
+      )
+      eq("markdown_refs.find(): the references markdown.nvim found", #refs_util.find("/nope.md"), 1)
+      eq(
+        "markdown_refs.retarget(): markdown.nvim's target",
+        refs_util.retarget(stub_ref, "/p/moved/nope.md"),
+        "moved/nope.md"
+      )
+    end)
+    package.loaded["markdown"] = saved
+    if not ok_run then error(err) end
+  end
+
   -- unique_files(): dedup by slashified key, regardless of separator spelling.
   local cwd = vim.fn.getcwd():gsub("\\", "/")
   local f1 = cwd .. "/sub/a.md"
