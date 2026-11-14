@@ -338,6 +338,12 @@ nothing else. Announce your own operation the same way:
 require("filetree.util.changed").emit("create", nil, "/abs/path/new.lua")
 ```
 
+While the own tree shows a view of other sources, the event asks the sources
+of that view again (once for however many operations ended together). A
+[source](#a-source) that lists files therefore needs no events of its own to be
+right after a rename or a delete done from its view; one that changes for other
+reasons still has `emit`.
+
 The types are in
 [`lua/filetree/@types/native.lua`](../lua/filetree/@types/native.lua).
 
