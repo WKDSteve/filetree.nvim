@@ -85,6 +85,7 @@ local text_width = {}
 ---@field _foreign table<string, true>?  Keys the user or another plugin mapped on the buffer: the table leaves them alone.
 ---@field width integer
 ---@field height integer  Of a tree at the top or bottom.
+---@field _alone_size integer?  The width (height) a docked tree had before it became the only window of its tab.
 ---@field private _sync boolean
 ---@field private _loaded table<string, true>  Folder ids whose children were read.
 ---@field private _alias table<string, string>  A folder inside a merged line -> the id of that line.
@@ -782,6 +783,7 @@ end
 ---@private
 function View:_window_gone()
   self.win = nil
+  self._alone_size = nil
   self._seen_closed = true
   self:_unwatch()
   if self._pane then self._pane:stop() end
@@ -1720,6 +1722,85 @@ api.nvim_create_autocmd("WinResized", {
         if view and view.win == win then bar.update(view) end
       end
     end
+  end,
+})
+
+-- A docked tree that becomes the only window of its tab fills the screen, and the next window split
+-- off it (layout_guard after the last editor window closed, a file opened from the tree) leaves it
+-- half of that: 'winfixwidth' does not hold against a split of the window itself. The size the tree
+-- had beside its last neighbour is noted while that neighbour closes, and given back with the next.
+
+---The windows beside the tree in its tab, floats and `except` left out.
+---@param view Filetree.View
+---@param except? integer
+---@return integer
+local function neighbours(view, except)
+  local n = 0
+  for _, win in ipairs(api.nvim_tabpage_list_wins(api.nvim_win_get_tabpage(view.win))) do
+    if win ~= view.win and win ~= except and api.nvim_win_get_config(win).relative == "" then
+      n = n + 1
+    end
+  end
+  return n
+end
+
+---The views whose window is docked at an edge, with whether that edge fixes the width.
+---@return { view: Filetree.View, wide: boolean }[]
+local function docked()
+  local out = {}
+  for _, view in pairs(by_buf) do
+    local at = view.position
+    if
+      view.win
+      and api.nvim_win_is_valid(view.win)
+      and (at == "left" or at == "right" or at == "top" or at == "bottom")
+    then
+      out[#out + 1] = { view = view, wide = at == "left" or at == "right" }
+    end
+  end
+  return out
+end
+
+api.nvim_create_autocmd("WinClosed", {
+  group = AUGROUP,
+  desc = "[filetree] Note the size of a docked tree whose last neighbour closes",
+  callback = function(ev)
+    -- fires before the window is gone: the tree still has the size it had beside it
+    local closing = tonumber(ev.match)
+    if not closing or not api.nvim_win_is_valid(closing) then return end
+    if api.nvim_win_get_config(closing).relative ~= "" then return end
+    for _, entry in ipairs(docked()) do
+      local view = entry.view
+      if
+        closing ~= view.win
+        and api.nvim_win_get_tabpage(closing) == api.nvim_win_get_tabpage(view.win)
+        and neighbours(view, closing) == 0
+      then
+        view._alone_size = entry.wide and api.nvim_win_get_width(view.win)
+          or api.nvim_win_get_height(view.win)
+      end
+    end
+  end,
+})
+
+api.nvim_create_autocmd("WinNew", {
+  group = AUGROUP,
+  desc = "[filetree] Give a docked tree its size back when it has a neighbour again",
+  callback = function()
+    -- after the command that made the window is through with it
+    vim.schedule(function()
+      for _, entry in ipairs(docked()) do
+        local view = entry.view
+        if view._alone_size and neighbours(view) > 0 then
+          if entry.wide then
+            pcall(api.nvim_win_set_width, view.win, view._alone_size)
+          else
+            pcall(api.nvim_win_set_height, view.win, view._alone_size)
+          end
+          view._alone_size = nil
+        end
+      end
+    end)
   end,
 })
 

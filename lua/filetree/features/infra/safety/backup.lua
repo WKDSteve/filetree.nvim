@@ -37,16 +37,21 @@ end
 --- shell). Possible consolidation onto the same primitive; out of scope
 --- for this pass.
 ---Recursively copy a file or directory.
----Uses `xcopy` on Windows, `cp -r` elsewhere.
+---A file is copied in-process; a directory with `xcopy` on Windows, `cp -r` elsewhere.
 ---@param src string
 ---@param dst string
 ---@return boolean
 local function copy(src, dst)
+  if vim.fn.isdirectory(src) == 0 then
+    -- One file needs no program. On Windows it must not get one: `xcopy` asks whether a target that
+    -- does not exist yet names a file or a directory (`/I` answers that for a directory source
+    -- only), and with nobody to answer the backup of every single file failed.
+    return (vim.uv.fs_copyfile(src, dst)) == true
+  end
   local platform = require("filetree.util.platform")
   local run_argv = require("lib.nvim.cross.run_argv")
   local ok
   if platform.is_windows() and not platform.is_wsl() then
-    -- xcopy handles both files and directories
     ok = run_argv.run_blocking({ "xcopy", "/E", "/I", "/H", "/Y", src, dst })
   else
     ok = run_argv.run_blocking({ "cp", "-r", src, dst })
