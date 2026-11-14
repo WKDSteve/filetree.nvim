@@ -212,12 +212,22 @@ eq("the files have no dd", vim.fn.maparg("dd", "n"), "")
 -- ── buffers ────────────────────────────────────────────────────────────────────
 view:show("buffers")
 local outside_label = (vim.fn.fnamemodify(outside, ":~"):gsub("\\", "/"))
-eq("the listed buffers, by name; a file below the root relative to it", lines(), {
-  "▾ Buffers",
-  "lua/a.lua",
-  "README.md",
-  outside_label,
-})
+---The file buffers in the order of the view: by name, whatever the case. Where the file outside the
+---root stands depends on the system (`~/...` after the letters, `/tmp/...` before them).
+local function by_name(labels)
+  table.sort(labels, function(a, b)
+    return a:lower() < b:lower()
+  end)
+  return labels
+end
+local function listing(files, rest)
+  return vim.list_extend(vim.list_extend({ "▾ Buffers" }, by_name(files)), rest or {})
+end
+eq(
+  "the listed buffers, by name; a file below the root relative to it",
+  lines(),
+  listing({ "lua/a.lua", "README.md", outside_label })
+)
 eq("the head counts them", view.tree:node("buffers:root").columns, { "3" })
 
 goto_id(view, "buffers:" .. buf_a)
@@ -238,7 +248,11 @@ eq(
   end, require("filetree.native.decor").badges(view:current().node, false)),
   { "spec_flag:F" }
 )
-eq("the tree finds the buffer by its path", adapter.get_node_line(dir .. "/lua/a.lua"), 2)
+eq(
+  "the tree finds the buffer by its path",
+  lines()[adapter.get_node_line(dir .. "/lua/a.lua")],
+  "lua/a.lua"
+)
 eq("d waits for the dd this view has", {
   vim.fn.maparg("d", "n", false, true).nowait,
   vim.fn.maparg("dd", "n", false, true).desc,
@@ -252,15 +266,11 @@ local term = vim.api.nvim_create_buf(true, false)
 vim.api.nvim_open_term(term, {})
 vim.b[term].term_title = "spec shell"
 settle()
-eq("new buffers appear by themselves; unnamed ones and terminals stand last", lines(), {
-  "▾ Buffers",
-  "lua/a.lua",
-  "lua/b.lua",
-  "README.md",
-  outside_label,
-  "[No Name]",
-  "spec shell",
-})
+eq(
+  "new buffers appear by themselves; unnamed ones and terminals stand last",
+  lines(),
+  listing({ "lua/a.lua", "lua/b.lua", "README.md", outside_label }, { "[No Name]", "spec shell" })
+)
 eq("the cursor stayed on its buffer", view:current().id, "buffers:" .. buf_a)
 goto_id(view, "buffers:" .. term)
 eq("a terminal is no file for the features", adapter.get_current_node(), nil)
@@ -303,13 +313,11 @@ eq("dd on a file buffer deletes the buffer, not the file", {
   vim.fn.buflisted(buf_b),
   vim.fn.filereadable(dir .. "/lua/b.lua"),
 }, { 0, 1 })
-eq("the list follows", lines(), {
-  "▾ Buffers",
-  "lua/a.lua",
-  "README.md",
-  outside_label,
-  "[No Name]",
-})
+eq(
+  "the list follows",
+  lines(),
+  listing({ "lua/a.lua", "README.md", outside_label }, { "[No Name]" })
+)
 vim.api.nvim_buf_set_lines(unnamed, 0, -1, false, { "unsaved" })
 -- the editor reports a change of 'modified' for the buffer one is in; this one was changed from outside
 vim.cmd("doautocmd BufModifiedSet")
