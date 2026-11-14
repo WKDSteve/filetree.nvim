@@ -1121,7 +1121,7 @@ NAV
   Reveal Alt ............................................|filetree-reveal-alt|
   Sidebar Guard ......................................|filetree-sidebar-guard|
   Sort Cycle ............................................|filetree-sort-cycle|
-  Source Switcher (neo-tree) .......................|filetree-source-switcher|
+  Source Switcher (neo-tree, native) ...............|filetree-source-switcher|
   Tree Toggle (opt-in) .................................|filetree-tree-toggle|
   Tree Traverse ......................................|filetree-tree-traverse|
 
@@ -2030,7 +2030,14 @@ source_selector = {
 }
 <
 
-A silent no-op on every other adapter: one tree, nothing to switch.
+On the own tree (`adapter = "native"`) the same keys, commands and API drive
+its views: a view is what a source is there (`files`, `buffers`, `git`,
+`symbols`, `diagnostics`, and what plugins registered), the list is
+`native.views`, and the tree's view bar shows it. The window is never touched
+there, so there is no position to keep. A view that cannot load is shown all
+the same: its one line says why.
+
+A silent no-op on the other adapters: one tree, nothing to switch.
 
 Keymaps: " !
 

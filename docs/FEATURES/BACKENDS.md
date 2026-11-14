@@ -13,9 +13,10 @@ Windows/WSL) leaks OS-level file handles.
 
 > **Status.** The tree, its window and the whole adapter contract are there, the
 > features run on it, it follows the disk by itself and draws the badges of
-> registered decorators, it searches below folders it never opened, and every
-> key goes through one action table. Still to come: more sources than files.
-> Until then treat it as a trial backend.
+> registered decorators, it searches below folders it never opened, every
+> key goes through one action table, and the window shows more than files:
+> buffers, git changes, document symbols and diagnostics are views of it.
+> Treat it as a trial backend until it has replaced neo-tree in daily use.
 
 ```lua
 require("filetree").setup({
@@ -30,6 +31,8 @@ require("filetree").setup({
     max_entries = 20000,      -- entries shown per folder; a last line says how many more (0 = no limit)
     watch = true,             -- follow changes on disk and read only the folders that changed
     search_max = 1000,        -- hits a search shows at most; a last line says how many more
+    view_bar = true,          -- the views as tabs in the winbar of the tree window
+    views = nil,              -- which views there are; nil: files, the tree's sources, registered ones
   },
 })
 ```
@@ -146,10 +149,76 @@ flowchart LR
   `.gitignore` names, the Lua walk the names of the ignore list. A new root
   (`set_root`) ends a search.
 
+### Views and sources
+
+The tree window shows one **view** at a time: the files, or the nodes of
+registered [sources](../api.md#a-source). The tree brings four sources itself;
+another plugin's source (tests, tasks) is a view the same way.
+
+```
+ view bar (winbar, clickable; " and ! cycle)
+ ┌────────────────────────────────────┐
+ │ Files  Buffers  Git 3  Sym [!]  Dia│   a count: nodes of the view that carry a
+ ├────────────────────────────────────┤   status. [!]: the source cannot load now
+ │ ▾ Git                              │
+ │   ▾ Staged                      1  │
+ │       lua/a.lua                 M  │
+ │   ▾ Changes                     2  │
+ │       lua/a.lua                 M  │
+ │       README.md                 M  │
+ └────────────────────────────────────┘
+```
+
+| View | Shows | Live on | Its own keys |
+| --- | --- | --- | --- |
+| `files` | the directory tree | the watcher | everything above and below |
+| `buffers` | listed file buffers (relative to the root), unnamed buffers, terminals | buffer events | `dd` deletes the buffer (a modified one is kept and named) |
+| `git` | the changed files of the repository the root lies in, as `Conflicts` / `Staged` / `Changes` / `Untracked` | a write, focus, a file operation, files that came or went | `ga` stage, `gu` unstage; with gitsuite.nvim `gd` diff against HEAD, `gB` blame |
+| `symbols` | the LSP document symbols of the editor buffer | another editor buffer, an edit; its cursor follows the editor's | `<CR>` goes to the symbol |
+| `diagnostics` | every diagnostic the editor holds, by folder and file, the worst first | `DiagnosticChanged` | `<CR>` goes to the place |
+
+- **Switching touches nothing but the lines.** The window, its position and its
+  width stay; the files come back as they were left; every view keeps its own
+  cursor and its open nodes.
+- **A node with a path is a file in every view.** A buffer, a changed file, a
+  file with diagnostics: trash, rename, path copies, the preview and every path
+  [decorator](../api.md#a-decorator) work on it without another line. A node
+  without one (a symbol, a terminal, a single diagnostic, a group) is no entry
+  for those features.
+- **A source costs nothing while it is not shown.** It is asked when its view
+  is shown, followed while the window is on screen, and asked again when the
+  window or the view comes back.
+- **A source that cannot load** (no language server, no git) keeps its tab,
+  dimmed with `[!]`; its view is one line that says why, and comes alive by
+  itself when the source can load.
+- **Sections.** `native.views` lists the views; one with several sources shows
+  them under each other, each under its own head:
+
+  ```lua
+  native = {
+    views = {
+      { "files" },
+      { name = "work", "buffers", "git" }, -- one view, two sections
+      { "symbols" },
+      { "diagnostics" },
+    },
+  }
+  ```
+
+  Without `views`: the files, the tree's own sources, then every source another
+  plugin registered. The files cannot be a section next to other sources yet
+  (that section says so).
+- **`source_switcher`** ([navigation](NAVIGATION.md)) drives the views here:
+  `:Filetree source [<name>|next|prev|pick]`, its pick key and its API.
+- **Keys of the directory tree** that make no sense elsewhere (`H`, the search)
+  step back in another view. A feature key that changes the root (`-`) changes
+  the root of the view: the git view then shows the repository of that folder.
+
 ### The tree buffer
 
-Filetype `filetree`, `buftype=nofile`, unlisted; `b:filetree_view` (`"files"`)
-is set before the `FileType` event. A side tree's window has `winfixbuf`,
+Filetype `filetree`, `buftype=nofile`, unlisted; `b:filetree_view` (the name of
+the view on screen, `"files"` at first) is set before the `FileType` event, and
+`User FiletreeView` fires with `{ buf, view }` when another view is shown. A side tree's window has `winfixbuf`,
 `winfixwidth`, `foldmethod=manual` and `nofoldenable` (a tree has nothing to
 fold, and an inherited `foldexpr` would be evaluated once per line and change).
 The first line is the root folder; it is the label of the tree, not an entry
@@ -168,7 +237,8 @@ the same buffer.
 | `h` | close the folder, or go to the parent folder |
 | `C` | close the folder the entry lies in |
 | `z` | close every folder |
-| `R` | read the folders again |
+| `R` | read the folders again, or ask the sources of the view again |
+| `"`, `!` | show the next, the previous view |
 | `H` | show or hide the names of the ignore list |
 | `-` | show the parent folder as the root |
 | `sw` | open the file in a window you pick |

@@ -69,10 +69,12 @@ require("filetree").setup({
   --   max_entries = 20000,      -- per folder; 0 = no limit
   --   watch = true,             -- follow the disk, read only what changed
   --   search_max = 1000,        -- hits a search (filter) shows at most
+  --   view_bar = true,          -- the views (files, buffers, git ...) as tabs in the winbar
+  --   views = nil,              -- e.g. { { "files" }, { name = "work", "buffers", "git" } }
   -- },
 
-  -- Sources, decorators and actions for the own tree (being built; see
-  -- docs/api.md, "Sources, decorators and actions"). Lists of entries; a later
+  -- Sources, decorators and actions for the own tree (see docs/api.md,
+  -- "Sources, decorators and actions"). Lists of entries; a later
   -- setup() replaces what an earlier one listed. Same as calling
   -- require("filetree").source / .decorator / .action yourself.
   -- sources    = {},

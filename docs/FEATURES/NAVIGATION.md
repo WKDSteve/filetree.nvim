@@ -66,7 +66,7 @@ the tree-buffer analogue of `:e #`.
 - **Module:** [`features/nav/reveal_alt/init.lua`](../../lua/filetree/features/nav/reveal_alt/init.lua)
 - **Keymaps:** `B` (config field `keymap`)
 
-## Source Switcher (neo-tree)
+## Source Switcher (neo-tree, native)
 
 neo-tree renders its filesystem, buffer list, git status, symbol outline,
 diagnostics and (with neo-tree-tests-source) tests through one window.
@@ -94,7 +94,14 @@ source_selector = {
 }
 ```
 
-A silent no-op on every other adapter: one tree, nothing to switch.
+On the own tree (`adapter = "native"`) the same keys, commands and API drive
+its [views](BACKENDS.md#views-and-sources): a view is what a source is there
+(`files`, `buffers`, `git`, `symbols`, `diagnostics`, and what plugins
+registered), the list is `native.views`, and the tree's view bar shows it. The
+window is never touched there, so there is no position to keep. A view that
+cannot load is shown all the same: its one line says why.
+
+A silent no-op on the other adapters: one tree, nothing to switch.
 
 - **Module:** [`features/nav/source_switcher/init.lua`](../../lua/filetree/features/nav/source_switcher/init.lua)
 - **Keymaps:** `"` next, `!` previous (config fields `keymap_next`/`keymap_prev`, tree-local); `keymap_pick` (global, default unset)

@@ -213,7 +213,38 @@ children for nodes that carry none), `subscribe(ctx, emit)` (live updates while
 a view shows the source: `emit.push(update)`, `emit.invalidate(id)`,
 `emit.reset()`; return an unsubscribe function), `actions`, `severity` and
 `aggregate` (how statuses add up on a parent), `preview(node, ctx)`,
-`available()` (answer `false, reason` when the source cannot load right now).
+`available()` (answer `false, reason` when the source cannot load right now),
+`mutable = false` (actions that need `"mutable"` step back on its nodes).
+
+A registered source is a view of the tree window: a tab of its
+[view bar](FEATURES/BACKENDS.md#views-and-sources), reachable with `"` / `!`
+and `:Filetree source <name>`, and usable as a section through `native.views`.
+`root(ctx)` is called when the view is shown, with
+`ctx = { root, cwd, win, view, source, alt_buf }` (`alt_buf`: the editor buffer
+the tree belongs to); `subscribe` runs only while the window is on screen.
+
+What a node may carry besides `id`, `label`, `kind`, `status`, `columns`,
+`children`, `path` and `data`:
+
+| Field | Effect |
+| --- | --- |
+| `open = true` | the node starts open, once; closed by hand it stays closed |
+| `hl = "<group>"` | the highlight group of its name |
+| `icon = "<glyph>"` | drawn in place of the file icon |
+| `lazy = true` | its children come from the source's `children(node, ctx, cb)` |
+| `kind = "note"` | a line of text and no entry ("nothing changed") |
+| `data.bufnr` | `<CR>` shows this buffer instead of a file (a terminal) |
+| `data.lnum`, `data.col` | `<CR>` goes there (1-based line, 0-based column) |
+
+`columns` are drawn at the far right of the line. The number next to a view in
+the bar is how many of its nodes carry a `status`.
+
+`emit` has a fourth function on this tree: `emit.focus(id)` puts the cursor of
+the tree on one of the source's nodes and opens what is above it (the symbols
+view follows the editor's cursor with it); it does nothing while the user is in
+the tree window. After `emit.reset()` and `emit.invalidate(id)` the nodes are
+merged by `id`: a node that is there again keeps its place, its open state and
+the cursor, so give a node the same `id` every time.
 
 ### A decorator
 

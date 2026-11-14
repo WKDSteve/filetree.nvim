@@ -483,6 +483,30 @@ ok("a view whose sources clash still shows", (view:show("bad")))
 ok("... one line with the reason", #lines() == 1 and lines()[1]:find("duplicate node id", 1, true))
 remove_clash()
 
+-- ── the example source of docs/api.md, in the tree ─────────────────────────────
+-- native_contract_spec.lua checks that the example loads against the types; here it is shown.
+local api_md = table.concat(vim.fn.readfile(root .. "/docs/api.md"), "\n")
+local example = api_md:match("<!%-%- example:source %-%->\n```lua\n(.-)\n```")
+ok(
+  "the example source of docs/api.md runs",
+  pcall(loadstring(example or "error('none')", "example"))
+)
+native.setup(vim.tbl_extend("force", native.options(), { views = {} }))
+ok("a source registered the way the page says is a view of the tree", (view:show("todo")))
+eq("... with the groups of the example", lines(), { "▾ Todo", "▸ today", "▸ later" })
+view:expand("todo:today")
+goto_id(view, "todo:/notes/bank.md")
+eq(
+  "its leaf is a file for the features, because it carries a path",
+  adapter.get_current_node().path,
+  "/notes/bank.md"
+)
+eq(
+  "the action it brought applies to its own kind of node",
+  view.actions:resolve("gd", view:current().node, action.ctx(view)).name,
+  "todo.done"
+)
+
 view:show("files")
 eq(
   "the files are still there after all of it",
