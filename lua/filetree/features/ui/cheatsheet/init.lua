@@ -123,8 +123,10 @@ end
 ---@param rows FiletreeCheatsheetRow[]
 ---@param widest integer
 local function emit_group(lines, header, rows, widest)
+  -- by key, then by text: two rows on one key keep their order from one opening to the next
   table.sort(rows, function(a, b)
-    return a.lhs < b.lhs
+    if a.lhs ~= b.lhs then return a.lhs < b.lhs end
+    return a.desc < b.desc
   end)
   lines[#lines + 1] = " " .. header
   for _, r in ipairs(rows) do
@@ -372,22 +374,30 @@ local function build_here_page(view)
   local entries = require("filetree.native.action").applicable(view)
   local row = view:current()
   local label = row and (row.node.label or tostring(row.id)) or "(no entry)"
-  ---@type FiletreeCheatsheetRow[]
-  local rows = {}
-  local widest = 1
+  -- An action without a key gets a group of its own, listed by its name: a placeholder in the key
+  -- column read as a key (`-` is one: the parent folder), and four rows shared it.
+  ---@type FiletreeCheatsheetRow[], FiletreeCheatsheetRow[]
+  local keyed, unkeyed = {}, {}
+  local widest, widest_name = 1, 1
   for _, e in ipairs(entries) do
-    local lhs = e.key or "-"
     local desc = (e.action.desc or e.action.name):gsub("[%c]+", " ")
-    if not e.key then desc = desc .. "  (:Filetree action " .. e.action.name .. ")" end
     if e.action.origin == "source" or e.action.origin == "plugin" then
       desc = desc .. "  [" .. e.action.origin .. "]"
     end
-    rows[#rows + 1] = { lhs = lhs, desc = desc }
-    if #lhs > widest then widest = #lhs end
+    if e.key then
+      keyed[#keyed + 1] = { lhs = e.key, desc = desc }
+      if #e.key > widest then widest = #e.key end
+    else
+      unkeyed[#unkeyed + 1] = { lhs = e.action.name, desc = desc }
+      if #e.action.name > widest_name then widest_name = #e.action.name end
+    end
   end
   local lines = {}
-  if #rows == 0 then return { " nothing applies to " .. label, "" } end
-  emit_group(lines, "on " .. label, rows, widest)
+  if #keyed == 0 and #unkeyed == 0 then return { " nothing applies to " .. label, "" } end
+  if #keyed > 0 then emit_group(lines, "on " .. label, keyed, widest) end
+  if #unkeyed > 0 then
+    emit_group(lines, "without a key  (:Filetree action <name>)", unkeyed, widest_name)
+  end
   return lines
 end
 

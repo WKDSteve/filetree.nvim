@@ -53,6 +53,7 @@
 ---   :FiletreeRevealCurrent          Force reveal now.
 
 local bufevents = require("filetree.util.bufevents")
+local au = require("filetree.util.autocmd")
 local lib_debounce = require("lib.nvim.debounce")
 local lib_is_subpath = require("lib.nvim.fs.is_subpath")
 local target_dir_util = require("filetree.util.target_dir")
@@ -132,6 +133,15 @@ local _tree_pause_until = 0
 ---(a terminal, help, a picker) or is already gone.
 ---@type string?
 local _last_editor_path = nil
+
+---Whether the window that was left last is a floating one. Focus that comes back to the tree from a
+---float (a menu, a dialog, a prompt, a viewer) is not the user stepping into the tree: the float was
+---opened from the node the cursor is on, and what it does applies to that node.
+---@type boolean
+local _left_float = false
+
+---@type integer?
+local _augroup = nil
 
 ---Debounce handle built in M.setup() (needs `_cfg.debounce_ms`); `{ call, cancel }`.
 ---@type table?
@@ -334,6 +344,29 @@ local function current_file_path()
   return nil
 end
 
+---Whether the `WinEnter` being handled is the user stepping into the tree window from a window
+---beside it. Two things look the same to an autocmd on the tree buffer and are not that:
+---
+--- - A window that was just created shows the buffer of the window it was created from until its
+---   own buffer is set, and `WinEnter` fires in between. A float opened from the tree (every menu,
+---   dialog and prompt) therefore "enters the tree buffer" in a window that is not the tree.
+--- - Focus coming back to the tree when such a float closes.
+---
+---In both the cursor is on the node the float belongs to; moving it to the editor's file made a
+---right click act on another node than the one clicked, and every dialog opened from the tree
+---leave the cursor somewhere else.
+---@internal
+---@return boolean
+local function stepped_into_tree()
+  local win = vim.api.nvim_get_current_win()
+  if vim.api.nvim_win_get_config(win).relative ~= "" then return false end
+  local tree_win = _adapter and _adapter.get_winid and _adapter.get_winid() or nil
+  if tree_win and tree_win > 0 and vim.api.nvim_win_is_valid(tree_win) and tree_win ~= win then
+    return false
+  end
+  return not _left_float
+end
+
 ---Put the tree cursor on the current file's node, on entering the tree window.
 ---Unlike `do_reveal` this runs *while* the cursor is in the tree — that is the
 ---point — and ignores the entry pause it is about to arm. An explicit
@@ -343,6 +376,7 @@ end
 local function sync_on_enter()
   if not _cfg.sync_on_enter then return end
   if not _adapter or is_paused() then return end
+  if not stepped_into_tree() then return end
   local path = current_file_path()
   if not path then return end
   -- A reveal queued by the BufEnter that brought us here is now redundant, and
@@ -426,10 +460,27 @@ function M.setup(config, adapter)
       _tree_pause_until = (vim.uv or vim.loop).hrtime() + (500 * 1e6)
     end,
   })
+
+  -- which kind of window the focus comes from, for `stepped_into_tree`
+  if _augroup then au.del_group(_augroup) end
+  _augroup = au.group("filetree_auto_reveal", true)
+  _left_float = false
+  au.acmd("WinLeave", {
+    group = _augroup,
+    desc = "[filetree] Remember whether the window that is left is a floating one",
+    callback = function()
+      _left_float = vim.api.nvim_win_get_config(0).relative ~= ""
+    end,
+  })
 end
 
 function M.teardown()
   bufevents.unregister("auto_reveal")
+  if _augroup then
+    au.del_group(_augroup)
+    _augroup = nil
+  end
+  _left_float = false
   _adapter = nil
   _resolve_target_dir = nil
   _paused_until = 0

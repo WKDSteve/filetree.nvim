@@ -308,6 +308,62 @@ return function(opts)
     vim.fn.setreg('"', "")
   end
 
+  -- On the own tree the features draw nothing into the buffer: they hand their marks to the tree as
+  -- decorators, and the tree places them with each line as ephemeral marks. Those cannot be read
+  -- back, so the calls that place them are recorded.
+  ---What is drawn on the line of `rel` besides its text: nil when the tree does not show it.
+  ---@param rel string
+  ---@return { text: string, name_hl: string?, line_hl: string? }|nil
+  function T.drawn(rel)
+    local line = T.adapter.get_node_line(dir .. "/" .. rel)
+    if not line then return nil end
+    local out, chunks = { name_hl = nil, line_hl = nil }, {}
+    local real = vim.api.nvim_buf_set_extmark
+    vim.api.nvim_buf_set_extmark = function(_, _, _, _, o)
+      for _, chunk in ipairs(o.virt_text or {}) do
+        local text = vim.trim(chunk[1])
+        if text ~= "" then chunks[#chunks + 1] = text end
+      end
+      if o.line_hl_group then
+        out.line_hl = o.line_hl_group
+      elseif o.priority == 95 then
+        out.name_hl = o.hl_group
+      end
+      return 0
+    end
+    pcall(
+      require("filetree.native.view").decorate_line,
+      T.adapter.get_bufnr(),
+      line - 1,
+      T.adapter.get_winid()
+    )
+    vim.api.nvim_buf_set_extmark = real
+    out.text = table.concat(chunks, " ")
+    return out
+  end
+  ---The floating windows that are open, with the lines of their buffers.
+  ---@return { win: integer, buf: integer, filetype: string, lines: string[] }[]
+  function T.floats()
+    local out = {}
+    for _, win in ipairs(vim.api.nvim_list_wins()) do
+      if vim.api.nvim_win_get_config(win).relative ~= "" then
+        local buf = vim.api.nvim_win_get_buf(win)
+        out[#out + 1] = {
+          win = win,
+          buf = buf,
+          filetype = vim.bo[buf].filetype,
+          lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false),
+        }
+      end
+    end
+    return out
+  end
+  function T.close_floats()
+    for _, float in ipairs(T.floats()) do
+      pcall(vim.api.nvim_win_close, float.win, true)
+    end
+  end
+
   T.tree()
   T.settle()
   T.buf = T.adapter.get_bufnr()
