@@ -381,6 +381,19 @@ end
 
 -- ── keys on the buffer ─────────────────────────────────────────────────────────
 
+---Is `lhs` the beginning of a longer key of the table (`d` of `dd`)?
+---@param t Filetree.Action.Table
+---@param lhs string
+---@return boolean
+local function starts_longer(t, lhs)
+  local id = t:canon(lhs)
+  for _, other in ipairs(t:keys()) do
+    local longer = t:canon(other)
+    if #longer > #id and longer:sub(1, #id) == id then return true end
+  end
+  return false
+end
+
 ---Set the dispatcher on one key.
 ---@param view Filetree.View
 ---@param buf integer
@@ -398,7 +411,8 @@ local function bind(view, buf, lhs)
     M.run_key(view, lhs)
   end, {
     buffer = buf,
-    nowait = true,
+    -- a key that begins a longer one has to wait for it: `d` while this view has a `dd`
+    nowait = not starts_longer(t, lhs),
     silent = true,
     desc = M.PREFIX .. (first and first.desc or lhs),
   })
@@ -484,7 +498,9 @@ function M.sync(view)
         break
       end
     end
-    if others and not foreign[id] then
+    -- a feature's own mapping does not wait: while a longer key of the table begins with it (`d` and
+    -- a source's `dd`), the key goes through the dispatcher, which does
+    if (others or starts_longer(t, lhs)) and not foreign[id] then
       bind(view, buf, lhs)
       dispatched[id] = nil
     end

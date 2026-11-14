@@ -57,7 +57,7 @@ end
 ---@return boolean
 local function is_entry(row)
   local node = row.node
-  if node.kind == "more" or node.kind == "unavailable" then return false end
+  if node.kind == "more" or node.kind == "unavailable" or node.kind == "note" then return false end
   return type(node.path) == "string"
 end
 

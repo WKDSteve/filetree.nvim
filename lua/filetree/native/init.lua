@@ -57,6 +57,7 @@ local views = {}
 ---@param opts? Filetree.Native.Opts
 function M.setup(opts)
   options = vim.tbl_extend("force", vim.deepcopy(DEFAULTS), opts or {})
+  require("filetree.native.source").register()
   M.hijack_netrw(options.hijack_netrw ~= false)
 end
 
@@ -139,7 +140,14 @@ function M.views()
     end
   else
     add("files", { "files" })
-    local ok, registered = pcall(require("filetree.registry").list, "source")
+    local registry = require("filetree.registry")
+    -- the tree's own sources first, in their fixed order: when a plugin registered must not decide
+    -- where the buffers stand in the bar
+    for _, name in ipairs(require("filetree.native.source").NAMES) do
+      local ok, entry = pcall(registry.get, "source", name)
+      if ok and entry then add(name, { name }) end
+    end
+    local ok, registered = pcall(registry.list, "source")
     for _, entry in ipairs(ok and registered or {}) do
       add(entry.name, { entry.name })
     end
@@ -217,6 +225,7 @@ function M.reset()
   require("filetree.native.fs.watch").stop_all()
   require("filetree.native.decor").stop()
   require("filetree.native.action").reset()
+  require("filetree.native.source").unregister()
 end
 
 ---A window a file can be opened in: not the tree, not a float, not a special buffer.

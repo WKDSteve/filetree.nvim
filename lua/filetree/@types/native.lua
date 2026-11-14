@@ -10,6 +10,7 @@
 ---@class Filetree.Node : Lib.Tree.Node
 ---@field path? string absolute path, `/`-separated, drive letter upper case
 ---@field data? table belongs to the source; the tree never touches it. `data.chain` (string[]): the ids of the folders a merged line `a/b/c` stands for, outermost first. Read when the node is opened: `data.bufnr` (integer, the buffer to show instead of a file), `data.lnum` and `data.col` (1-based line, 0-based column to go to)
+---@field open? boolean the node starts open (once: closed by hand, it stays closed)
 ---@field lazy? boolean the node has children the source answers through its `children(node, ctx, cb)`
 
 ---What a source, a decorator or an action is called with.

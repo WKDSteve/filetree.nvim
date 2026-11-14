@@ -47,6 +47,10 @@ M.HL = {
   FiletreeModified = "DiagnosticWarn",
 }
 
+--- Node kinds that are a line of text and no entry: no icon, no badge, drawn like a comment.
+---@type table<string, true>
+local QUIET = { more = true, unavailable = true, note = true }
+
 ---@type table<integer, Filetree.View>  buffer -> view
 local by_buf = {}
 ---@type table<string, string>  icon name -> highlight group, created once
@@ -141,7 +145,7 @@ end
 ---@return string|nil hl
 local function icon_of(row)
   local node = row.node
-  if node.kind == "more" or node.kind == "unavailable" then return nil, nil end
+  if QUIET[node.kind] then return nil, nil end
   -- a source's own glyph for the node wins over what the name would get
   if type(node.icon) == "string" and node.icon ~= "" then return node.icon, nil end
   local nerd = require("lib.nvim.ui.nerd_font").available()
@@ -182,9 +186,7 @@ local function line_of_row(self, row)
   local kind = row.node.kind
   -- the head of a section stands where the root of the files stands
   local head = row.id == self.root or (self._pane ~= nil and row.depth == 0)
-  local whole = ((kind == "more" or kind == "unavailable") and "FiletreeMore")
-    or (head and "FiletreeRoot")
-    or nil
+  local whole = (QUIET[kind] and "FiletreeMore") or (head and "FiletreeRoot") or nil
   if whole then
     for _, span in ipairs(line.spans) do
       if span.col_start >= line.name_start then span.hl = whole end
@@ -553,6 +555,8 @@ end
 
 ---@private
 function View:_after_draw()
+  -- nodes of a source that start open: their rows are written by a call of _apply of their own
+  if self._pane then self._pane:open_pending() end
   self:_place_cursor()
   local buf = self.buf
   for _, fn in ipairs(render_listeners) do
@@ -1550,7 +1554,7 @@ function M.decorate_line(buf, lnum, win)
   end
 
   local node = row.node
-  if node.kind == "more" or node.kind == "unavailable" then return drawn end
+  if QUIET[node.kind] then return drawn end
   local badges = decor.badges(node, row.expandable or node.kind == "dir")
 
   local right = {}

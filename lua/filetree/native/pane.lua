@@ -43,6 +43,8 @@ local M = {}
 ---@field private _by_path table<string, any>
 ---@field private _loaders table<any, function>
 ---@field private _loaded table<any, true>
+---@field private _opened table<any, true>  Nodes with `open = true` that were opened once: closed by hand, they stay closed.
+---@field private _pending_open table<any, true>  Such nodes that are waiting to be opened.
 ---@field private _stops (fun())[]
 ---@field private _started boolean
 local Pane = {}
@@ -82,6 +84,10 @@ end
 function Pane:_adopt(source, entry, node, is_root)
   local id = node.id
   self._source_of[id] = source
+  if node.open == true and not self._opened[id] then
+    self._opened[id] = true
+    self._pending_open[id] = true
+  end
   if type(node.path) == "string" and self._by_path[node.path] == nil then
     self._by_path[node.path] = id
   end
@@ -151,6 +157,7 @@ end
 ---Build the tree from scratch: every source is asked for its root again.
 function Pane:build()
   self._source_of, self._by_path, self._loaders, self._loaded = {}, {}, {}, {}
+  self._opened, self._pending_open = {}, {}
   self._sections = {}
   local roots = {}
   local severity, aggregate = nil, nil
@@ -195,7 +202,25 @@ function Pane:build()
   for _, section in ipairs(self._sections) do
     tree:expand(section.id)
   end
+  -- nothing is on screen yet: the nodes that start open are opened without reporting rows
+  for id in pairs(self._pending_open) do
+    if tree:node(id) then tree:expand(id) end
+  end
+  self._pending_open = {}
   if self.cursor_id ~= nil and not tree:node(self.cursor_id) then self.cursor_id = nil end
+end
+
+---Open the nodes that asked to start open and are in the tree by now. Called after rows were
+---written: the nodes a lazy answer brought are registered only once that answer is taken over.
+function Pane:open_pending()
+  if next(self._pending_open) == nil then return end
+  local pending = self._pending_open
+  self._pending_open = {}
+  for id in pairs(pending) do
+    if self.tree:node(id) and not self.tree:is_expanded(id) then
+      self:_apply(self.tree:expand(id))
+    end
+  end
 end
 
 ---@return Filetree.Pane.Section[]
@@ -384,6 +409,8 @@ function M.new(name, sources, hooks)
     _by_path = {},
     _loaders = {},
     _loaded = {},
+    _opened = {},
+    _pending_open = {},
     _stops = {},
     _started = false,
   }, Pane)
