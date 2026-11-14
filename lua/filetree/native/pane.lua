@@ -43,6 +43,7 @@ local M = {}
 ---@field private _sections Filetree.Pane.Section[]
 ---@field private _source_of table<any, string>
 ---@field private _by_path table<string, any>
+---@field private _above table<any, string>  Node id -> the path of the node itself or of the nearest node above it that has one.
 ---@field private _loaders table<any, function>
 ---@field private _loaded table<any, true>
 ---@field private _opened table<any, true>  Nodes with `open = true` that were opened once: closed by hand, they stay closed.
@@ -83,7 +84,8 @@ end
 ---@param entry Filetree.Source
 ---@param node Filetree.Node
 ---@param is_root? boolean
-function Pane:_adopt(source, entry, node, is_root)
+---@param above? string  The path of the nearest node above that has one.
+function Pane:_adopt(source, entry, node, is_root, above)
   local id = node.id
   self._source_of[id] = source
   if node.open == true and not self._opened[id] then
@@ -92,11 +94,17 @@ function Pane:_adopt(source, entry, node, is_root)
   end
   -- the last node handed over for a path: after a reload that is one of the fresh nodes, also when
   -- the file moved to another group and its old node is gone
-  if type(node.path) == "string" then self._by_path[node.path] = id end
+  -- A node that carries the path of a node above it is a place in that file (a test case under its
+  -- spec file, a symbol), not the file: the path stays with the file, or `reveal` and "which line is
+  -- this path on" would land on a row that is hidden while the file is closed.
+  local own = type(node.path) == "string" and node.path or nil
+  if own and own ~= above then self._by_path[own] = id end
+  local below = own or above
+  self._above[id] = below
   local kids = node.children
   if type(kids) == "table" then
     for _, child in ipairs(kids) do
-      self:_adopt(source, entry, child)
+      self:_adopt(source, entry, child, false, below)
     end
     return
   end
@@ -118,7 +126,7 @@ function Pane:_adopt(source, entry, node, is_root)
       if type(list) == "table" then
         self._loaded[n.id] = true
         for _, child in ipairs(list) do
-          self:_adopt(source, entry, child)
+          self:_adopt(source, entry, child, false, self._above[n.id])
         end
       end
       cb(list, err)
@@ -168,6 +176,7 @@ end
 ---Build the tree from scratch: every source is asked for its root again.
 function Pane:build()
   self._source_of, self._by_path, self._loaders, self._loaded = {}, {}, {}, {}
+  self._above = {}
   self._opened, self._pending_open = {}, {}
   self._sections = {}
   local roots = {}
@@ -306,7 +315,7 @@ function Pane:_resync(id, node)
       local entry = source and self:_entry(source)
       if entry then
         for _, child in ipairs(list) do
-          self:_adopt(source, entry, child)
+          self:_adopt(source, entry, child, false, self._above[id])
         end
       end
       take(list)
@@ -438,6 +447,7 @@ function M.new(name, sources, hooks)
     _sections = {},
     _source_of = {},
     _by_path = {},
+    _above = {},
     _loaders = {},
     _loaded = {},
     _opened = {},

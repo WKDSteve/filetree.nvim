@@ -524,6 +524,84 @@ eq(
   "todo.done"
 )
 
+-- ── a node that carries the path of the node above it ──────────────────────────
+-- a test case under its spec file, a symbol under its file: a place in the file, not the file
+do
+  local spec_file = dir .. "/lua/a.lua"
+  local remove_places = registry.source({
+    name = "places",
+    root = function()
+      return {
+        id = "places:root",
+        label = "Places",
+        children = {
+          {
+            id = "places:file",
+            label = "a.lua",
+            kind = "file",
+            path = spec_file,
+            children = {
+              { id = "places:case1", label = "first case", kind = "case", path = spec_file },
+              {
+                id = "places:describe",
+                label = "a describe block",
+                kind = "describe",
+                path = spec_file,
+                children = {
+                  { id = "places:case3", label = "third case", kind = "case", path = spec_file },
+                },
+              },
+              {
+                id = "places:group",
+                label = "a group",
+                kind = "group",
+                children = function(_, cb)
+                  cb({
+                    { id = "places:case2", label = "second case", kind = "case", path = spec_file },
+                  })
+                end,
+              },
+            },
+          },
+          { id = "places:other", label = "b.lua", kind = "file", path = dir .. "/lua/b.lua" },
+        },
+      }
+    end,
+  })
+  eq("the view of the places", { view:show("places") }, { true })
+  settle(100)
+  local file_line = adapter.get_node_line(spec_file)
+  ok("the path is on the row of the file while the file is closed", file_line ~= nil)
+  eq("... and that row is the file", view:row(file_line).id, "places:file")
+  view:expand("places:file")
+  settle(50)
+  eq(
+    "with its cases open the path is still the file's",
+    view:row(adapter.get_node_line(spec_file)).id,
+    "places:file"
+  )
+  view:expand("places:group")
+  settle(50)
+  eq(
+    "... also after a lazy group below brought another node with that path",
+    view:row(adapter.get_node_line(spec_file)).id,
+    "places:file"
+  )
+  ok("reveal of the path lands on the file", view:reveal(spec_file))
+  eq("... not on a case", view:current().id, "places:file")
+  eq(
+    "a node with a path of its own keeps it",
+    view:row(adapter.get_node_line(dir .. "/lua/b.lua")).id,
+    "places:other"
+  )
+  local describe_text = lines()[view.tree:row_of("places:describe")]
+  ok(
+    "an expandable node that says what it is gets no folder slash: " .. tostring(describe_text),
+    describe_text ~= nil and describe_text:find("a describe block/", 1, true) == nil
+  )
+  remove_places()
+end
+
 view:show("files")
 eq(
   "the files are still there after all of it",

@@ -94,7 +94,8 @@ function M.render(row, opts)
     put(label, name_hl)
   end
   -- a group of a source opens like a folder and is none: no path, no slash
-  local is_folder = row.node.kind == "dir" or (row.node.path ~= nil and row.node.kind ~= "file")
+  -- nor is a node that says what it is (a describe block, a group that carries the path of its file)
+  local is_folder = row.node.kind == "dir" or (row.node.path ~= nil and row.node.kind == nil)
   if opts.trailing_slash and is_dir and is_folder then put("/", name_hl) end
 
   return { text = table.concat(parts), spans = spans, name_start = name_start, name_end = col }
