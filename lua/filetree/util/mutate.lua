@@ -47,7 +47,10 @@ function M.move(src, dst)
   for _, resume in ipairs(resumes) do
     resume()
   end
-  if ok then return true, nil end
+  if ok then
+    require("filetree.util.changed").emit("move", src, dst)
+    return true, nil
+  end
   return false, err
 end
 

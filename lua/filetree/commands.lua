@@ -74,6 +74,28 @@ end
 ---@type table<string, any>
 local TREE = {
 
+  -- ── own tree: an action of its table by name ────────────────────────────────
+  -- `:Filetree action <name> [key=value ...]`: what the action's key does, on the selection or the
+  -- node under the cursor; says in one line why when it does not apply there.
+  action = function(args)
+    local view = require("filetree.native").current()
+    if not (view and view.actions) then
+      notify.info('action: the own tree (adapter = "native") is not open in this tab')
+      return
+    end
+    local name = args[1]
+    if not name or name == "" then
+      notify.info("action: which one? :Filetree action <Tab> lists them")
+      return
+    end
+    local named = {}
+    for i = 2, #args do
+      local k, v = args[i]:match("^([%w_]+)=(.*)$")
+      if k then named[k] = v end
+    end
+    require("filetree.native.action").run(view, name, next(named) and named or nil)
+  end,
+
   -- ── trash ───────────────────────────────────────────────────────────────────
   trash = {
     undo = function(_)
@@ -922,7 +944,35 @@ local function build_routes()
   walked.cwd.lock = nil
   walked.traverse = vim.tbl_extend("force", {}, TREE.traverse)
   walked.traverse["goto"] = nil
+  walked.action = nil
   walk_tree(walked, {}, routes)
+
+  -- the names of the actions of the own tree open in this tab, for <Tab>
+  require("lib.nvim.bindings.usercmd.composer.argtypes").register("FILETREE_ACTION", {
+    validate = function(raw)
+      return true, raw, nil
+    end,
+    complete = function(arg_lead)
+      local view = require("filetree.native").current()
+      local out = {}
+      for _, action in ipairs(view and view.actions and view.actions:list() or {}) do
+        if action.name:sub(1, #arg_lead) == arg_lead then out[#out + 1] = action.name end
+      end
+      return out
+    end,
+  })
+  routes[#routes + 1] = {
+    path = { "action" },
+    args = { { name = "name", type = "FILETREE_ACTION" } },
+    desc = "Run an action of the own tree by name, on the selection or the node under the cursor",
+    run = function(ctx)
+      local args = { ctx.args.name }
+      for _, t in ipairs(ctx.rest) do
+        args[#args + 1] = t
+      end
+      TREE.action(args)
+    end,
+  }
 
   routes[#routes + 1] = {
     path = { "find" },

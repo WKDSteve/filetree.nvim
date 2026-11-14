@@ -255,6 +255,7 @@ Default: `Filetree`, with `Ft` registered automatically as an alias.
 | `:Filetree safety dry-run` | Toggle safety dry-run |
 | `:Filetree watcher enter [ms]` | Enter watcher quarantine |
 | `:Filetree watcher exit` | Exit watcher quarantine |
+| `:Filetree action <name> [key=value ...]` | Own tree only: run an action of its table by name on the selection or the node under the cursor; says in one line why when it does not apply (`<Tab>` lists the actions) |
 | `:Filetree keys` | List keys claimed by more than one filetree action (the active one marked), recommend free alternatives, and move the one you pick for this session; copies the `setup()` fragment that makes it permanent |
 | `:Filetree wholocks [path] [--json]` | Diagnose who holds a file open (probe, Restart Manager holders, neo-tree watchers on its folder) |
 | `:Filetree handles` | List tracked neo-tree watcher handles (`handle_guard`); flags any pointing at a path that no longer exists |

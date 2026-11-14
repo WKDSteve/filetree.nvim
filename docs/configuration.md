@@ -60,8 +60,10 @@ require("filetree").setup({
 
   -- The own tree, used with adapter = "native" (see docs/FEATURES/BACKENDS.md).
   -- native = {
-  --   position = "left",        -- "left" | "right" | "float" | "current"
+  --   position = "left",        -- "left" | "right" | "top" | "bottom" | "float" | "current"
   --   width = 32,
+  --   height = 15,              -- of a tree at the top or bottom
+  --   hijack_netrw = true,      -- `nvim <dir>` / `:edit <dir>` shows the tree in that window
   --   group_empty_dirs = true,  -- a/b/c/ as one line
   --   icons = true,
   --   max_entries = 20000,      -- per folder; 0 = no limit

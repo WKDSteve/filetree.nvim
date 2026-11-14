@@ -78,6 +78,12 @@ function M.install(adapter)
         for _, cb in ipairs(_callbacks) do
           if cb.feature == nil or sources.allows(cb.feature, source) then pcall(cb.fn, buf) end
         end
+        -- every feature has bound its keys: the own tree reads them into its action table
+        vim.api.nvim_exec_autocmds("User", {
+          pattern = "FiletreeAttached",
+          modeline = false,
+          data = { buf = buf },
+        })
       end)
     end,
   })

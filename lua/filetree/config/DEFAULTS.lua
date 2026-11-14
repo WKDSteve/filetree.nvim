@@ -69,6 +69,7 @@ return {
     search = true, -- find files / grep in dir
     info = true, -- node info
     marks = true, -- toggle / mark all / unmark all / clear / show marked
+    actions = true, -- own tree only: its actions that apply to the node (other plugins', the source's)
     window = true, -- open/close the tree itself
   },
 

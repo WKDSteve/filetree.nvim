@@ -13,16 +13,18 @@ Windows/WSL) leaks OS-level file handles.
 
 > **Status.** The tree, its window and the whole adapter contract are there, the
 > features run on it, it follows the disk by itself and draws the badges of
-> registered decorators, and it searches below folders it never opened. Still to
-> come: more sources than files and the action table. Until then treat it as a
-> trial backend.
+> registered decorators, it searches below folders it never opened, and every
+> key goes through one action table. Still to come: more sources than files.
+> Until then treat it as a trial backend.
 
 ```lua
 require("filetree").setup({
   adapter = "native",
   native = {
-    position = "left",        -- "left" | "right" | "float" | "current"
+    position = "left",        -- "left" | "right" | "top" | "bottom" | "float" | "current"
     width = 32,               -- of a side tree
+    height = 15,              -- of a tree at the top or bottom
+    hijack_netrw = true,      -- a folder opened as a buffer (nvim <dir>, :edit <dir>) shows the tree there
     group_empty_dirs = true,  -- a chain of folders holding one folder each is one line: a/b/c/
     icons = true,             -- file and folder icons; drawn only with a Nerd Font declared
     max_entries = 20000,      -- entries shown per folder; a last line says how many more (0 = no limit)
@@ -157,7 +159,7 @@ the current node).
 ### Its own keys
 
 Only what makes a tree a tree; every other key is a feature's and is bound on
-the same buffer. A feature key on the same left-hand side wins.
+the same buffer.
 
 | Key | Action |
 | --- | --- |
@@ -168,7 +170,45 @@ the same buffer. A feature key on the same left-hand side wins.
 | `z` | close every folder |
 | `R` | read the folders again |
 | `H` | show or hide the names of the ignore list |
+| `-` | show the parent folder as the root |
+| `sw` | open the file in a window you pick |
 | `q` | close the tree |
+
+### One action table
+
+Every key of the tree buffer is an entry of the view's action table
+(`lua/filetree/native/action/`): the tree's own keys above, the keys the
+features bound, the actions other plugins registered
+([api](../api.md#an-action)) and those of the view's source. The `?` cheatsheet
+opens on the page **here** (what applies to the node under the cursor, with the
+key that reaches it), the context menu lists the same, and
+`:Filetree action <name>` runs one by name.
+
+```
+ key d on ...            node                  runs
+ ───────────────────────────────────────────────────────────────────────
+ files                   file                  trash (a feature)
+ files                   the "N more" line     "d: needs a file or folder"
+ a test view (source)    spec file             diff (the source's action ranks first)
+```
+
+When several actions claim a key, the first that applies runs: the source's,
+then the higher `priority`, then a feature before another plugin's action before
+the tree's own. When none applies, one line says why. A key the user mapped on
+the tree buffer (`adapter_keymaps`) or another plugin mapped stays theirs.
+
+### Windows and the netrw replacement
+
+`top` and `bottom` open the tree as a full-width split (`height`). With
+`hijack_netrw` (on by default, only with `adapter = "native"`), a folder opened
+as a buffer, `nvim <dir>` or `:edit <dir>`, shows the tree in that window,
+rooted at the folder; `-` goes up, `<CR>` on a file opens it in the same window.
+
+### After a file operation
+
+Every file operation of filetree.nvim ends with `User FiletreeChanged`
+(`{ op, from, to }`, [api](../api.md#when-files-changed)); the own tree reads the
+folders `from` and `to` lie in and nothing else, also with `watch = false`.
 
 A file never opens in the tree's own window: it goes to the window you came
 from, else to another editor window, else to a new one beside the tree. Closing

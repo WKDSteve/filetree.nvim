@@ -79,6 +79,8 @@
 ---| "right"    Sidebar on the right
 ---| "float"    Floating window
 ---| "current"  In the current window (netrw-style)
+---| "top"      Full-width split at the top (own tree only)
+---| "bottom"   Full-width split at the bottom (own tree only)
 
 ---@class FiletreeToggleOpts
 ---@field reveal? boolean   Reveal the current file when opening.

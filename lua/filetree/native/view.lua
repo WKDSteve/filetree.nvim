@@ -67,7 +67,13 @@ local text_width = {}
 ---@field hide_ignored boolean
 ---@field cursor_id string?
 ---@field root_error string?  Why the root could not be read, when it could not.
+---@field source string?  The source the view shows (default "files").
+---@field actions Filetree.Action.Table?  Every key of the buffer (`filetree.native.action`).
+---@field _feature_maps table<string, table>?  The feature mappings the action table took over, by lhs.
+---@field _running table<string, table<string, true>>?  Per key, the actions running on it right now.
+---@field _foreign table<string, true>?  Keys the user or another plugin mapped on the buffer: the table leaves them alone.
 ---@field width integer
+---@field height integer  Of a tree at the top or bottom.
 ---@field private _sync boolean
 ---@field private _loaded table<string, true>  Folder ids whose children were read.
 ---@field private _alias table<string, string>  A folder inside a merged line -> the id of that line.
@@ -103,6 +109,7 @@ View.__index = View
 ---@field root string
 ---@field position? FiletreeTreePosition
 ---@field width? integer
+---@field height? integer  Height of a tree at the top or bottom.
 ---@field group_empty? boolean
 ---@field hide? fun(): fun(name: string, path: string): boolean  Answers the test for the names `hide_ignored` hides; asked once per listing.
 ---@field icons? boolean  false: no icons at all.
@@ -350,6 +357,19 @@ function View:_changed(dirs)
   end
 end
 
+---Read the folder `path` lies in again, when this view has read it (an operation on `path` is done).
+---A folder the view never read has nothing on screen to bring up to date.
+---@param path string
+---@return boolean reading
+function View:refresh_path(path)
+  local parent = list.parent(list.norm(path))
+  if not parent or not list.inside(self.root, parent) then return false end
+  local id = self:id_of(parent)
+  if not (self._loaded[id] and self.main:node(id)) then return false end
+  self:refresh_dir(id)
+  return true
+end
+
 ---Read one folder again, without blocking, and take over what changed. At most one read per folder
 ---runs; a change that arrives meanwhile is answered by one more read after it, however many there were.
 ---@param id string  The id of a folder this view has read.
@@ -396,7 +416,7 @@ function View:_ensure_buf()
   vim.bo[buf].modifiable = false
   -- set before FileType, so that whoever reacts to the filetype can already ask which view this is
   vim.b[buf].filetree_view = "files"
-  require("filetree.native.keys").attach(self, buf)
+  require("filetree.native.action").attach(self, buf)
   self:_draw_all()
   vim.bo[buf].filetype = M.FILETYPE
   api.nvim_create_autocmd("CursorMoved", {
@@ -559,7 +579,7 @@ end
 -- ── window ─────────────────────────────────────────────────────────────────────
 
 ---@param win integer
----@param fixed boolean  A side window: pinned width and buffer.
+---@param fixed false|"width"|"height"  A docked window: pinned width (side) or height (top, bottom) and buffer.
 local function window_options(win, fixed)
   -- [0]: local to this window and this buffer, the window's own defaults stay as they are (a file
   -- opened into the same window later, or a split off it, must not inherit a tree's options)
@@ -576,7 +596,11 @@ local function window_options(win, fixed)
   wo.foldmethod = "manual"
   wo.foldenable = false
   if fixed then
-    wo.winfixwidth = true
+    if fixed == "height" then
+      wo.winfixheight = true
+    else
+      wo.winfixwidth = true
+    end
     if vim.fn.exists("&winfixbuf") == 1 then wo.winfixbuf = true end
   end
 end
@@ -627,6 +651,14 @@ function View:open(position, focus)
     self._prev_buf = api.nvim_win_get_buf(win)
     api.nvim_win_set_buf(win, buf)
     window_options(win, false)
+  elseif position == "top" or position == "bottom" then
+    -- a full-width split at the top or bottom edge, like a quickfix list
+    win = api.nvim_open_win(buf, focus ~= false, {
+      split = position == "top" and "above" or "below",
+      win = -1,
+      height = self.height,
+    })
+    window_options(win, "height")
   else
     -- A full-height split at the edge, made without entering it: a tree that is only shown
     -- (`focus = false`) must not look like a window the user was in and left.
@@ -635,7 +667,7 @@ function View:open(position, focus)
       win = -1,
       width = self.width,
     })
-    window_options(win, true)
+    window_options(win, "width")
   end
   self.win, self.position = win, position
   if position ~= "current" then
@@ -688,6 +720,7 @@ function View:close()
       -- the window stays and shows an empty buffer
       if vim.fn.exists("&winfixbuf") == 1 then vim.wo[win][0].winfixbuf = false end
       vim.wo[win][0].winfixwidth = false
+      vim.wo[win][0].winfixheight = false
       api.nvim_win_call(win, function()
         vim.cmd("enew")
       end)
@@ -1148,6 +1181,7 @@ function M.new(opts)
     root = list.norm(opts.root),
     position = opts.position or "left",
     width = opts.width or 32,
+    height = opts.height or 15,
     sort = { kind = "name", descending = false },
     hide_ignored = false,
     _sync = false,

@@ -247,7 +247,16 @@ function M.items()
   if mcfg.enable == false then return {} end
 
   local out = {}
+  -- On the own tree the menu lists what applies to the node: a row without a path (the "N more" line)
+  -- gets none of the groups that act on a file, and the actions of its table come in a group of their own.
+  local view = package.loaded["filetree.native.view"]
+    and require("filetree.native.view").of_buf(vim.api.nvim_get_current_buf())
+  local row = view and view:current()
+  local pathless = view ~= nil and not (row and row.node.path)
+  local PATH_GROUPS = { fileops = true, clipboard = true, delete = true, open = true, media = true }
+  PATH_GROUPS.paths, PATH_GROUPS.info = true, true
   local on = function(group)
+    if pathless and PATH_GROUPS[group] then return false end
     return mcfg[group] ~= false
   end
 
@@ -334,8 +343,38 @@ function M.items()
     )
   end
 
+  if view and view.actions and on("actions") then
+    local actions = M.action_entries(view)
+    if #actions > 0 and #out > 0 then out[#out + 1] = { name = "separator" } end
+    vim.list_extend(out, actions)
+  end
+
   if on("window") then add_group(out, M.window_entry()) end
 
+  return out
+end
+
+---The own tree's actions that apply to the node under the cursor and belong in a menu: those of other
+---plugins and of the view's source, and the tree's own that are not about folding and moving (a feature's
+---keys are the curated groups above).
+---@param view Filetree.View
+---@return table[]
+function M.action_entries(view)
+  local action = require("filetree.native.action")
+  local out = {}
+  for _, e in ipairs(action.applicable(view)) do
+    local a = e.action
+    if a.origin ~= "feature" and a.menu ~= false then
+      out[#out + 1] = {
+        name = a.desc or a.name,
+        rtxt = e.key,
+        icon = ICON.filetree,
+        cmd = function()
+          action.run(view, a.name)
+        end,
+      }
+    end
+  end
   return out
 end
 

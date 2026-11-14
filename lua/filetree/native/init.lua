@@ -19,8 +19,10 @@ local api = vim.api
 local M = {}
 
 ---@class Filetree.Native.Opts
----@field position? "left"|"right"|"float"|"current"  Where the tree opens by default (default "left").
+---@field position? "left"|"right"|"top"|"bottom"|"float"|"current"  Where the tree opens by default (default "left").
 ---@field width? integer  Width of a side tree (default 32).
+---@field height? integer  Height of a tree at the top or bottom (default 15).
+---@field hijack_netrw? boolean  A folder opened as a buffer (`nvim <dir>`, `:edit <dir>`) shows the tree in that window (default true).
 ---@field group_empty_dirs? boolean  Draw a chain of folders that hold one folder each as one line (default true).
 ---@field icons? boolean  File and folder icons (default true; without a Nerd Font none are drawn).
 ---@field max_entries? integer  Entries shown per folder; a last line says how many more there are (default 20000, 0 = no limit).
@@ -31,6 +33,8 @@ local M = {}
 local DEFAULTS = {
   position = "left",
   width = 32,
+  height = 15,
+  hijack_netrw = true,
   group_empty_dirs = true,
   icons = true,
   max_entries = 20000,
@@ -47,6 +51,53 @@ local views = {}
 ---@param opts? Filetree.Native.Opts
 function M.setup(opts)
   options = vim.tbl_extend("force", vim.deepcopy(DEFAULTS), opts or {})
+  M.hijack_netrw(options.hijack_netrw ~= false)
+end
+
+---Show a folder that is opened as a buffer as the tree, in the same window, the way netrw would.
+---@param buf integer
+---@return boolean shown
+function M.show_dir_buffer(buf)
+  if not api.nvim_buf_is_valid(buf) or vim.bo[buf].buftype ~= "" then return false end
+  local name = api.nvim_buf_get_name(buf)
+  if name == "" or vim.fn.isdirectory(name) == 0 then return false end
+  local win = vim.fn.bufwinid(buf)
+  if win == -1 then return false end
+  local dir = list.norm(vim.fn.fnamemodify(name, ":p"))
+  api.nvim_set_current_win(win)
+  local view = M.ensure(dir)
+  if view.root ~= dir then
+    if view:is_open() then view:close() end
+    view:set_root(dir)
+  end
+  view:open("current")
+  -- the folder buffer was only the way in; it is nothing to go back to
+  if api.nvim_buf_is_valid(buf) and vim.fn.bufwinid(buf) == -1 then
+    pcall(api.nvim_buf_delete, buf, { force = true })
+  end
+  if view._prev_buf == buf then view._prev_buf = nil end
+  return true
+end
+
+---Turn the netrw replacement on or off. With it on, netrw's own folder listing is not used: its
+---autocommands are taken out when it is loaded (they would draw over the tree first).
+---@param on boolean
+function M.hijack_netrw(on)
+  local group = api.nvim_create_augroup("filetree_native_netrw", { clear = true })
+  if not on then return end
+  pcall(api.nvim_clear_autocmds, { group = "FileExplorer" })
+  api.nvim_create_autocmd("BufEnter", {
+    group = group,
+    nested = true,
+    desc = "[filetree] A folder opened as a buffer shows the own tree",
+    callback = function(ev)
+      if require("filetree.adapter").get() == nil then return end
+      if require("filetree.adapter").get().name ~= "native" then return end
+      vim.schedule(function()
+        M.show_dir_buffer(ev.buf)
+      end)
+    end,
+  })
 end
 
 ---@return Filetree.Native.Opts
@@ -86,6 +137,7 @@ function M.ensure(root)
     root = root or vim.fn.getcwd(),
     position = options.position,
     width = options.width,
+    height = options.height,
     group_empty = options.group_empty_dirs,
     icons = options.icons,
     max_entries = options.max_entries,
@@ -120,6 +172,7 @@ function M.reset()
   list.invalidate()
   require("filetree.native.fs.watch").stop_all()
   require("filetree.native.decor").stop()
+  require("filetree.native.action").reset()
 end
 
 ---A window a file can be opened in: not the tree, not a float, not a special buffer.
@@ -148,8 +201,9 @@ local COMMANDS = { edit = "edit", split = "split", vsplit = "vsplit", tab = "tab
 ---@param view Filetree.View
 ---@param path string
 ---@param mode? FiletreeOpenMode
+---@param win? integer  Open it in this window (a window picker's answer) instead of choosing one.
 ---@return boolean
-function M.open_path(view, path, mode)
+function M.open_path(view, path, mode, win)
   mode = mode or "edit"
   local escaped = vim.fn.fnameescape(path)
   if mode == "tab" then return (pcall(vim.cmd, "tabedit " .. escaped)) end
@@ -162,7 +216,8 @@ function M.open_path(view, path, mode)
 
   -- a floating tree is in the way of the file it opens
   if view.position == "float" and view:is_open() then view:close() end
-  local target = editor_window(view)
+  local target = (win and api.nvim_win_is_valid(win) and win ~= view.win) and win
+    or editor_window(view)
   if not target then
     local adapter = require("filetree.adapter").get()
     target = require("filetree.util.window").open_editor_window(adapter, { empty = true })

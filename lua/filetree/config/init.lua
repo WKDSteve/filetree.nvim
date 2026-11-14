@@ -52,10 +52,12 @@ local KNOWN_MENU = {
   clipboard = true,
   delete = true,
   open = true,
+  media = true,
   paths = true,
   search = true,
   info = true,
   marks = true,
+  actions = true,
   window = true,
 }
 

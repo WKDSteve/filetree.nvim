@@ -2,7 +2,10 @@
 ---@brief `?` cheatsheet — a paged floating window with every key and command
 ---that is active on the current tree.
 ---@description
---- Pages (`<Tab>` / `<S-Tab>` or `1`..`4` switch):
+--- Pages (`<Tab>` / `<S-Tab>` or the page number switch):
+---   0. here       -- own tree only, shown first: the actions of its table that
+---                    apply to the node under the cursor, with the key that
+---                    reaches each one there (`filetree.native.action`)
 ---   1. filetree   -- filetree.nvim's own keymaps, grouped by category
 ---   2. other keys -- every other buffer-local key on the tree buffer: the
 ---                    adapter's native ones (neo-tree, nvim-tree, ...) and the
@@ -360,6 +363,34 @@ local function build_conflicts_page(buf, conflicts)
   return lines
 end
 
+---Page "here", own tree only: exactly the actions of its table that apply to the node under the
+---cursor, each with the key that reaches it there. The rows come from the table the keys are bound
+---from (rule UI-20), so a key listed here does what the row says on this node.
+---@param view Filetree.View
+---@return string[]
+local function build_here_page(view)
+  local entries = require("filetree.native.action").applicable(view)
+  local row = view:current()
+  local label = row and (row.node.label or tostring(row.id)) or "(no entry)"
+  ---@type FiletreeCheatsheetRow[]
+  local rows = {}
+  local widest = 1
+  for _, e in ipairs(entries) do
+    local lhs = e.key or "-"
+    local desc = (e.action.desc or e.action.name):gsub("[%c]+", " ")
+    if not e.key then desc = desc .. "  (:Filetree action " .. e.action.name .. ")" end
+    if e.action.origin == "source" or e.action.origin == "plugin" then
+      desc = desc .. "  [" .. e.action.origin .. "]"
+    end
+    rows[#rows + 1] = { lhs = lhs, desc = desc }
+    if #lhs > widest then widest = #lhs end
+  end
+  local lines = {}
+  if #rows == 0 then return { " nothing applies to " .. label, "" } end
+  emit_group(lines, "on " .. label, rows, widest)
+  return lines
+end
+
 ---@internal
 ---Build every page for the given tree buffer.
 ---@param buf integer
@@ -372,6 +403,12 @@ local function build_pages(buf)
     { title = "other keys", lines = build_other_page(buf) },
     { title = "commands", lines = build_commands_page() },
   }
+  -- the own tree knows what applies where: that page comes first
+  local native_view = package.loaded["filetree.native.view"]
+    and require("filetree.native.view").of_buf(buf)
+  if native_view and native_view.actions then
+    table.insert(pages, 1, { title = "here", lines = build_here_page(native_view) })
+  end
   if #conflicts > 0 then
     pages[#pages + 1] = {
       title = "conflicts",

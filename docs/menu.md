@@ -108,6 +108,16 @@ require("filetree").setup({
     paths     = true, -- copy path / markdown link
     search    = true, -- find files / grep in dir
     info      = true, -- node info + Inspect (`:Inspect`, highlight/treesitter groups at the click)
+    marks     = true, -- toggle / mark all / unmark all / clear / show marked
+    actions   = true, -- own tree only: the actions of its table that apply to the node
+    window    = true, -- open / close the tree itself
   },
 })
 ```
+
+On the own tree (`adapter = "native"`) the menu follows the node: on a line
+without a path (the "N more" line of a long folder) the groups that act on a
+file are left out, and **actions** lists the entries of the tree's action table
+that apply to the node under the cursor (other plugins' actions, the source's,
+and the tree's own that are not about folding), each with the key that reaches
+it there.

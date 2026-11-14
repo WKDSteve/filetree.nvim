@@ -231,7 +231,9 @@ local function refresh_onto(target, dir_node, hold)
   if dir_node and dir_node.is_expanded == false and _adapter.expand_node then
     pcall(_adapter.expand_node, dir_node)
   end
-  if _adapter.refresh then pcall(_adapter.refresh) end
+  require("filetree.util.changed").emit("create", nil, target)
+  -- the own tree reads the one folder the new entry lies in on that event; the others read everything
+  if _adapter.refresh and _adapter.name ~= "native" then pcall(_adapter.refresh) end
   place_cursor.when_rendered(function()
     return _adapter
   end, target, { delays = CURSOR_RETRY_MS, hold = hold, key = "smart_create" })

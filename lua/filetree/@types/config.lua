@@ -25,6 +25,7 @@
 ---@field search    boolean?  find files / grep in dir (default true).
 ---@field info      boolean?  node info (default true).
 ---@field marks     boolean?  toggle / mark all / unmark all / clear / show marked (default true).
+---@field actions   boolean?  own tree only: the actions of its table that apply to the node, other plugins' and the source's (default true).
 ---@field window    boolean?  open/close the tree itself (default true).
 
 --- The **resolved** configuration, as `config.get()` returns it and as every

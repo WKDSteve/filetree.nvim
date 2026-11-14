@@ -271,6 +271,38 @@ falls through to the next action bound to that key, and when none applies the
 tree says why instead of doing nothing. `run` gets a list: the selection, or
 the node under the cursor.
 
+```mermaid
+flowchart LR
+  B["the tree's own<br/>open, fold, -, sw, q"] --> T
+  F["filetree features<br/>their buffer keys"] --> T
+  P["other plugins<br/>registry.action"] --> T
+  S["the view's source<br/>source.actions"] --> T
+  T["action table<br/>of the view"] --> K["keys<br/>(a dispatcher where<br/>several claim one)"]
+  T --> CH["? page 'here'"]
+  T --> CM["context menu"]
+  T --> UC[":Filetree action"]
+```
+
+Which action a key runs, first wins: an action of the view's source, then the
+higher `priority` (default 0), then a filetree feature before another plugin's
+action before the tree's own, then the order of registration. A key that only a
+feature claims keeps that feature's mapping; a key the user or another plugin
+mapped on the tree buffer is left alone. An action that presses its own key while
+it runs (a feature wrapping what was on the key before it) reaches the next
+action of that key, not itself.
+
+### When files changed
+
+Every finished file operation of filetree.nvim fires
+`User FiletreeChanged` with `data = { op, from, to }` (`op`: `"create"`,
+`"move"`, `"copy"`, `"delete"`; a rename is a move). Whoever shows files can
+react to exactly that: the own tree reads the folders `from` and `to` lie in,
+nothing else. Announce your own operation the same way:
+
+```lua
+require("filetree.util.changed").emit("create", nil, "/abs/path/new.lua")
+```
+
 The types are in
 [`lua/filetree/@types/native.lua`](../lua/filetree/@types/native.lua).
 

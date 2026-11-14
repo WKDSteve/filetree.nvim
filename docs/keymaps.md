@@ -34,8 +34,7 @@ require("filetree").setup({
 
 The own tree brings only the keys that make it a tree; everything else in the
 table of [`BINDINGS/KEYMAPS.md`](BINDINGS/KEYMAPS.md) is a feature key and works
-on it as on any backend. Where a feature binds the same key, the feature wins
-(`<CR>` goes through the preview feature first and falls through to the tree).
+on it as on any backend.
 
 | Key | Action |
 | --- | --- |
@@ -46,10 +45,24 @@ on it as on any backend. Where a feature binds the same key, the feature wins
 | `z` | close every folder |
 | `R` | read the folders again |
 | `H` | show or hide the names of the ignore list |
+| `-` | show the parent folder as the root (`tree_traverse`'s `-` does the same when it is on) |
+| `sw` | open the file in a window you pick (`ui.windowpicker`) |
 | `q` | close the tree |
 
+**One table for every key.** On the own tree a key is an entry of its action
+table: the tree's own keys, the features' keys, the actions other plugins
+register and those of the view's source. When several claim one key, the first
+that applies to the node under the cursor runs (an action of the source first,
+then the higher `priority`, then a feature before another plugin's action before
+the tree's own). When none applies, one line says why, e.g. `gC: needs a file`.
+Marked nodes (`m`) are the selection an action gets. `?` opens on the page
+**here**: exactly the actions that apply to the node under the cursor, with the
+key that reaches each one there; the context menu lists the same.
+`:Filetree action <name>` runs one by name (`<Tab>` lists them).
+
 Switch one off or point it elsewhere with `adapter_keymaps`, as for any backend:
-`adapter_keymaps = { H = false }`.
+`adapter_keymaps = { H = false }`. A key mapped like that, or by another plugin,
+stays as it is: the table does not take it back.
 
 ## Noop an adapter (neotree) built-in key:
 
