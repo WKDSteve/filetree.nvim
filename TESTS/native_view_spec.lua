@@ -647,6 +647,31 @@ do
   ok("a refresh keeps the revealed entry", state:line_of(second) ~= nil)
   eq("a path that does not exist is still not found", state:reveal(dir .. "/nope.txt"), false)
   eq("... and leaves the kept entry alone", state:line_of(second) ~= nil, true)
+  -- a name past the cut that the listing hides: asked for once, and then not read again per reveal
+  do
+    state._opts.hide = function()
+      return function(name)
+        return name == vim.fn.fnamemodify(first, ":t")
+      end
+    end
+    state:set_hide_ignored(true)
+    vim.wait(200, function()
+      return false
+    end)
+    local read = list.stats.scans
+    eq("a hidden name past the cut is not found", state:reveal(first), false)
+    local once = list.stats.scans - read
+    ok("... the folder was read for it once at most", once <= 1)
+    read = list.stats.scans
+    state:reveal(first)
+    state:reveal(first)
+    eq("... and not again on the next reveals of the same path", list.stats.scans - read, 0)
+    state:set_hide_ignored(false)
+    state._opts.hide = nil
+    vim.wait(200, function()
+      return false
+    end)
+  end
   -- a file in a folder that is itself past the cut, in a folder cut as well
   state._opts.max_entries = 1
   adapter.collapse_all()

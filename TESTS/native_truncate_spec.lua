@@ -217,6 +217,25 @@ local float = view._name_win
 eq("... in a float of the tree window", vim.api.nvim_win_get_config(float).relative, "win")
 eq("... that cannot be entered", vim.api.nvim_win_get_config(float).focusable, false)
 eq("... and the tree stays the current window", vim.api.nvim_get_current_win(), win)
+vim.api.nvim_exec_autocmds("CursorMoved", { buffer = buf })
+eq("the cursor resting on the line keeps the float it has", view._name_win, float)
+adapter.refresh()
+vim.wait(200, function()
+  return false
+end)
+eq("... a refresh of the tree too: no window closed and opened per draw", view._name_win, float)
+ok("... and it is still on screen", vim.api.nvim_win_is_valid(float))
+if vim.fn.getwininfo(win)[1].leftcol ~= nil then
+  vim.cmd("normal! 10zl")
+  if vim.fn.getwininfo(win)[1].leftcol > 0 then
+    vim.api.nvim_exec_autocmds("CursorMoved", { buffer = buf })
+    eq("scrolled sideways there is no float: the name is not drawn cut", float_text(), nil)
+  end
+  vim.fn.winrestview({ leftcol = 0 })
+  cursor_on(long)
+  float = view._name_win
+  ok("back at the left edge it shows again", float_text() ~= nil)
+end
 cursor_on(wide)
 eq("the next cut name replaces it", float_text(), WIDE)
 ok("... the old float is closed", not vim.api.nvim_win_is_valid(float))
@@ -241,6 +260,24 @@ vim.api.nvim_win_set_width(win, 20)
 cursor_on(long)
 adapter.close()
 eq("closing the tree takes the float away", float_text(), nil)
+
+-- ── a tree that is a float itself ──────────────────────────────────────────────
+native.reset()
+native.setup({})
+adapter.toggle_at("float", { dir = dir })
+win, buf, view = adapter.get_winid(), adapter.get_bufnr(), native.current()
+vim.api.nvim_win_set_width(win, 20)
+vim.api.nvim_set_current_win(win)
+cursor_on(long)
+if float_text() then
+  ok(
+    "a floating tree: the name float lies above it",
+    vim.api.nvim_win_get_config(view._name_win).zindex > vim.api.nvim_win_get_config(win).zindex
+  )
+else
+  say("  n/a  the floating tree is wide enough for the name")
+end
+adapter.close()
 
 -- ── switched off ───────────────────────────────────────────────────────────────
 native.reset()

@@ -63,6 +63,8 @@ local render_listeners = {}
 local redraw_views
 ---@type table<integer, integer>  window -> columns its text may use, read once per redraw
 local text_width = {}
+---@type table<integer, integer>  window -> columns it is scrolled sideways, read once per redraw
+local left_col = {}
 
 ---@class Filetree.View
 ---@field root string  Normalized root directory.
@@ -89,6 +91,7 @@ local text_width = {}
 ---@field _alone_size integer?  The width (height) a docked tree had before it became the only window of its tab.
 ---@field _ask_again boolean?  The sources of the view are about to be asked again after a file operation.
 ---@field _name_win integer?  The float that shows the full name of the cursor line while it is drawn cut.
+---@field _name_shown { name: string, lnum: integer, col: integer }?  What that float says, and where.
 ---@field private _sync boolean
 ---@field private _loaded table<string, true>  Folder ids whose children were read.
 ---@field private _alias table<string, string>  A folder inside a merged line -> the id of that line.
@@ -914,6 +917,9 @@ function View:_keep(dir, path)
   local node = self.main:node(id)
   -- only a folder that was read and cut can hide an entry; anything else that is missing is not there
   if not node or not node.path or not self._loaded[id] then return end
+  -- asked for already and still no row (a name the listing hides): reading the folder again, on
+  -- every buffer the person enters, would bring nothing
+  if self._kept[path] then return end
   if not self.main:node(node.path .. "//more") or not vim.uv.fs_lstat(path) then return end
   local before = self._kept_in[node.path]
   if before then self._kept[before] = nil end
@@ -1717,6 +1723,17 @@ end
 ---@field name string  The full name, as the buffer line holds it.
 ---@field name_col integer  Display column where the name starts.
 
+---How far a window is scrolled sideways (0 on a Neovim that does not say).
+---@param win? integer
+---@return integer
+local function scrolled(win)
+  if not win then return 0 end
+  if left_col[win] then return left_col[win] end
+  if not api.nvim_win_is_valid(win) then return 0 end
+  local info = vim.fn.getwininfo(win)[1]
+  return info and info.leftcol or 0
+end
+
 ---Where the name of a line is cut when the line may use `room` columns; nil when it fits.
 ---@param line Filetree.Line
 ---@param room integer
@@ -1812,19 +1829,16 @@ function M.decorate_line(buf, lnum, win)
     end
   end
 
-  if cut and cut.text ~= "" then
-    -- the buffer line keeps the whole name (`/`, `y` and a search see it); what does not fit is
-    -- drawn over. Not while the window is scrolled sideways: then the person is reading the rest.
-    local info = win and api.nvim_win_is_valid(win) and vim.fn.getwininfo(win)[1] or nil
-    if not info or (info.leftcol or 0) == 0 then
-      local last = line.spans[#line.spans]
-      mark(cut.col, {
-        virt_text = { { cut.text, last and last.hl or nil } },
-        virt_text_pos = "overlay",
-        hl_mode = "combine",
-        priority = 99,
-      })
-    end
+  -- the buffer line keeps the whole name (`/`, `y` and a search see it); what does not fit is drawn
+  -- over. Not while the window is scrolled sideways: then the person is reading the rest.
+  if cut and cut.text ~= "" and scrolled(win) == 0 then
+    local last = line.spans[#line.spans]
+    mark(cut.col, {
+      virt_text = { { cut.text, last and last.hl or nil } },
+      virt_text_pos = "overlay",
+      hl_mode = "combine",
+      priority = 99,
+    })
   end
 
   if #layout.items > 0 then
@@ -1840,7 +1854,7 @@ end
 ---@private
 function View:_name_float_close()
   local win = self._name_win
-  self._name_win = nil
+  self._name_win, self._name_shown = nil, nil
   if win and api.nvim_win_is_valid(win) then pcall(api.nvim_win_close, win, true) end
 end
 
@@ -1848,17 +1862,47 @@ end
 ---when the cursor is on a name that fits, or the tree is not the window the person is in.
 ---@private
 function View:_name_float()
-  self:_name_float_close()
   local win, buf = self.win, self.buf
-  if self._opts.name_float == false or not win or not buf then return end
-  if not api.nvim_win_is_valid(win) or api.nvim_get_current_win() ~= win then return end
-  if api.nvim_win_get_buf(win) ~= buf then return end
-  local lnum = api.nvim_win_get_cursor(win)[1]
-  -- the width of this very moment: the one noted at the last redraw may be from before a resize
-  text_width[win] = nil
-  local name, col = M.cut_name(buf, lnum - 1, win)
-  if not name or not col then return end
+  local name, col, lnum
+  if
+    self._opts.name_float ~= false
+    and win
+    and buf
+    and api.nvim_win_is_valid(win)
+    and api.nvim_get_current_win() == win
+    and api.nvim_win_get_buf(win) == buf
+  then
+    lnum = api.nvim_win_get_cursor(win)[1]
+    -- what the window is at this very moment: what was noted at the last redraw may be from before
+    -- a resize or a scroll
+    text_width[win], left_col[win] = nil, nil
+    -- scrolled sideways the name is not drawn cut, so there is nothing to complete
+    if scrolled(win) == 0 then
+      name, col = M.cut_name(buf, lnum - 1, win)
+    end
+  end
+  if not win or not name or not col then
+    self:_name_float_close()
+    return
+  end
+  -- every draw of the tree ends here: the float that already says this stays, so that a refresh
+  -- while the cursor rests neither flickers nor fires WinClosed and WinNew each time
+  local shown = self._name_shown
+  local old = self._name_win
+  if
+    shown
+    and old
+    and api.nvim_win_is_valid(old)
+    and shown.name == name
+    and shown.lnum == lnum
+    and shown.col == col
+  then
+    return
+  end
+  self:_name_float_close()
   local width = math.min(vim.fn.strdisplaywidth(name), math.max(1, vim.o.columns - 2))
+  -- above the tree when the tree is a float itself
+  local tree_z = api.nvim_win_get_config(win).zindex
   local float_buf = api.nvim_create_buf(false, true)
   vim.bo[float_buf].bufhidden = "wipe"
   api.nvim_buf_set_lines(float_buf, 0, -1, false, { name })
@@ -1875,7 +1919,7 @@ function View:_name_float()
     style = "minimal",
     focusable = false,
     noautocmd = true,
-    zindex = 45,
+    zindex = tree_z and (tree_z + 1) or 45,
   })
   if not okay then
     pcall(api.nvim_buf_delete, float_buf, { force = true })
@@ -1884,6 +1928,7 @@ function View:_name_float()
   vim.wo[float][0].winhighlight = "NormalFloat:FiletreeNameFloat"
   vim.wo[float][0].wrap = false
   self._name_win = float
+  self._name_shown = { name = name, lnum = lnum, col = col }
 end
 
 -- Highlights for the lines on screen only: a status change or a scroll costs the visible rows, never
@@ -1894,6 +1939,7 @@ api.nvim_set_decoration_provider(NS, {
     -- once per redraw of the window, not once per line
     local info = vim.fn.getwininfo(win)[1]
     text_width[win] = api.nvim_win_get_width(win) - (info and info.textoff or 0)
+    left_col[win] = info and info.leftcol or 0
     return true
   end,
   on_line = function(_, win, buf, lnum)
