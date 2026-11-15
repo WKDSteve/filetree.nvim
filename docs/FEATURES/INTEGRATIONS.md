@@ -112,7 +112,15 @@ and open folders of the per-project store land on top of what the other side
 just set. `:FiletreeSessionRestore` keeps working. What to save and set is on
 the adapter: `get_root_path` / `set_root`, `get_expanded_paths` /
 `expand_paths`, and on the own tree `get_view` / `show_view(name)` for the view
-on screen.
+on screen and `get_open_nodes(name)` / `set_open_nodes(name, ids)` for what is
+open in a view of other sources (the groups of the buffers, of git, of the
+tests): ids top to bottom, section heads among them. Setting them closes what
+is open and not named, and opens what is named, now or when it arrives; a view
+that was not shown yet takes them over when it is. A node that is open below a
+closed one is not among the ids. What is open in a view also outlives a source
+that registers again (its plugin set up late, or a second time): the view is
+built again in place, what was open is opened again, and a node closed by hand
+stays closed.
 
 **sessions.nvim.** With sessions.nvim (`restore_tree`, on by default) a named
 session brings the own tree back as it was saved: its root, the open folders

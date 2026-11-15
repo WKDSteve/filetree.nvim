@@ -49,6 +49,7 @@ local M = {}
 ---@field private _answer Filetree.Node[]?  What the loader answered to that question, when it answered at once.
 ---@field private _opened table<any, true>  Nodes with `open = true` that were opened once: closed by hand, they stay closed.
 ---@field private _pending_open table<any, true>  Such nodes that are waiting to be opened.
+---@field private _wanted table<any, true>  Nodes somebody asked to have open (`set_open`) that are not in the tree yet.
 ---@field private _stops (fun())[]
 ---@field private _started boolean
 local Pane = {}
@@ -89,7 +90,12 @@ end
 function Pane:_adopt(source, entry, node, is_root, above)
   local id = node.id
   self._source_of[id] = source
-  if node.open == true and not self._opened[id] then
+  if self._wanted[id] then
+    -- somebody asked for it by name (`set_open`) before it was there
+    self._wanted[id] = nil
+    self._opened[id] = true
+    self._pending_open[id] = true
+  elseif node.open == true and not self._opened[id] then
     self._opened[id] = true
     self._pending_open[id] = true
   end
@@ -179,10 +185,32 @@ function Pane:_root_of(name)
 end
 
 ---Build the tree from scratch: every source is asked for its root again.
-function Pane:build()
+---@param keep? boolean  The tree is built again in place (a source came, went or registered again): what was open is opened again, now or when it arrives, and what was closed by hand stays closed.
+function Pane:build(keep)
+  ---@type (string|number)[]?
+  local open_before = nil
+  ---@type table<any, boolean>
+  local heads_before = {}
+  if keep and self.tree then
+    open_before = self:open_nodes()
+    for _, section in ipairs(self._sections) do
+      heads_before[section.id] = self.tree:is_expanded(section.id)
+    end
+  end
   self._source_of, self._by_path, self._loaded = {}, {}, {}
   self._above = {}
-  self._opened, self._pending_open = {}, {}
+  -- kept with `keep`: a node that says `open = true` and was closed by hand does not open itself again
+  self._opened = open_before and self._opened or {}
+  self._pending_open = {}
+  if open_before then
+    -- what somebody asked to have open and has not arrived yet (`set_open`) stays asked for
+    for _, id in ipairs(open_before) do
+      self._wanted[id] = true
+    end
+  else
+    -- another tree (the first build, another root): nothing is carried over
+    self._wanted = {}
+  end
   self._sections = {}
   local roots = {}
   local severity, aggregate = nil, nil
@@ -223,9 +251,10 @@ function Pane:build()
   end
   built = tree
   self.tree = tree
-  -- a section starts open; a lazy root is asked for its children here
+  -- a section starts open (one that was closed before a build in place stays closed); a lazy root
+  -- is asked for its children here
   for _, section in ipairs(self._sections) do
-    tree:expand(section.id)
+    if heads_before[section.id] ~= false then tree:expand(section.id) end
   end
   -- nothing is on screen yet: the nodes that start open are opened without reporting rows
   for id in pairs(self._pending_open) do
@@ -246,6 +275,51 @@ function Pane:open_pending()
       self:_apply(self.tree:expand(id))
     end
   end
+end
+
+---The ids of the open nodes on screen, top to bottom (so a folder stands before what is in it).
+---Section heads are among them. Only ids that can be written down: strings and numbers.
+---@return (string|number)[]
+function Pane:open_nodes()
+  local out = {}
+  local tree = self.tree
+  for i = 1, tree:count() do
+    local row = tree:row(i)
+    local kind = type(row.id)
+    if row.expanded and (kind == "string" or kind == "number") then out[#out + 1] = row.id end
+  end
+  return out
+end
+
+---Have exactly these nodes open: what is open and not named is closed (a section head too), what is
+---named is opened, now or when it arrives (a node below a folder that is read later, a source that
+---answers later). A node that says `open = true` and arrives later still opens itself.
+---@param ids (string|number)[]  As `open_nodes` answered them: a folder before what is in it.
+function Pane:set_open(ids)
+  local tree = self.tree
+  local want = {}
+  for _, id in ipairs(ids) do
+    want[id] = true
+  end
+  -- from the bottom up: closing a row takes the rows below it away
+  local open = self:open_nodes()
+  for i = #open, 1, -1 do
+    local id = open[i]
+    if not want[id] and tree:node(id) then
+      self._opened[id] = true
+      self:_apply(tree:collapse(id))
+    end
+  end
+  self._wanted = {}
+  for _, id in ipairs(ids) do
+    if tree:node(id) then
+      self._opened[id] = true
+      if not tree:is_expanded(id) then self:_apply(tree:expand(id)) end
+    else
+      self._wanted[id] = true
+    end
+  end
+  self:open_pending()
 end
 
 ---How many nodes of the view carry a status (changed files, failed tests, problems): the number the
@@ -352,7 +426,9 @@ function Pane:reload(source)
         -- another root, or the source came or went: the sections are not the ones that were built
         local was_started = self._started
         self:stop()
-        self:build()
+        -- the source came or went: in place, what was open is open again. Another root is another
+        -- tree: what was open is closed, as in the files view.
+        self:build(fresh.id == section.id or not (fresh.available and section.available))
         if was_started then self:start() end
         self._hooks.redraw()
         return
@@ -477,6 +553,7 @@ function M.new(name, sources, hooks)
     _asking = false,
     _opened = {},
     _pending_open = {},
+    _wanted = {},
     _stops = {},
     _started = false,
   }, Pane)

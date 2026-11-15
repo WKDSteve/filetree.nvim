@@ -756,6 +756,177 @@ do
   remove_later()
 end
 
+-- ── the open nodes of a view of sources, read and set ──────────────────────────
+-- (what a session stores next to the open folders of the files)
+do
+  ---@param name string
+  local function register_groups(name)
+    return registry.source({
+      name = name,
+      title = "Groups",
+      root = function()
+        return {
+          id = name .. ":root",
+          label = "Groups",
+          children = {
+            {
+              id = name .. ":a",
+              label = "a",
+              kind = "group",
+              children = {
+                {
+                  id = name .. ":a1",
+                  label = "a1",
+                  kind = "group",
+                  children = { { id = name .. ":a1x", label = "x", kind = "note" } },
+                },
+              },
+            },
+            {
+              id = name .. ":b",
+              label = "b",
+              kind = "group",
+              -- read when it is opened, and it answers a moment later
+              children = function(_, cb)
+                vim.defer_fn(function()
+                  cb({
+                    {
+                      id = name .. ":b1",
+                      label = "b1",
+                      kind = "group",
+                      children = { { id = name .. ":b1x", label = "y", kind = "note" } },
+                    },
+                  })
+                end, 10)
+              end,
+            },
+            {
+              id = name .. ":c",
+              label = "c",
+              kind = "group",
+              open = true,
+              children = { { id = name .. ":c1", label = "z", kind = "note" } },
+            },
+          },
+        }
+      end,
+    })
+  end
+  local remove_groups = register_groups("groups")
+  local remove_later = register_groups("groups2")
+  native.setup(vim.tbl_extend("force", native.options(), { views = {} }))
+
+  eq("the files have paths for this: no ids", adapter.get_open_nodes("files"), nil)
+  eq("a name no view has: no ids", adapter.get_open_nodes("no-such-view"), nil)
+  eq("... and nothing to set", adapter.set_open_nodes("no-such-view", {}), false)
+  eq("the files cannot be set this way", adapter.set_open_nodes("files", {}), false)
+  eq("a view that was never shown has nothing open", adapter.get_open_nodes("groups"), {})
+
+  ok("(the view shows)", (view:show("groups")))
+  eq(
+    "the open nodes of the view on screen: the head and the node that starts open",
+    adapter.get_open_nodes(),
+    { "groups:root", "groups:c" }
+  )
+  view:expand("groups:a")
+  view:expand("groups:a1")
+  eq(
+    "top to bottom, a folder before what is in it",
+    adapter.get_open_nodes("groups"),
+    { "groups:root", "groups:a", "groups:a1", "groups:c" }
+  )
+
+  -- set: what is not named is closed, what is named is opened, also below a node read later
+  eq(
+    "set_open_nodes answers true",
+    adapter.set_open_nodes(
+      "groups",
+      { "groups:root", "groups:b", "groups:b1", 7, {}, "groups:gone" }
+    ),
+    true
+  )
+  ok(
+    "a node below a folder that answers later is opened when it arrives",
+    vim.wait(2000, function()
+      return view.tree:node("groups:b1") ~= nil and view.tree:is_expanded("groups:b1")
+    end, 10)
+  )
+  eq(
+    "exactly the named nodes are open (an id that is none is passed over)",
+    adapter.get_open_nodes("groups"),
+    { "groups:root", "groups:b", "groups:b1" }
+  )
+  eq("... and the lines follow", lines()[#lines() - 1], "y")
+  eq("... the cursor is on a row of the view", view.tree:row_of(view.cursor_id) ~= nil, true)
+  -- the section head can be closed this way too
+  adapter.set_open_nodes("groups", {})
+  eq("nothing named: the head is closed", adapter.get_open_nodes("groups"), {})
+  eq("... one line is left", #lines(), 1)
+  adapter.set_open_nodes("groups", { "groups:root", "groups:a" })
+  eq("... and opened again", adapter.get_open_nodes("groups"), { "groups:root", "groups:a" })
+
+  -- the source registers again (its plugin is set up a second time, or only now): the view is built
+  -- again in place, and what was open is open again, also what was opened or closed by hand
+  view:expand("groups:a1")
+  remove_groups()
+  remove_groups = register_groups("groups")
+  settle(80)
+  eq("(still that view)", view.view_name, "groups")
+  eq(
+    "the source registered again: the same nodes are open",
+    adapter.get_open_nodes("groups"),
+    { "groups:root", "groups:a", "groups:a1" }
+  )
+  ok(
+    "... the node that starts open and was closed stays closed",
+    not view.tree:is_expanded("groups:c")
+  )
+  adapter.set_open_nodes("groups", {})
+  remove_groups()
+  remove_groups = register_groups("groups")
+  settle(80)
+  eq(
+    "a head that was closed stays closed over a new registration",
+    adapter.get_open_nodes("groups"),
+    {}
+  )
+  adapter.set_open_nodes("groups", { "groups:root", "groups:a" })
+
+  -- a view that was not shown yet takes them over when it is
+  view:show("files")
+  eq(
+    "set for a view never shown: true",
+    adapter.set_open_nodes("groups2", { "groups2:root", "groups2:a", "groups2:a1" }),
+    true
+  )
+  eq(
+    "... read back before it is shown",
+    adapter.get_open_nodes("groups2"),
+    { "groups2:root", "groups2:a", "groups2:a1" }
+  )
+  eq("(the files are still on screen)", view.view_name, "files")
+  view:show("groups2")
+  eq(
+    "shown: those nodes are open, the one that starts open by itself is not",
+    adapter.get_open_nodes(),
+    { "groups2:root", "groups2:a", "groups2:a1" }
+  )
+  ok("... on screen", vim.tbl_contains(lines(), "x"))
+  -- a view that is built and not on screen
+  view:show("files")
+  adapter.set_open_nodes("groups", { "groups:root", "groups:c" })
+  eq("set while the files are shown: read back", adapter.get_open_nodes("groups"), {
+    "groups:root",
+    "groups:c",
+  })
+  view:show("groups")
+  ok("... and on screen when the view comes back", vim.tbl_contains(lines(), "z"))
+  ok("... what was open before is closed", not vim.tbl_contains(lines(), "a1"))
+  view:show("files")
+  remove_groups()
+  remove_later()
+end
+
 remove_other()
 vim.notify = real_notify
 native.reset()

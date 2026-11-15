@@ -105,6 +105,7 @@ local left_col = {}
 ---@field _ask_again boolean?  The sources of the view are about to be asked again after a file operation.
 ---@field _name_win integer?  The float that shows the full name of the cursor line while it is drawn cut.
 ---@field _root_back string[]  The roots shown before this one, the last one last.
+---@field _open_wanted table<string, (string|number)[]>  Per view of sources not shown yet: the nodes to have open when it is.
 ---@field _root_forward string[]  The roots gone back from, for the way forward again.
 ---@field _name_shown { name: string, lnum: integer, col: integer }?  What that float says, and where.
 ---@field private _sync boolean
@@ -1840,6 +1841,51 @@ function View:_pane_of(spec)
   return pane
 end
 
+---The spec of a view of sources by name; nil for the files and for a name no view has.
+---@private
+---@param name string
+---@return Filetree.View.Spec|nil
+function View:_spec_of(name)
+  for _, spec in ipairs(self:views()) do
+    if spec.name == name then return (not is_files(spec)) and spec or nil end
+  end
+  return nil
+end
+
+---The ids of the open nodes of a view of sources, top to bottom (a folder before what is in it),
+---section heads among them. For a view that was not shown yet: what `set_open_nodes` was last asked
+---for, else nothing. The files have paths for this (`expanded_paths`).
+---@param name? string  Default: the view on screen.
+---@return (string|number)[]|nil ids  nil for the files and for a name no view has.
+function View:open_nodes(name)
+  name = name or self.view_name
+  if not self:_spec_of(name) then return nil end
+  local pane = self._panes[name]
+  if pane then return pane:open_nodes() end
+  return vim.deepcopy(self._open_wanted[name] or {})
+end
+
+---Have exactly these nodes of a view of sources open (see `Pane:set_open`). A view that was not
+---shown yet takes them over when it is.
+---@param name string
+---@param ids (string|number)[]
+---@return boolean ok  false for the files and for a name no view has.
+function View:set_open_nodes(name, ids)
+  if type(ids) ~= "table" or not self:_spec_of(name) then return false end
+  local clean = {}
+  for _, id in ipairs(ids) do
+    if type(id) == "string" or type(id) == "number" then clean[#clean + 1] = id end
+  end
+  local pane = self._panes[name]
+  if not pane then
+    self._open_wanted[name] = clean
+    return true
+  end
+  if pane == self._pane then self:sync_cursor() end
+  pane:set_open(clean)
+  return true
+end
+
 ---Show another view in this window. The window stays where it is and as wide as it is; every view
 ---keeps its own cursor and its open nodes.
 ---@param name string
@@ -1876,6 +1922,13 @@ function View:show(name)
     end
   else
     local pane = self:_pane_of(spec)
+    -- what somebody asked to have open before the view was ever shown (`set_open_nodes`): taken over
+    -- while the view is not on screen yet, its lines are written below
+    local wanted = self._open_wanted[name]
+    if wanted then
+      self._open_wanted[name] = nil
+      pane:set_open(wanted)
+    end
     self._pane = pane
     self.tree = pane.tree
     local first = pane.tree:row(1)
@@ -1905,7 +1958,8 @@ function View:source_changed(source)
         self:sync_cursor()
         local started = pane:started()
         pane:stop()
-        pane:build()
+        -- in place: what was open is open again, what was closed by hand stays closed
+        pane:build(true)
         if started then pane:start() end
         self.tree = pane.tree
         if self.buf and api.nvim_buf_is_valid(self.buf) then self:_draw_all() end
@@ -1934,6 +1988,7 @@ function M.new(opts)
     _chains = {},
     _root_back = {},
     _root_forward = {},
+    _open_wanted = {},
     _kept = {},
     _kept_in = {},
     _watches = {},
