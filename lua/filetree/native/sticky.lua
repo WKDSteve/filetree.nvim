@@ -161,12 +161,14 @@ function M.update(view, max, reason)
     lines[i] = api.nvim_buf_get_lines(buf, at - 1, at, false)[1] or ""
   end
   local text = table.concat(lines, "\n")
-  local info = vim.fn.getwininfo(win)[1] or {}
   local config = {
     relative = "win",
     win = win,
-    -- row 0 of a window is its winbar (the view bar)
-    row = info.winbar or 0,
+    -- Row 0 of a window is its first text row, below the winbar (the view bar). An editor without
+    -- a UI answers the position of such a float as if it lay over the winbar; with a UI attached
+    -- it does not (seen in the screen of the feature sheet: one row lower left a file row in sight
+    -- above the pinned folders).
+    row = 0,
     col = 0,
     width = api.nvim_win_get_width(win),
     height = #rows,

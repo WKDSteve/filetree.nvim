@@ -82,11 +82,9 @@ eq(
 local config = api.nvim_win_get_config(state.win)
 eq("... one line each", config.height, 3)
 eq("... as wide as the tree", config.width, api.nvim_win_get_width(win))
-eq(
-  "... below the view bar when there is one",
-  config.row,
-  (vim.fn.getwininfo(win)[1] or {}).winbar or 0
-)
+-- row 0 of a window is its first text row: the float covers the rows it stands for, not the view
+-- bar and not one row further down (TESTS/sheets/native-sticky-parents.sheet.lua has the screen)
+eq("... on the first text row of the tree", config.row, 0)
 eq("... and nobody can end in it", config.focusable, false)
 ok(
   "a pinned folder is drawn as its row of the tree is",
