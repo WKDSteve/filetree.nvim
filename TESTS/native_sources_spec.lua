@@ -619,6 +619,143 @@ eq(
 
 eq("nothing at warning level in the whole run", loud(), {})
 remove_spec()
+-- ── a node that starts open, and its source registered again ──────────────────
+-- (the plugin behind a source is set up a second time: testing.nvim's view of the tests showed its
+-- one spec folder closed after that)
+for _, how in ipairs({ "list", "lazy", "late" }) do
+  local name = "opens_" .. how
+  local dir_id = name .. ":dir"
+  local function kids()
+    return {
+      {
+        id = dir_id,
+        label = "only",
+        kind = "dir",
+        open = true,
+        children = { { id = name .. ":leaf", label = "leaf", kind = "note" } },
+      },
+    }
+  end
+  local function register_opens()
+    local children = kids()
+    if how == "lazy" then
+      -- a root that is asked and answers at once
+      children = function(_, cb)
+        cb(kids())
+      end
+    elseif how == "late" then
+      -- ... and one that answers a moment later
+      children = function(_, cb)
+        vim.defer_fn(function()
+          cb(kids())
+        end, 10)
+      end
+    end
+    return registry.source({
+      name = name,
+      title = "Opens",
+      root = function()
+        return { id = name .. ":root", label = "Opens", children = children }
+      end,
+    })
+  end
+  local function is_open()
+    return view.tree:node(dir_id) ~= nil and view.tree:is_expanded(dir_id)
+  end
+  ---Wait until the node is there and open (a root that answers later, a queue that is busy).
+  local function opens()
+    return vim.wait(2000, is_open, 10)
+  end
+  ---Wait until the node is there, then let what follows its arrival run.
+  local function arrived()
+    vim.wait(2000, function()
+      return view.tree:node(dir_id) ~= nil
+    end, 10)
+    settle(60)
+  end
+  local remove_opens = register_opens()
+  native.setup(vim.tbl_extend("force", native.options(), { views = {} }))
+  ok(how .. ": (the view of the source shows)", (view:show(name)))
+  settle(60)
+  ok(how .. ": a node that says open = true starts open", opens())
+  -- registered again while its view is on screen: taken away and brought back
+  remove_opens()
+  remove_opens = register_opens()
+  settle(60)
+  eq(how .. ": (still the view of the source)", view.view_name, name)
+  ok(how .. ": registered again while on screen: the node is open", opens())
+  -- ... registered over itself, without being taken away first
+  register_opens()
+  settle(60)
+  ok(how .. ": registered over itself: the node is open", opens())
+  -- ... and while another view is on screen
+  view:show("files")
+  remove_opens()
+  remove_opens = register_opens()
+  settle(60)
+  view:show(name)
+  settle(60)
+  ok(how .. ": registered again while the files were shown: open when its view comes back", opens())
+  -- closed by hand it stays closed, as long as the source is the same registration
+  view:collapse(dir_id)
+  view:show("files")
+  view:show(name)
+  arrived()
+  ok(how .. ": closed by hand: closed when the view comes back", not is_open())
+  view:refresh()
+  settle(60)
+  arrived()
+  ok(how .. ": ... and after a refresh", not is_open())
+  view:show("files")
+  remove_opens()
+end
+
+-- the flag comes with a later answer, and nothing else about the node changes: no row is written,
+-- and the node is opened all the same (a view of tests that learns only then that there is one folder)
+do
+  local says_open, emit = false, nil
+  local remove_later = registry.source({
+    name = "opens_later",
+    title = "Later",
+    root = function()
+      return {
+        id = "opens_later:root",
+        label = "Later",
+        children = {
+          {
+            id = "opens_later:dir",
+            label = "only",
+            kind = "dir",
+            open = says_open or nil,
+            children = { { id = "opens_later:leaf", label = "leaf", kind = "note" } },
+          },
+        },
+      }
+    end,
+    subscribe = function(_, e)
+      emit = e
+      return function()
+        emit = nil
+      end
+    end,
+  })
+  native.setup(vim.tbl_extend("force", native.options(), { views = {} }))
+  ok("(the view of the source shows)", (view:show("opens_later")))
+  settle(60)
+  ok("a node that does not say open starts closed", not view.tree:is_expanded("opens_later:dir"))
+  says_open = true
+  emit.reset()
+  ok(
+    "the flag comes with a later answer: the node is opened",
+    vim.wait(1000, function()
+      return view.tree:is_expanded("opens_later:dir")
+    end, 10)
+  )
+  eq("... and its content is on screen", lines()[#lines()], "leaf")
+  view:show("files")
+  remove_later()
+end
+
 remove_other()
 vim.notify = real_notify
 native.reset()
