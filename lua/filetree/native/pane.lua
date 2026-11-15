@@ -47,8 +47,9 @@ local M = {}
 ---@field private _loaded table<any, true>  Lazy nodes that were asked for their children.
 ---@field private _asking boolean  A lazy node is being asked again right now, by `_reload`.
 ---@field private _answer Filetree.Node[]?  What the loader answered to that question, when it answered at once.
----@field private _opened table<any, true>  Nodes with `open = true` that were opened once: closed by hand, they stay closed.
+---@field private _opened table<any, true>  Nodes with `open = true` that were opened once: closed by hand, they stay closed, until they come once without saying it.
 ---@field private _pending_open table<any, true>  Such nodes that are waiting to be opened.
+---@field private _asking_roots boolean?  The sources are being asked for their roots again (`reload`): nothing is opened until that is through.
 ---@field private _wanted table<any, true>  Nodes somebody asked to have open (`set_open`) that are not in the tree yet.
 ---@field private _stops (fun())[]
 ---@field private _started boolean
@@ -98,6 +99,11 @@ function Pane:_adopt(source, entry, node, is_root, above)
   elseif node.open == true and not self._opened[id] then
     self._opened[id] = true
     self._pending_open[id] = true
+  elseif node.open ~= true then
+    -- It comes without the word: the next time it says `open = true` that is a new request (a step
+    -- of a pipeline that was red, ran again without findings and is red again). A node closed by
+    -- hand stays closed for as long as it keeps saying it.
+    self._opened[id] = nil
   end
   -- the last node handed over for a path: after a reload that is one of the fresh nodes, also when
   -- the file moved to another group and its old node is gone
@@ -267,7 +273,9 @@ end
 ---Open the nodes that asked to start open and are in the tree by now. Called after rows were
 ---written: the nodes a lazy answer brought are registered only once that answer is taken over.
 function Pane:open_pending()
-  if next(self._pending_open) == nil then return end
+  -- while the sources are asked again the tree still holds the nodes as they were: a node that comes
+  -- back with children is a leaf until they are mixed in, and opening a leaf does nothing
+  if self._asking_roots or next(self._pending_open) == nil then return end
   local pending = self._pending_open
   self._pending_open = {}
   for id in pairs(pending) do
@@ -419,6 +427,18 @@ end
 ---Ask sources for their roots again and take over what changed; what is open stays open.
 ---@param source? string  Only this source (default: every source of the view).
 function Pane:reload(source)
+  self._asking_roots = true
+  local rebuilt = self:_reload_sections(source)
+  self._asking_roots = false
+  -- the nodes that asked to be open, now that their children are in the tree; also when no row
+  -- changed (a node that only gained the word)
+  if not rebuilt then self:open_pending() end
+end
+
+---@private
+---@param source? string
+---@return boolean rebuilt  The tree was built again (and the view drawn).
+function Pane:_reload_sections(source)
   for i, section in ipairs(self._sections) do
     if not source or section.source == source then
       local root, fresh = self:_root_of(section.source)
@@ -430,8 +450,9 @@ function Pane:reload(source)
         -- tree: what was open is closed, as in the files view.
         self:build(fresh.id == section.id or not (fresh.available and section.available))
         if was_started then self:start() end
+        self._asking_roots = false
         self._hooks.redraw()
-        return
+        return true
       end
       self._sections[i] = fresh
       -- also for a source that still cannot load: its reason may be another one
@@ -450,6 +471,7 @@ function Pane:reload(source)
       if fresh.available then self:_resync(root.id, root) end
     end
   end
+  return false
 end
 
 ---@private

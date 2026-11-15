@@ -756,6 +756,65 @@ do
   remove_later()
 end
 
+-- A node that was open, comes once without children and without the word, and then says
+-- `open = true` again: that is a new request (a pipeline step that was red, runs again, is red again).
+do
+  local shape, emit = "red", nil
+  local remove_steps = registry.source({
+    name = "steps",
+    title = "Steps",
+    root = function()
+      local step = { id = "steps:lint", label = "lint", kind = "step" }
+      if shape == "red" then
+        step.open = true
+        step.children = { { id = "steps:finding", label = "finding", kind = "note" } }
+      end
+      return { id = "steps:root", label = "Steps", children = { step } }
+    end,
+    subscribe = function(_, e)
+      emit = e
+      return function()
+        emit = nil
+      end
+    end,
+  })
+  native.setup(vim.tbl_extend("force", native.options(), { views = {} }))
+  settle(60)
+  ok("(the view shows)", (view:show("steps")))
+  ok("a red step starts open", vim.tbl_contains(lines(), "finding"))
+  shape = "queued"
+  emit.reset()
+  settle(60)
+  ok("it runs again: no findings, nothing to open", not vim.tbl_contains(lines(), "finding"))
+  shape = "red"
+  emit.reset()
+  ok(
+    "red again: it is open again, nobody closed it by hand",
+    vim.wait(1000, function()
+      return vim.tbl_contains(lines(), "finding")
+    end, 10)
+  )
+  -- closed by hand it stays closed while it keeps saying open = true
+  view:collapse("steps:lint")
+  emit.reset()
+  settle(60)
+  ok("closed by hand and asked again: it stays closed", not vim.tbl_contains(lines(), "finding"))
+  -- ... until it has come once without the word
+  shape = "queued"
+  emit.reset()
+  settle(60)
+  shape = "red"
+  emit.reset()
+  ok(
+    "after a round without findings a red step opens again",
+    vim.wait(1000, function()
+      return vim.tbl_contains(lines(), "finding")
+    end, 10)
+  )
+  view:show("files")
+  remove_steps()
+end
+
 -- ── the open nodes of a view of sources, read and set ──────────────────────────
 -- (what a session stores next to the open folders of the files)
 do
