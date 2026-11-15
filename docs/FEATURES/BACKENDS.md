@@ -214,6 +214,10 @@ native = { fs = { helper = "auto" } }  -- "auto" | false | "/path/to/filetree-he
   is asked of `du` / PowerShell, each of its watches becomes a libuv handle on
   the same folder (which is read again), and it is said once. On Linux the
   folders below an open root are followed again once they are read again.
+- **On Linux its watch takes one inotify watch per folder below the root**,
+  ignored ones (`node_modules`, `target`) included. When the system's limit
+  (`fs.inotify.max_user_watches`) is reached, it says so once and the tree goes
+  back to one handle per folder read for the rest of the session.
 - **`:checkhealth filetree`** names its state: not installed (and where it
   looked), off and why, found, running with its pid, or ended and why.
 

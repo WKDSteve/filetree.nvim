@@ -239,8 +239,18 @@ else
     eq("... without starting a process", spawned, {})
   end
 
-  -- the watch: on Linux through the helper, recursive
+  -- the watch: on Linux through the helper, recursive. Windows and macOS watch recursively with libuv;
+  -- there the helper's watch is checked as Linux would use it (notify watches recursively everywhere)
   do
+    if watch.native_recursive then
+      eq(
+        "Windows and macOS: libuv watches recursively, the helper does not watch",
+        watch.by_helper(),
+        false
+      )
+    end
+    local native_recursive = watch.native_recursive
+    watch.native_recursive = false
     local reported = {}
     local unsubscribe = watch.subscribe(function(dirs)
       for _, changed in ipairs(dirs) do
@@ -249,15 +259,8 @@ else
     end)
     local unwatch = watch.watch(dir)
     settle(400)
-    if watch.native_recursive then
-      eq(
-        "Windows and macOS: libuv watches recursively, the helper does not watch",
-        watch.by_helper(),
-        false
-      )
-      na("the watch through the helper", "this system has recursive handles")
-    else
-      eq("Linux: the helper watches", watch.by_helper(), true)
+    do
+      eq("without recursive libuv handles the helper watches", watch.by_helper(), true)
       eq("... so a folder below the root is covered", watch.recursive, true)
       eq("... with one watch of the helper", watch.state().watchers[1].helper, true)
       mkfile("closed/deeper/new.txt")
@@ -285,8 +288,51 @@ else
       vim.fn.delete(dir .. "/right_after_resume.txt")
     end
     unwatch()
-    unsubscribe()
     eq("the watch is given back", watch.count(), 0)
+
+    -- the helper cannot watch a folder (on Linux: the inotify limit): handles per folder again
+    do
+      local told = {}
+      local notify = vim.notify
+      ---@diagnostic disable-next-line: duplicate-set-field
+      vim.notify = function(msg, level)
+        if tostring(msg):find("watched one by one", 1, true) then
+          told[#told + 1] = { msg = msg, level = level }
+        end
+      end
+      local real_request = helper.request
+      local gen
+      ---@diagnostic disable-next-line: duplicate-set-field
+      helper.request = function(...)
+        gen = real_request(...)
+        return gen
+      end
+      local unwatch_err = watch.watch(dir)
+      helper.request = real_request
+      eq("a watch of the helper", watch.state().watchers[1].helper, true)
+      -- answered in the helper's place: what notify says when inotify has no watch left
+      helper.on("error", gen, "OS file watch limit reached")
+      settle(100)
+      local state = watch.state()
+      eq("its error leaves the folder to a libuv handle", state.watchers[1].helper, nil)
+      ok("... the error is kept: " .. tostring(state.helper_failed), state.helper_failed ~= nil)
+      eq("... no more watches of the helper in this session", watch.by_helper(), false)
+      eq("... so folders are watched one by one", watch.recursive, false)
+      eq("... and it is said once, as a warning", #told == 1 and told[1].level, vim.log.levels.WARN)
+      reported = {}
+      mkfile("after_the_error.txt")
+      vim.wait(3000, function()
+        return reported[dir]
+      end, 20)
+      ok("... and the folder is still followed", reported[dir])
+      vim.fn.delete(dir .. "/after_the_error.txt")
+      vim.notify = notify
+      unwatch_err()
+      watch.stop_all()
+      eq("stop_all forgets the error", watch.by_helper(), true)
+    end
+    unsubscribe()
+    watch.native_recursive = native_recursive
     -- what the watch case made is not part of the listings below
     vim.fn.delete(dir .. "/closed/deeper/new.txt")
     vim.fn.delete(dir .. "/later", "rf")

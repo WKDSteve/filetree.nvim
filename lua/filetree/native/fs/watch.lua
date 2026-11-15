@@ -30,10 +30,15 @@ local sysname = uv.os_uname().sysname
 --- libuv watches a directory tree with one handle on these systems only.
 M.native_recursive = sysname == "Windows_NT" or sysname == "Darwin"
 
+---@type string|nil  why the helper does not watch any more in this session (it could not watch a folder)
+local helper_failed = nil
+
 ---Does the helper process watch here (a system without recursive handles, and a helper to use)?
 ---@return boolean
 local function by_helper()
-  return not M.native_recursive and require("filetree.native.fs.helper").available()
+  return not M.native_recursive
+    and helper_failed == nil
+    and require("filetree.native.fs.helper").available()
 end
 M.by_helper = by_helper
 
@@ -180,7 +185,21 @@ local function open_helper(dir)
   local helper = require("filetree.native.fs.helper")
   ---@type Filetree.Fs.Watch.Entry
   local entry = { refs = 0 }
-  local gen = helper.request("watch", dir, function(kind, payload)
+  -- the helper's watch is over: a libuv handle on the same folder from now on, and the folder is read
+  -- again (what changed below it in the meantime would be missed otherwise)
+  local function to_handle()
+    entry.helper = nil
+    if watchers[dir] ~= entry then return end
+    local fallback, err = open_handle(dir)
+    if fallback then
+      entry.handle = fallback.handle
+    else
+      entry.error = err
+    end
+    M.on_changed(dir)
+  end
+  local gen
+  gen = helper.request("watch", dir, function(kind, payload)
     if kind == "changed" and type(payload) == "table" then
       for _, changed in ipairs(payload) do
         M.on_changed(list.norm(changed))
@@ -190,20 +209,24 @@ local function open_helper(dir)
       -- What came or went in between is caught by reading the folder once more.
       M.on_changed(dir)
     elseif kind == "error" then
-      entry.error = tostring(payload)
-    elseif kind == "lost" then
-      -- the helper ended: a libuv handle on the same folder from now on, and the folder is read
-      -- again (what changed below it in the meantime would be missed otherwise)
-      entry.helper = nil
-      if watchers[dir] == entry then
-        local fallback, err = open_handle(dir)
-        if fallback then
-          entry.handle = fallback.handle
-        else
-          entry.error = err
-        end
-        M.on_changed(dir)
+      -- It cannot watch this folder (on Linux: more folders below it than inotify allows). No more
+      -- watches of the helper in this session: one handle per folder read, as without it.
+      if not helper_failed then
+        helper_failed = ("cannot watch %s: %s"):format(dir, tostring(payload))
+        vim.schedule(function()
+          vim.notify(
+            ("[filetree] the helper process %s; folders are watched one by one again"):format(
+              helper_failed
+            ),
+            vim.log.levels.WARN
+          )
+        end)
       end
+      helper.drop(gen, "unwatch")
+      to_handle()
+      return false
+    elseif kind == "lost" then
+      to_handle()
       return false
     end
     return true
@@ -352,6 +375,7 @@ function M.state()
   local out = {
     recursive = M.recursive,
     by_helper = by_helper(),
+    helper_failed = helper_failed,
     watchers = {},
     released = {},
     quarantined = {},
@@ -415,12 +439,13 @@ function M.release(path)
   return resume, count
 end
 
----Close every handle and forget what was pending. Subscribers stay.
+---Close every handle and forget what was pending, and that the helper could not watch. Subscribers stay.
 function M.stop_all()
   for _, dir in ipairs(vim.tbl_keys(watchers)) do
     close(dir)
   end
   dirty, traffic, released = {}, {}, {}
+  helper_failed = nil
   if timer then
     timer:stop()
     if not timer:is_closing() then timer:close() end

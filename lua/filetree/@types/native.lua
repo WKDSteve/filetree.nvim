@@ -106,6 +106,7 @@
 ---@class Filetree.Fs.WatchState
 ---@field recursive boolean one handle per root watches the whole tree below it (Windows, macOS, and elsewhere through the helper process); false: one handle per folder read
 ---@field by_helper boolean the watches are the helper process's (a system without recursive libuv handles, with the helper running or to be started)
+---@field helper_failed? string why the helper does not watch any more in this session (it could not watch a folder, e.g. the inotify limit)
 ---@field watchers { dir: string, refs: integer, error?: string, helper?: true }[] the open handles, sorted by folder; `refs`: how many times the folder was asked for; `helper`: a watch of the helper process
 ---@field released { dir: string, refs: integer }[] handles closed for a running file operation, to be opened again after it
 ---@field quarantined string[] folders held back after an event storm, reported once they went quiet
