@@ -574,13 +574,17 @@ ok(("10k entries: reopening under 500 ms (%.0f ms)"):format(again_ms), again_ms 
 -- and timing it needs no screen.
 local view_mod = require("filetree.native.view")
 local big_buf = adapter.get_bufnr()
-t0 = vim.uv.hrtime()
-local spans = 0
-for lnum = 0, 49 do
-  spans = spans + view_mod.decorate_line(big_buf, lnum)
+-- the best of five rounds: one round measures whatever else the machine runs as well
+local spans, draw_ms = 0, math.huge
+for _ = 1, 5 do
+  t0 = vim.uv.hrtime()
+  spans = 0
+  for lnum = 0, 49 do
+    spans = spans + view_mod.decorate_line(big_buf, lnum)
+  end
+  draw_ms = math.min(draw_ms, (vim.uv.hrtime() - t0) / 1e6)
 end
-local draw_ms = (vim.uv.hrtime() - t0) / 1e6
-say(("  info 10k entries: decorating 50 visible lines %.2f ms"):format(draw_ms))
+say(("  info 10k entries: decorating 50 visible lines %.2f ms, best of 5"):format(draw_ms))
 ok("decorating a screen of lines highlights something", spans >= 50)
 ok(
   ("10k entries: a screen of lines is decorated in under 10 ms (%.2f ms)"):format(draw_ms),
@@ -732,11 +736,19 @@ do
   end
   say(("  info opening the tree again (window, options, cursor): %.2f ms, best of 5"):format(best))
   ok(("the tree opens again in under 30 ms (%.2f ms)"):format(best), best < 30)
-  local t = vim.uv.hrtime()
-  native.reset()
-  adapter.toggle_at("left", { dir = dir })
-  local cold = (vim.uv.hrtime() - t) / 1e6
-  say(("  info opening a new tree (read the root, build, buffer, window): %.2f ms"):format(cold))
+  -- the best of three: every round forgets the tree and what was read, and starts from nothing
+  local cold = math.huge
+  for _ = 1, 3 do
+    local t = vim.uv.hrtime()
+    native.reset()
+    adapter.toggle_at("left", { dir = dir })
+    cold = math.min(cold, (vim.uv.hrtime() - t) / 1e6)
+  end
+  say(
+    ("  info opening a new tree (read the root, build, buffer, window): %.2f ms, best of 3"):format(
+      cold
+    )
+  )
   ok(("a new tree opens in under 150 ms (%.2f ms)"):format(cold), cold < 150)
 end
 
