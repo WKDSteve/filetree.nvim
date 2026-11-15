@@ -1,0 +1,46 @@
+testing.nvim screen v1
+size: 90x20
+cursor: 9,17
+mode: n
+--- text
+01|##########################################################################################
+02|▾ proj/                         │return 1                    │# Readme
+03|  ▾ docs/                       │~                           │~
+04|      guide.md                  │~                           │~
+05|  ▾ lua/                        │~                           │~
+06|      init.lua                  │~                           │~
+07|    README.md                   │~                           │~
+08|~              ╭─────────────────────── filetree ai ───────────────────────╮
+09|~              │                1. trash.trash docs/guide.md               │
+10|~              │  Run this plan? trash.trash docs/guide.md changes files.  │
+11|~              │                                                           │
+12|~              │                      [ Yes ]  [ No ]                      │
+13|~              ╰───────────────────────────────────────────────────────────╯
+14|~                               │~                           │~
+15|~                               │~                           │~
+16|~                               │~                           │~
+17|~                               │~                           │~
+18|~                               │~                           │~
+19|[filetree.ai] ai: asking about trash the guide
+20|
+--- attrs
+01|##########################################################################################
+02|a bbbbb                         cbbbbbb d                    cbbbbbbbb
+03|  a eeeee                       caaaaaaaaaaaaaaaaaaaaaaaaaaaacaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+04|    a cccccccc                  caaaaaaaaaaaaaaaaaaaaaaaaaaaacaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+05|  a eeee                        caaaaaaaaaaaaaaaaaaaaaaaaaaaacaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+06|ffffgfhhhhhhhhffffffffffffffffffcaaaaaaaaaaaaaaaaaaaaaaaaaaaacaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+07|  a iiiiiiiii                   caaaaaaaaaaaaaaaaaaaaaaaaaaaacaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+08|aaaaaaaaaaaaaaajjjjjjjjjjjjjjjjjjjjjjjjbbbbbbbbbbbbbjjjjjjjjjjjjjjjjjjjjjjjjaaaaaaaaaaaaaa
+09|aaaaaaaaaaaaaaajjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjaaaaaaaaaaaaaa
+10|aaaaaaaaaaaaaaajjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjaaaaaaaaaaaaaa
+11|aaaaaaaaaaaaaaajjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjaaaaaaaaaaaaaa
+12|aaaaaaaaaaaaaaajjjjjjjjjjjjjjjjjjjjjjjjjkjjjjjjllmllljjjjjjjjjjjjjjjjjjjjjjjaaaaaaaaaaaaaa
+13|aaaaaaaaaaaaaaajjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjaaaaaaaaaaaaaa
+14|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaacaaaaaaaaaaaaaaaaaaaaaaaaaaaacaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+15|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaacaaaaaaaaaaaaaaaaaaaaaaaaaaaacaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+16|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaacaaaaaaaaaaaaaaaaaaaaaaaaaaaacaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+17|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaacaaaaaaaaaaaaaaaaaaaaaaaaaaaacaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+18|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaacaaaaaaaaaaaaaaaaaaaaaaaaaaaacaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+19|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn
+20|nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn
