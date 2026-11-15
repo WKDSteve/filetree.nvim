@@ -57,6 +57,10 @@ local function settle(ms)
 end
 
 local SLACK = vim.env.CI and 5 or 1
+--- What the yardstick of the 10k case takes on the development machine while nothing else runs
+--- (STEVESPC, i5-12400F: 6.2 to 6.7 ms, the fastest of 40). A budget is scaled by how much longer it
+--- takes in this very run.
+local YARDSTICK_MS = 6.5
 local function ms(ns)
   return ns / 1e6
 end
@@ -336,6 +340,27 @@ do
 
   local meter = slices[big]
   local rounds, last_new = 0, nil
+  ---A piece of plain Lua work of the size of a slice (10 000 names made, sorted, and a table made for
+  ---each), timed: the yardstick for how fast this machine is right now. In ns, the fastest of five.
+  local function yardstick()
+    local best = math.huge
+    for _ = 1, 5 do
+      local t0 = vim.uv.hrtime()
+      local names = {}
+      for i = 1, 10000 do
+        names[i] = ("entry_%05d.txt"):format((i * 7919) % 10000)
+      end
+      table.sort(names)
+      local nodes = {}
+      for i, name in ipairs(names) do
+        nodes[i] = { id = name, label = name, path = "/x/" .. name, kind = "file" }
+      end
+      assert(#nodes == 10000)
+      best = math.min(best, vim.uv.hrtime() - t0)
+    end
+    return best
+  end
+  local stick_before = yardstick()
   ---The fastest answer so far: the larger of its two slices, in ns.
   local function fastest_of()
     if #meter.nodes == 0 or #meter.merge == 0 then return math.huge end
@@ -355,7 +380,7 @@ do
         return adapter.get_node_line(shown) ~= nil and view._reading[big] == nil
       end, 2)
     end
-  until ms(fastest_of()) < 16 * SLACK or rounds >= 27
+  until ms(fastest_of()) < 16 * SLACK * math.max(1, ms(stick_before) / YARDSTICK_MS) or rounds >= 27
   list.list = real_list
   say(
     ("  info 10k entries, one new file, %d answers: nodes %.1f ms, merge and lines %.1f ms (median); %.1f and %.1f at worst"):format(
@@ -372,12 +397,25 @@ do
   -- machine), so the budget is checked on the fastest of the answers: what the work itself costs.
   -- Everything above that is the machine, and it has the wider budget of the loop.
   local fastest = fastest_of()
+  -- The budget is 16 ms on a machine that does the yardstick in its usual time. Next to a suite, or
+  -- on a slow mount, the yardstick takes longer too, and the budget grows by as much: load must not
+  -- read as a slow tree.
+  local stick = math.max(stick_before, yardstick())
+  local scale = math.max(1, ms(stick) / YARDSTICK_MS)
+  local budget = 16 * SLACK * scale
+  say(
+    ("  info yardstick %.1f ms (usual: %.1f ms), the budget of a slice is %.1f ms"):format(
+      ms(stick),
+      YARDSTICK_MS,
+      budget
+    )
+  )
   ok(
-    ("10k entries: no slice over %d ms (the fastest answer, its larger slice: %.1f ms)"):format(
-      16 * SLACK,
+    ("10k entries: no slice over %.1f ms (the fastest answer, its larger slice: %.1f ms)"):format(
+      budget,
       ms(fastest)
     ),
-    ms(fastest) < 16 * SLACK
+    ms(fastest) < budget
   )
   ok(
     ("... and the median under %d ms"):format(50 * SLACK),
