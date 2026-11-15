@@ -4,7 +4,7 @@
 --- The catalog is the action table of the view (decision L11 of the concept): the model picks from what
 --- the tree can do anyway. Every entry gets a stable name: the tree's own and other plugins' actions keep
 --- theirs, a filetree feature's key (`feature:sg` in the table) is named after the feature and its action
---- (`open_variants.vsplit`), read from the keymap registry, so the name does not depend on the key.
+--- (`open_variants.vsplit`), which the table writes on the entry, so the name does not depend on the key.
 ---
 --- Whether an entry changes files decides whether a plan runs at once or asks first:
 ---
@@ -24,40 +24,6 @@ local service = require("filetree.native.fs.service")
 
 local M = {}
 
---- Feature actions that change no file (the rest of a feature not named here counts as changing):
---- `true` for every action of the feature, or a set of its action names.
----@type table<string, true|table<string, true>>
-M.READ_ONLY = {
-  open_variants = true,
-  cwd_mode = true,
-  tree_traverse = true,
-  reveal_alt = true,
-  collapse_all = true,
-  sort_cycle = true,
-  source_switcher = true,
-  window_size_cycler = true,
-  buffer_cycle = true,
-  marks = true,
-  node_info = true,
-  -- `open` (its <CR>) hands some files to the program of the system
-  preview = { toggle = true },
-  filter = true,
-  live_search = true,
-  find_files = true,
-  grep_in_dir = true,
-  spotlight_node = true,
-  breadcrumbs = true,
-  cheatsheet = true,
-  path_copy = true,
-  lua_require_copy = true,
-  -- `link_insert` writes into the editor buffer
-  markdown_links = { link = true, link_recursive = true, link_from_marked = true },
-  -- `save` writes a file
-  copy_file_list = { files_abs = true, files_rel = true, dirs_abs = true, dirs_rel = true },
-  -- `system` and `terminal` start another program, as mdview_open starts a browser: those ask
-  pdf_open = { text = true, picker = true },
-}
-
 --- Features a plan never names: a shell command, global keys and modes that take over the keyboard.
 ---@type table<string, true>
 M.NEVER = { shell_run = true, quickpick = true, tree_toggle = true, context_menu = true }
@@ -76,56 +42,6 @@ M.MAX_SELECTION = 50
 ---@field needs? string[]
 ---@field feature? string  The filetree feature the key belongs to.
 
----Feature and action of every filetree key on a tree buffer, by the canonical form of the key.
----@param buf integer|nil
----@return table<string, { feature: string, action: string }>
-function M.feature_keys(buf)
-  local out = {}
-  local ok, keymap = pcall(require, "lib.nvim.bindings.keymap")
-  if not ok or type(keymap.registered) ~= "function" then return out end
-  local canon = require("filetree.util.key_conflicts").canon
-  local surfaces = {}
-  for surface in pairs(keymap.registered()) do
-    if surface:match("^filetree/") then surfaces[#surfaces + 1] = surface end
-  end
-  -- one order, so a key two features claim is named the same way every time
-  table.sort(surfaces)
-  local all = keymap.registered()
-  for _, surface in ipairs(surfaces) do
-    local feature = surface:match("^filetree/([^/]+)")
-    for _, e in ipairs(all[surface] or {}) do
-      local modes = type(e.mode) == "table" and e.mode or { e.mode or "n" }
-      if
-        feature
-        and e.lhs
-        and e.name
-        and vim.tbl_contains(modes, "n")
-        and (e.buffer == nil or e.buffer == buf)
-      then
-        local lhs_list = type(e.lhs) == "table" and e.lhs or { e.lhs }
-        for _, lhs in ipairs(lhs_list) do
-          local id = canon(lhs)
-          -- the buffer's own record wins over a global one of the same key
-          if not out[id] or e.buffer == buf then
-            out[id] = { feature = feature, action = e.name }
-          end
-        end
-      end
-    end
-  end
-  return out
-end
-
----Whether a feature action changes no file.
----@param feature string
----@param action string
----@return boolean
-function M.read_only(feature, action)
-  local entry = M.READ_ONLY[feature]
-  if entry == true then return true end
-  return type(entry) == "table" and entry[action] == true
-end
-
 ---The catalog of a view.
 ---@param view Filetree.View
 ---@return Filetree.Ai.Item[] items  In the rank order of the table.
@@ -134,20 +50,20 @@ function M.build(view)
   local items, by_name = {}, {}
   local t = view.actions
   if not t then return items, by_name end
-  local keys = M.feature_keys(view.buf)
   for _, action in ipairs(t:list()) do
     local item = nil
     if action.ai ~= false then
       if action.origin == "feature" then
-        local lhs = type(action.key) == "string" and action.key or nil
-        local id = lhs and keys[t:canon(lhs)]
-        if id and not M.NEVER[id.feature] then
+        -- the table says which feature a key is and whether it changes files
+        -- (`filetree.native.action.features`)
+        local feature = action.feature
+        if feature and not M.NEVER[feature] then
           item = {
-            name = id.feature .. "." .. id.action,
-            feature = id.feature,
-            mutates = not M.read_only(id.feature, id.action),
+            name = feature .. "." .. tostring(action.feature_action),
+            feature = feature,
+            mutates = action.mutates ~= false,
           }
-        elseif not id then
+        elseif not feature then
           -- a key nobody can name: offered, but it asks first
           item = { name = action.name, mutates = true }
         end

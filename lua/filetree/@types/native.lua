@@ -52,6 +52,8 @@
 ---cheatsheet, the context menu and `:Filetree`.
 ---@class Filetree.Action : Lib.Tree.Registry.Action
 ---@field ai? boolean false keeps the action out of the catalog a model picks from (`native.ai`); default true
+---@field feature? string for a key of a filetree feature (`feature:<lhs>` in the table): the feature it belongs to (`open_variants`)
+---@field feature_action? string ... and the name the feature gave the key (`vsplit`)
 ---@field when? fun(node: Filetree.Node, ctx: Filetree.Ctx): boolean
 ---@field run fun(nodes: Filetree.Node[], ctx: Filetree.Ctx, args?: table<string, string>)
 

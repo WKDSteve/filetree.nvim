@@ -82,6 +82,7 @@ local T = dofile(here .. "/native_drive.lua")({
 local eq, ok, dir = T.eq, T.ok, T.dir
 local ai = require("filetree.native.ai")
 local catalog = require("filetree.native.ai.catalog")
+local features = require("filetree.native.action.features")
 local plan = require("filetree.native.ai.plan")
 local registry = require("lib.nvim.tree.registry")
 local native = require("filetree.native")
@@ -130,6 +131,59 @@ local function ask(text, reply)
   return asked, before
 end
 
+-- ── the action table says what a feature key is ─────────────────────────────────
+do
+  ---@param feature string
+  ---@param action string
+  local function entry_of(feature, action)
+    for _, entry in ipairs(view.actions:list()) do
+      if entry.feature == feature and entry.feature_action == action then return entry end
+    end
+    return nil
+  end
+  local vsplit, trash = entry_of("open_variants", "vsplit"), entry_of("trash", "trash")
+  ok("the table names the feature and the action of a feature key", vsplit ~= nil and trash ~= nil)
+  eq("... under the name of its key, as before", vsplit.name:match("^feature:") ~= nil, true)
+  eq("... and says that it reads", vsplit.mutates, false)
+  eq("... or that it changes files", trash.mutates, true)
+  local unnamed = 0
+  for _, entry in ipairs(view.actions:list()) do
+    if entry.origin == "feature" and not entry.feature and entry.mutates ~= true then
+      unnamed = unnamed + 1
+    end
+  end
+  eq("a feature key nobody can name counts as changing", unnamed, 0)
+
+  -- a feature that says it itself is taken at its word, before the list is asked
+  local keymap = require("lib.nvim.bindings.keymap")
+  local real_registered = keymap.registered
+  keymap.registered = function()
+    return {
+      ["filetree/move/tree"] = {
+        { lhs = "zm", name = "peek", mode = "n", mutates = false },
+        { lhs = "zM", name = "move", mode = "n" },
+      },
+      ["filetree/node_info/tree"] = {
+        { lhs = "zi", name = "rewrite", mode = "n", mutates = true },
+        { lhs = "zI", name = "show", mode = "n" },
+      },
+      ["other/thing"] = { { lhs = "zo", name = "x", mode = "n" } },
+    }
+  end
+  local named = features.keys(view.buf)
+  keymap.registered = real_registered
+  local canon = require("filetree.util.key_conflicts").canon
+  eq(
+    "a key registered with mutates = false reads, whatever the list says",
+    named[canon("zm")],
+    { feature = "move", action = "peek", mutates = false }
+  )
+  eq("... its neighbour without a word goes by the list", named[canon("zM")].mutates, true)
+  eq("mutates = true wins over a feature that is on the list", named[canon("zi")].mutates, true)
+  eq("... its neighbour reads, by the list", named[canon("zI")].mutates, false)
+  eq("a key of another plugin is none of the features'", named[canon("zo")], nil)
+end
+
 -- ── the catalog ────────────────────────────────────────────────────────────────
 local items, by_name = catalog.build(view)
 ok("the catalog is not empty", #items > 10)
@@ -167,15 +221,15 @@ for _, item in ipairs(items) do
   if item.feature and catalog.NEVER[item.feature] then never[#never + 1] = item.name end
 end
 eq("no shell command, no global keys", never, {})
-eq("a feature not on the read-only list changes files", catalog.read_only("move", "move"), false)
+eq("a feature not on the read-only list changes files", features.read_only("move", "move"), false)
 eq(
   "a key that hands a file to another program asks (preview's <CR>, a PDF in the system viewer, mdview)",
   {
-    catalog.read_only("preview", "open"),
-    catalog.read_only("pdf_open", "system"),
-    catalog.read_only("pdf_open", "terminal"),
-    catalog.read_only("mdview_open", "open"),
-    catalog.read_only("preview", "toggle"),
+    features.read_only("preview", "open"),
+    features.read_only("pdf_open", "system"),
+    features.read_only("pdf_open", "terminal"),
+    features.read_only("mdview_open", "open"),
+    features.read_only("preview", "toggle"),
   },
   { false, false, false, false, true }
 )

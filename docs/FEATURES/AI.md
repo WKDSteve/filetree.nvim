@@ -105,9 +105,10 @@ Which actions run without the question: the tree's own keys; another plugin's
 action or a source's only when it says `mutates = false` (one that says nothing
 asks); of the features only those on a list of reading ones (opening in the
 editor, moving the root or the cwd, copying paths, marks, filter, search, the
-preview float, node info, ...). That list lives in the AI module
-(`filetree.native.ai.catalog`, `READ_ONLY`) because a feature's key reaches the
-action table without saying whether it changes files; so every other feature
+preview float, node info, ...). That list lives next to the action table
+(`filetree.native.action.features`, `READ_ONLY`), which writes on every feature
+key which feature and action it is and whether it changes files (`feature`,
+`feature_action`, `mutates`); every other feature
 key, also one that is new, asks first, and so does one that starts another
 program (a PDF in the system viewer, the browser preview of mdview, a file
 `<CR>` hands to the system).

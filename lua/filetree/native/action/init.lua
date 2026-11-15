@@ -538,12 +538,20 @@ function M.sync(view)
   end
   view._foreign = foreign
   t:remove_origin("feature")
-  for _, m in pairs(maps) do
+  -- which feature and which of its actions a key is, and whether it changes files: written on the
+  -- entry, so that every reader of the table finds it there
+  local named = require("filetree.native.action.features").keys(buf)
+  for id, m in pairs(maps) do
     local lhs = lhs_of(m)
+    local what = named[id]
     t:add({
       name = "feature:" .. lhs,
       key = lhs,
       desc = (m.desc or ""):sub(#FEATURE_PREFIX + 1):gsub("^%l", string.upper),
+      feature = what and what.feature or nil,
+      feature_action = what and what.action or nil,
+      -- a key nobody can name may change anything
+      mutates = not what or what.mutates,
       run = function()
         call_mapping(m)
       end,
