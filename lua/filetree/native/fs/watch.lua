@@ -269,6 +269,8 @@ local function open(dir)
     local entry = open_helper(dir)
     if entry then return entry, nil end
   end
+  -- no watch of the helper: nothing to name to it when this folder is opened again
+  followed[dir] = nil
   return open_handle(dir)
 end
 
@@ -475,6 +477,9 @@ function M.release(path)
           entry.refs = refs
           watchers[dir] = entry
         end
+      elseif not watchers[dir] then
+        -- not opened again (nobody holds it any more)
+        followed[dir] = nil
       end
     end
     mine = {}

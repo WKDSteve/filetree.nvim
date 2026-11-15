@@ -171,6 +171,7 @@ impl Folders {
             builder.filter_entry(move |entry| {
                 walk::kept(entry)
                     && (entry.depth() == 0
+                        || !entry.file_type().is_some_and(|kind| kind.is_dir())
                         || !watched
                             .lock()
                             .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -454,8 +455,10 @@ impl Worker {
             }
         }
         for dir in std::mem::take(&mut self.folders.stale) {
-            if self.folders.named.contains(&dir) && dir.is_dir() {
-                // the tree reads it: watched for itself from here on, whatever the rules say now
+            // The tree reads it: watched for itself from here on, whatever the rules say now. Watched
+            // again, because after lost events the folder may be another one than the one watched.
+            let named = self.folders.named.contains(&dir);
+            if named && (self.watcher.watch(&dir, RecursiveMode::NonRecursive)).is_ok() {
                 self.folders.pinned.insert(dir);
             } else {
                 self.folders.named.remove(&dir);
