@@ -81,6 +81,14 @@ local timer = nil
 
 M.stats = { events = 0, reports = 0, quarantined = 0 }
 
+---The time in milliseconds, read from the clock. Not `uv.now()`: that is the time of the last turn of
+---the loop, and after a long piece of work on the main thread it lies behind by as long as that took.
+---A folder put on hold with such a stamp counted as quiet again at the next report.
+---@return number
+local function now_ms()
+  return uv.hrtime() / 1e6
+end
+
 ---@param opts? { debounce_ms?: integer, storm?: integer, quiet_ms?: integer }
 function M.configure(opts)
   options = vim.tbl_extend("force", options, opts or {})
@@ -90,7 +98,7 @@ local arm
 
 ---Report what is dirty and not held back; folders that went quiet are let go first.
 local function report()
-  local now = uv.now()
+  local now = now_ms()
   local held = false
   for dir, t in pairs(traffic) do
     if t.held then
@@ -157,7 +165,7 @@ end
 ---@param changed string  Normalized.
 function M.on_changed(changed)
   M.stats.events = M.stats.events + 1
-  local now = uv.now()
+  local now = now_ms()
   local t = traffic[changed]
   if not t or (not t.held and now - t.since >= 1000) then
     t = { n = 0, since = now, last = now, held = false }

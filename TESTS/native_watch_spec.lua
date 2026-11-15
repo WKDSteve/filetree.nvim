@@ -265,6 +265,14 @@ local unsubscribe = watch.subscribe(function(dirs)
   reports[#reports + 1] = table.concat(dirs, ",")
 end)
 local quarantined = watch.stats.quarantined
+-- A long piece of work on the main thread right before the events, longer than the hold: the time
+-- of the last turn of the loop lies that far behind. Stamped with it, the folder counted as quiet
+-- again at the first report (seen on a slow file system, where the lines above take that long).
+do
+  local busy_until = vim.uv.hrtime() + 400 * 1e6
+  while vim.uv.hrtime() < busy_until do
+  end
+end
 for i = 1, 200 do
   watch.on_event(dir .. "/storm", ("f%d"):format(i))
 end
