@@ -377,6 +377,58 @@ do
   end
 end
 
+-- ── which folder to look at: the roots of the trees ────────────────────────────
+do
+  native.reset()
+  local announced = {}
+  local listener = vim.api.nvim_create_autocmd("User", {
+    pattern = "FiletreeRoots",
+    callback = function(ev)
+      announced[#announced + 1] = vim.deepcopy(ev.data.roots)
+    end,
+  })
+  local handed = nil
+  local remove_scan = filetree.decorator({
+    name = "spec_scan",
+    get = function()
+      return nil
+    end,
+    subscribe = function(_, ctx)
+      handed = ctx
+      return function() end
+    end,
+  })
+  adapter.toggle_at("left", { dir = dir })
+  ok("a decorator is handed a context when it subscribes", type(handed) == "table")
+  eq("... that answers the root the tree shows", handed.roots(), { dir })
+  eq("making a tree announces its root", announced[#announced], { dir })
+  local count = #announced
+  adapter.set_root(dir .. "/lua")
+  eq("another root is announced", announced[#announced], { dir .. "/lua" })
+  eq("... once", #announced, count + 1)
+  eq("... and the context answers it without subscribing again", handed.roots(), { dir .. "/lua" })
+  adapter.set_root(dir .. "/lua")
+  eq("the same root again announces nothing", #announced, count + 1)
+  adapter.refresh()
+  eq("nor does a refresh", #announced, count + 1)
+  -- a second tab with a tree on another folder
+  vim.cmd("tabnew")
+  adapter.toggle_at("left", { dir = dir .. "/docs" })
+  eq(
+    "a tree in a second tab: both roots, sorted",
+    announced[#announced],
+    { dir .. "/docs", dir .. "/lua" }
+  )
+  vim.cmd("tabclose")
+  native.current()
+  eq("the tab is gone: its root with it", announced[#announced], { dir .. "/lua" })
+  native.reset()
+  eq("no tree left: no root", announced[#announced], {})
+  eq("... and the context says so", handed.roots(), {})
+  remove_scan()
+  vim.api.nvim_del_autocmd(listener)
+end
+
 vim.notify = real_notify
 require("lib.nvim.tree.registry").reset()
 vim.fn.delete(dir, "rf")

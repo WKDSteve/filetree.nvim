@@ -40,8 +40,13 @@
 ---@class Filetree.Badge : Lib.Tree.Registry.Badge
 
 ---Badges on nodes. `get` runs while the tree draws: a table lookup, never I/O.
+---What a decorator is handed when it subscribes, next to `emit`.
+---@class Filetree.Decor.Ctx
+---@field roots fun(): string[] the roots the trees show right now (one per tab that opened one), sorted; `User FiletreeRoots` (`data.roots`) fires when they change
+
 ---@class Filetree.Decorator : Lib.Tree.Registry.Decorator
 ---@field get fun(key: string, node?: Filetree.Node): Filetree.Badge|nil  `node` is given while a row is drawn, not when a changed key is re-read
+---@field subscribe fun(emit: fun(keys?: string[]), ctx?: Filetree.Decor.Ctx): fun() tell which keys changed (nil: everything); `ctx.roots()` says what the trees show; returns unsubscribe
 ---@field all? fun(): table<string, Filetree.Badge> every key with a badge; needed for a folder to show what lies below it
 
 ---@class Filetree.ActionArg : Lib.Tree.Registry.ActionArg
@@ -49,6 +54,7 @@
 ---Something to do with the node under the cursor, or with the selection. One table feeds the keys, the
 ---cheatsheet, the context menu and `:Filetree`.
 ---@class Filetree.Action : Lib.Tree.Registry.Action
+---@field ai? boolean false keeps the action out of the catalog a model picks from (`native.ai`); default true
 ---@field when? fun(node: Filetree.Node, ctx: Filetree.Ctx): boolean
 ---@field run fun(nodes: Filetree.Node[], ctx: Filetree.Ctx, args?: table<string, string>)
 

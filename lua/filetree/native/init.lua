@@ -158,13 +158,7 @@ function M.fs_state()
   state.active = adapter ~= nil and adapter.name == "native"
   state.watch = options.watch ~= false
   state.reading = require("filetree.native.fs.list").reading()
-  state.roots = {}
-  for _, view in pairs(views) do
-    if view.root and not vim.tbl_contains(state.roots, view.root) then
-      state.roots[#state.roots + 1] = view.root
-    end
-  end
-  table.sort(state.roots)
+  state.roots = M.roots()
   return state
 end
 
@@ -215,17 +209,51 @@ end
 ---The view of the current tab, or nil when the tree was never asked for in it.
 ---@return Filetree.View|nil
 function M.current()
-  local tab = api.nvim_get_current_tabpage()
-  local view = views[tab]
-  if view then return view end
-  -- tabs that are gone give their view back
+  -- tabs that are gone give their view back: before the answer, so that a tree in the tab one is
+  -- in does not keep the views (and the roots) of closed tabs alive
+  local gave_up = false
   for known, gone in pairs(views) do
     if not api.nvim_tabpage_is_valid(known) then
       views[known] = nil
       gone:dispose()
+      gave_up = true
     end
   end
-  return nil
+  if gave_up then M.roots_changed() end
+  return views[api.nvim_get_current_tabpage()]
+end
+
+---The roots of the trees there are (one per tab that asked for one), sorted, each once.
+---@return string[]
+function M.roots()
+  local out, seen = {}, {}
+  for _, view in pairs(views) do
+    if view.root and not seen[view.root] then
+      seen[view.root] = true
+      out[#out + 1] = view.root
+    end
+  end
+  table.sort(out)
+  return out
+end
+
+---@type string  The roots that were announced last, as one string.
+local announced = ""
+
+---Say which roots the trees show, when that changed: `User FiletreeRoots` with `data.roots`. Called
+---wherever a tree is made, rooted elsewhere or given up. A plugin that scans in the background (which
+---images are orphans, which recordings have a transcript) scans what the tree shows, not the working
+---directory; nothing is fired while the roots are the ones announced before.
+function M.roots_changed()
+  local roots = M.roots()
+  local key = table.concat(roots, "\n")
+  if key == announced then return end
+  announced = key
+  pcall(api.nvim_exec_autocmds, "User", {
+    pattern = "FiletreeRoots",
+    modeline = false,
+    data = { roots = roots },
+  })
 end
 
 ---The view of the current tab; created at `root` (default: the working directory) when there is none.
@@ -250,6 +278,7 @@ function M.ensure(root)
     name_float = options.name_float,
   })
   views[api.nvim_get_current_tabpage()] = view
+  M.roots_changed()
   return view
 end
 
@@ -273,6 +302,7 @@ function M.reset()
     pcall(view.dispose, view)
   end
   views = {}
+  M.roots_changed()
   list.invalidate()
   require("filetree.native.fs.watch").stop_all()
   require("filetree.native.decor").stop()

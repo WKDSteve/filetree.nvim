@@ -277,6 +277,29 @@ The tree adds that up from the keys you emit and from `all()`; give it `all()`
 and a folder that was never opened shows its badge too. A decorator that raises
 is switched off for the session and named once.
 
+**Which folder to look at.** A decorator that finds its badges by a scan
+(which images no document refers to, which recordings have a transcript) scans
+what the tree shows, not the working directory. `subscribe` is handed a second
+argument for that, and an event says when it changes:
+
+```lua
+subscribe = function(emit, ctx)
+  local function rescan()
+    for _, root in ipairs(ctx and ctx.roots() or { vim.fn.getcwd() }) do
+      scan(root, emit)                   -- in the background; emit the paths that changed
+    end
+  end
+  local id = vim.api.nvim_create_autocmd("User", { pattern = "FiletreeRoots", callback = rescan })
+  rescan()
+  return function() vim.api.nvim_del_autocmd(id) end
+end
+```
+
+`ctx.roots()` answers the roots the trees show right now (one per tab that
+opened one, sorted). `User FiletreeRoots` fires with `data.roots` when a tree
+is made, rooted elsewhere or given up, and only when the list is another one.
+A decorator registered without `ctx` in its signature works as before.
+
 `get` is also handed the node of the row being drawn (`get(key, node)`), for what is a
 property of the node and not of its path, a symlink for one. It is not handed
 one when a key you emitted is read again.

@@ -89,6 +89,16 @@ local function reload(item)
   item.store:replace(map)
 end
 
+--- What a decorator is handed next to `emit` when it subscribes: where to ask which roots the trees
+--- show. A function, not a list: the roots change while the decorator stays subscribed (`User
+--- FiletreeRoots` says when).
+---@type Filetree.Decor.Ctx
+local CTX = {
+  roots = function()
+    return require("filetree.native").roots()
+  end,
+}
+
 ---@param entry Filetree.Decorator
 local function attach(entry)
   local name = entry.name
@@ -113,7 +123,7 @@ local function attach(entry)
       reload(item)
     end
     request_redraw()
-  end)
+  end, CTX)
   if not ok then
     fail(item, "subscribe()", stop)
   elseif type(stop) == "function" then

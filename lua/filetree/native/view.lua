@@ -1513,11 +1513,13 @@ function View:set_root(root)
     self:_build()
     self:sync_cursor()
     self._pane:reload()
+    require("filetree.native").roots_changed()
     return true
   end
   self.cursor_id = nil
   self:_build()
   if self.buf and api.nvim_buf_is_valid(self.buf) then self:_draw_all() end
+  require("filetree.native").roots_changed()
   return true
 end
 
