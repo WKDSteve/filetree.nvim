@@ -438,6 +438,15 @@ function M.get_open_nodes(name)
   return view:open_nodes(name)
 end
 
+---Is anything known of what is open in a view (it was shown, or ids were set for it)? Its presence
+---is also the mark of an adapter whose `get_open_nodes` answers nil for "nothing known" and a list,
+---also an empty one, for "this is open": an older one answered an empty list for both.
+---@param name? string  Default: the view on screen.
+---@return boolean
+function M.knows_open_nodes(name)
+  return M.get_open_nodes(name) ~= nil
+end
+
 ---Have exactly these nodes of a view of sources open: what is open and not named is closed, what
 ---is named is opened, now or when it arrives. A view that was not shown yet takes them over when it
 ---is, and so does a view nobody registered yet (a plugin set up after the session was loaded).

@@ -879,6 +879,8 @@ do
   eq("a name no view has: nothing is known", adapter.get_open_nodes("no-such-view"), nil)
   eq("the files cannot be set this way", adapter.set_open_nodes("files", {}), false)
   eq("a view that was never shown: nothing is known", adapter.get_open_nodes("groups"), nil)
+  eq("... knows_open_nodes says so", adapter.knows_open_nodes("groups"), false)
+  eq("... and for the files, which have paths for this", adapter.knows_open_nodes("files"), false)
 
   ok("(the view shows)", (view:show("groups")))
   eq(
@@ -983,6 +985,7 @@ do
   -- everything closed is a list, not "nothing known"
   adapter.set_open_nodes("groups", {})
   eq("everything closed by hand answers an empty list", adapter.get_open_nodes("groups"), {})
+  eq("... which is known", adapter.knows_open_nodes("groups"), true)
   view:show("files")
   eq("... also while the view is not on screen", adapter.get_open_nodes("groups"), {})
   -- a view nobody registered yet: its plugin is set up after the session was loaded
