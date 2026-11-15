@@ -3,7 +3,8 @@
 -- TESTS/native_helper_spec.lua -- the helper process of the own tree (`native.fs.helper`, helper/):
 -- which program is used and when none is (off, the workstation, a path that is not there); the deep
 -- listing through it lists what the Lua walk lists and stops when cancelled; a folder's size counts
--- everything; on Linux its watch follows a closed folder and a folder made later; a helper that ends
+-- everything; on Linux its watch follows a closed folder and a folder made later, costs no inotify
+-- watch for an ignored folder and still follows one the tree reads; a helper that ends
 -- hands an open listing to the next tier without a path twice, says so once, and its watches go back
 -- to libuv handles.
 --
@@ -251,6 +252,28 @@ else
     end
     local native_recursive = watch.native_recursive
     watch.native_recursive = false
+    -- an ignored folder with folders in it, as a node_modules is
+    mkfile(".gitignore", "cache/")
+    for i = 1, 30 do
+      mkfile(("cache/c%02d/x.o"):format(i))
+    end
+    local linux = uv.os_uname().sysname == "Linux"
+    ---How many inotify watches the helper holds (Linux).
+    ---@return integer
+    local function inotify_watches()
+      local count = 0
+      local fdinfo = ("/proc/%d/fdinfo"):format(helper.state().pid)
+      for name in vim.fs.dir(fdinfo) do
+        local file = io.open(fdinfo .. "/" .. name, "r")
+        if file then
+          for line in file:lines() do
+            if line:find("^inotify wd:") then count = count + 1 end
+          end
+          file:close()
+        end
+      end
+      return count
+    end
     local reported = {}
     local unsubscribe = watch.subscribe(function(dirs)
       for _, changed in ipairs(dirs) do
@@ -263,6 +286,14 @@ else
       eq("without recursive libuv handles the helper watches", watch.by_helper(), true)
       eq("... so a folder below the root is covered", watch.recursive, true)
       eq("... with one watch of the helper", watch.state().watchers[1].helper, true)
+      if linux then
+        -- the root, d01 to d25, closed, closed/deeper: not .git, not cache or its 30 folders
+        eq(
+          "Linux: an inotify watch per folder the listing walks into, none for an ignored one",
+          inotify_watches(),
+          28
+        )
+      end
       mkfile("closed/deeper/new.txt")
       vim.fn.mkdir(dir .. "/later/sub", "p")
       settle(300)
@@ -275,6 +306,34 @@ else
         reported[dir .. "/closed/deeper"]
       )
       ok("... and one in a folder made after the watch started", reported[dir .. "/later/sub"])
+      if linux then
+        eq("Linux: the folders made later are watched, each for itself", inotify_watches(), 30)
+        reported = {}
+        mkfile("cache/c01/unseen.o")
+        mkfile("d01/marker.txt")
+        vim.wait(3000, function()
+          return reported[dir .. "/d01"]
+        end, 20)
+        settle(200)
+        ok("... a change in an ignored folder is not reported", not reported[dir .. "/cache/c01"])
+      end
+      -- the tree reads an ignored folder (the user opened it): it is followed all the same
+      local unwatch_cache = watch.watch(dir .. "/cache/c01")
+      eq("a folder below the root takes no watch of its own here", watch.count(), 1)
+      reported = {}
+      vim.wait(3000, function()
+        return reported[dir .. "/cache/c01"] or not linux
+      end, 20)
+      if linux then
+        ok("Linux: an ignored folder that is read is read once more", reported[dir .. "/cache/c01"])
+        eq("... and takes one watch, for itself", inotify_watches(), 31)
+      end
+      reported = {}
+      mkfile("cache/c01/seen.o")
+      vim.wait(3000, function()
+        return reported[dir .. "/cache/c01"]
+      end, 20)
+      ok("a change in an ignored folder the tree reads is reported", reported[dir .. "/cache/c01"])
       -- the helper watches only once it has read the request: what comes right after the call is
       -- not lost (a file operation releases and resumes the watches around it)
       local resume = watch.release(dir)
@@ -286,6 +345,18 @@ else
       end, 20)
       ok("a file made right after the watch was opened again is reported", reported[dir])
       vim.fn.delete(dir .. "/right_after_resume.txt")
+      settle(300)
+      reported = {}
+      mkfile("cache/c01/after_resume.o")
+      vim.wait(3000, function()
+        return reported[dir .. "/cache/c01"]
+      end, 20)
+      ok(
+        "... and the ignored folder the tree reads is followed by the new watch too",
+        reported[dir .. "/cache/c01"]
+      )
+      if linux then eq("Linux: ... with the watches it had", inotify_watches(), 31) end
+      unwatch_cache()
     end
     unwatch()
     eq("the watch is given back", watch.count(), 0)
@@ -336,6 +407,9 @@ else
     -- what the watch case made is not part of the listings below
     vim.fn.delete(dir .. "/closed/deeper/new.txt")
     vim.fn.delete(dir .. "/later", "rf")
+    vim.fn.delete(dir .. "/d01/marker.txt")
+    vim.fn.delete(dir .. "/cache", "rf")
+    vim.fn.delete(dir .. "/.gitignore")
   end
 
   -- the helper ends while a listing is on its way: the next tier lists the rest, no path twice

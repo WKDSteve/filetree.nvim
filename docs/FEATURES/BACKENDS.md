@@ -124,9 +124,10 @@ sequenceDiagram
 
 - **Handles.** One recursive handle per root on Windows and macOS, one per
   folder the tree has read elsewhere (libuv cannot watch recursively there).
-  Elsewhere with the [helper process](#the-helper-process): one recursive watch
-  of the helper per root, so closed folders and folders made later are followed
-  too.
+  Elsewhere with the [helper process](#the-helper-process): one watch of the
+  helper per root, so closed folders and folders made later are followed too
+  (all but `.git` and what an ignore file names; of those, the ones the tree has
+  read).
   Views of the same root share them; they close with the last window that shows
   the tree, and a tree that is opened again catches up in the background.
 - **One read per folder.** At most one read of a folder runs; changes that
@@ -192,7 +193,7 @@ Without it the tree does all of this itself; nothing else changes.
 | --- | --- | --- |
 | deep listing | `fd`, `rg --files` or a Lua walk: 50 to 380 ms on 1 500 to 100 000 files | 8 to 55 ms, the same files as `fd` |
 | size of a folder | `du -sk` or PowerShell, a process per folder; the Lua walk took 0.8 to 4.5 s | 16 to 56 ms, in the process |
-| watching on Linux | one handle per folder read: closed folders are not followed | one recursive watch per root |
+| watching on Linux | one handle per folder read: closed folders are not followed | one watch per root that follows every folder the search would list, and the ignored ones the tree has read |
 
 Measurement and decision: `helper/README.md`. The git status stays with `git`:
 the helper was not reliably faster there.
@@ -220,10 +221,16 @@ native = { fs = { helper = "auto" } }  -- "auto" | false | "/path/to/filetree-he
   is asked of `du` / PowerShell, each of its watches becomes a libuv handle on
   the same folder (which is read again), and it is said once. On Linux the
   folders below an open root are followed again once they are read again.
-- **On Linux its watch takes one inotify watch per folder below the root**,
-  ignored ones (`node_modules`, `target`) included. When the system's limit
-  (`fs.inotify.max_user_watches`) is reached, it says so once and the tree goes
-  back to one handle per folder read for the rest of the session.
+- **On Linux its watch takes one inotify watch per folder the search would
+  walk into**: never `.git`, nothing a `.gitignore` or `.ignore` names. A
+  `node_modules` or `target` with thousands of folders costs nothing (measured:
+  12 304 watches before, 302 now, on a repository with 300 folders of its own
+  and 12 000 ignored ones). A folder made later is watched when it appears; an
+  ignore file that changes has the folders below it sorted again. An ignored
+  folder the tree has read (you opened it) is watched for itself, the folders
+  below it only once they are read too. When the system's limit
+  (`fs.inotify.max_user_watches`) is reached all the same, it says so once and
+  the tree goes back to one handle per folder read for the rest of the session.
 - **`:checkhealth filetree`** names its state: not installed (and where it
   looked), off and why, found, running with its pid, or ended and why.
 

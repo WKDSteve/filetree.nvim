@@ -8,14 +8,17 @@
 //! What it never does: open a socket, start a process, write to the file system, read the content of
 //! a file other than ignore files and what git keeps below `.git`. It ends when its stdin closes.
 //!
-//! Protocol (version 1). The editor sends notifications `[2, method, params]`; every one carries a
+//! Protocol (version 2). The editor sends notifications `[2, method, params]`; every one carries a
 //! generation number as its first parameter, and every answer carries the generation of its request:
 //!
 //! - `walk [gen, root]` -> `files [gen, paths]`*, then `done [gen, {ok, files, ms}]`
 //! - `cancel [gen]`: the walk of that generation sends nothing more
 //! - `size [gen, dir]` -> `size [gen, {files, bytes, ms}]`
 //! - `watch [gen, root]` -> `watching [gen, root]`, then `changed [gen, dirs]` after a short quiet,
-//!   until `unwatch [gen]`; `error [gen, text]` when it cannot watch
+//!   until `unwatch [gen]`; `error [gen, text]` when it cannot watch (any more). On Linux the folders
+//!   are watched one by one and ignored ones are left out (`watch.rs`), so:
+//! - `follow [gen, dir]`: the watch of that generation watches `dir` too, whatever the ignore rules
+//!   say (the editor shows it); answered with `changed [gen, [dir]]` when that watch is new
 //! - `status [gen, root]` -> `status [gen, {full, set, gone, entries, ms}]` (a delta after the first)
 //! - request `ping` -> `{name, version, protocol, pid}`
 //!
@@ -44,7 +47,7 @@ use rmpv::Value;
 const SINK: &str = "return require('filetree.native.fs.helper').on(...)";
 
 /// Bumped when a method or an answer changes shape.
-const PROTOCOL: u64 = 1;
+const PROTOCOL: u64 = 2;
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -277,22 +280,23 @@ impl Server {
             }
             ("watch", Some(root)) => {
                 let out = self.out.clone();
-                let started = watch::start(&root, move |dirs| {
-                    let dirs = Value::Array(dirs.into_iter().map(Value::from).collect());
-                    let _ = out.send(event("changed", generation, dirs));
+                let watched = root.clone();
+                let watch = watch::start(&root, move |report| {
+                    let (kind, payload) = match report {
+                        watch::Report::Watching => ("watching", Value::from(watched.as_str())),
+                        watch::Report::Changed(dirs) => (
+                            "changed",
+                            Value::Array(dirs.into_iter().map(Value::from).collect()),
+                        ),
+                        watch::Report::Failed(why) => ("error", Value::from(why)),
+                    };
+                    let _ = out.send(event(kind, generation, payload));
                 });
-                match started {
-                    Ok(watch) => {
-                        self.watches.insert(generation, watch);
-                        let _ = self
-                            .out
-                            .send(event("watching", generation, Value::from(root)));
-                    }
-                    Err(err) => {
-                        let _ =
-                            self.out
-                                .send(event("error", generation, Value::from(err.to_string())));
-                    }
+                self.watches.insert(generation, watch);
+            }
+            ("follow", Some(dir)) => {
+                if let Some(watch) = self.watches.get(&generation) {
+                    watch.follow(&dir);
                 }
             }
             ("unwatch", _) => {

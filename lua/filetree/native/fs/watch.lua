@@ -8,8 +8,10 @@
 --- Key responsibilities:
 --- - `watch(dir)`: reference-counted; one recursive handle per root on Windows and macOS, one handle
 ---   per folder elsewhere (libuv cannot watch recursively there). Elsewhere with the helper process
----   (`filetree.native.fs.helper`) one recursive watch of the helper per root: a closed folder and a
----   folder made later are followed too. A helper that ends leaves each of its watches to a libuv
+---   (`filetree.native.fs.helper`) one watch of the helper per root: a closed folder and a folder
+---   made later are followed too. The helper leaves out `.git` and what an ignore file names (a
+---   `node_modules` would use up the watches the system allows), so a folder below the root that is
+---   watched here is named to it (`follow`) and followed whatever the rules say. A helper that ends leaves each of its watches to a libuv
 ---   handle on the same folder (and reports that folder, so that it is read again); the folders below
 ---   it are followed again when they are read again
 --- - Group events by the folder whose listing changed, wait for a short quiet, tell the subscribers
@@ -68,6 +70,8 @@ local options = { debounce_ms = 100, storm = 200, quiet_ms = 2000 }
 local watchers = {}
 ---@type table<string, integer>  folder closed by release() -> the references still held on it
 local released = {}
+---@type table<string, table<string, true>>  folder the helper watches -> the folders below it named to the helper
+local followed = {}
 ---@type table<integer, fun(dirs: string[])>
 local subscribers = {}
 local next_id = 1
@@ -201,6 +205,7 @@ local function open_helper(dir)
   local function to_handle()
     entry.helper = nil
     if watchers[dir] ~= entry then return end
+    followed[dir] = nil
     local fallback, err = open_handle(dir)
     if fallback then
       entry.handle = fallback.handle
@@ -249,6 +254,10 @@ local function open_helper(dir)
   end)
   if not gen then return nil end
   entry.helper = gen
+  -- a watch that was closed for an operation and is opened again: the helper's watch is a new one
+  for below in pairs(followed[dir] or {}) do
+    helper.tell(gen, "follow", below)
+  end
   return entry
 end
 
@@ -297,6 +306,8 @@ local function close(dir)
   local entry = watchers[dir]
   if not entry then return end
   watchers[dir] = nil
+  -- closed for an operation: what was named to the helper is named again when it is opened again
+  if not released[dir] then followed[dir] = nil end
   if entry.helper then
     require("filetree.native.fs.helper").drop(entry.helper, "unwatch")
     entry.helper = nil
@@ -308,14 +319,24 @@ local function close(dir)
 end
 
 ---Watch a folder. On a system with recursive handles a folder below one that is watched already takes
----no handle of its own.
+---no handle of its own. Call it for every folder that is read, also where `recursive` is true: the
+---helper's watch has to be told about a folder its ignore rules leave out.
 ---@param dir string  Normalized.
 ---@return fun() unwatch  Gives the reference back; the handle closes with the last one. Safe to call twice.
 ---@return string|nil err  Why the folder is not watched, when it is not.
 function M.watch(dir)
   if M.recursive then
-    for watched in pairs(watchers) do
-      if watched ~= dir and list.inside(watched, dir) then return M.watch(watched) end
+    for watched, above in pairs(watchers) do
+      if watched ~= dir and list.inside(watched, dir) then
+        if above.helper then
+          -- The helper leaves out what an ignore file names. Somebody reads this folder: it is
+          -- followed all the same (nothing when the helper watches it already).
+          followed[watched] = followed[watched] or {}
+          followed[watched][dir] = true
+          require("filetree.native.fs.helper").tell(above.helper, "follow", dir)
+        end
+        return M.watch(watched)
+      end
     end
   end
   local entry = watchers[dir]
@@ -339,7 +360,10 @@ function M.watch(dir)
     elseif released[dir] then
       -- closed for an operation: the reference is given back there, so resume() does not revive it
       released[dir] = released[dir] - 1
-      if released[dir] <= 0 then released[dir] = nil end
+      if released[dir] <= 0 then
+        released[dir] = nil
+        followed[dir] = nil
+      end
     end
   end,
     nil
@@ -463,7 +487,7 @@ function M.stop_all()
   for _, dir in ipairs(vim.tbl_keys(watchers)) do
     close(dir)
   end
-  dirty, traffic, released = {}, {}, {}
+  dirty, traffic, released, followed = {}, {}, {}, {}
   helper_failed = nil
   if timer then
     timer:stop()

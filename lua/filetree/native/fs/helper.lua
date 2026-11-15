@@ -3,13 +3,14 @@
 ---@description
 --- `helper/` of this repository builds `filetree-helper`, a small read-only program (Rust) that lists the
 --- files below a folder with the ignore rules of ripgrep, adds up the size of a folder and watches a
---- folder tree recursively, also on Linux. This module finds it, starts it on first need, talks to it
+--- folder tree, also on Linux (there folder by folder, ignored ones left out). This module finds it, starts it on first need, talks to it
 --- over msgpack-RPC on stdin/stdout and hands its answers to whoever asked.
 ---
 --- Key responsibilities:
 --- - `find()` / `available()`: is there a helper to use, and if not, why (for `:checkhealth`)
 --- - `request(method, arg, handler)`: a generation per request; an answer of a dropped request is
----   thrown away before anybody sees it; `drop(gen, method?)` forgets one (and tells the helper)
+---   thrown away before anybody sees it; `drop(gen, method?)` forgets one (and tells the helper);
+---   `tell(gen, method, arg)` says something more about one that is open (`"follow"` for a watch)
 --- - A helper that ends or cannot start is not started again in this session: every request still
 ---   open gets `"lost"`, the callers go on with the Lua tiers, and the user is told once
 --- - `state()`: everything at once, plain data
@@ -26,7 +27,7 @@ local uv = vim.uv
 local M = {}
 
 --- The protocol this module speaks (`filetree-helper --version` names its own).
-M.PROTOCOL = 1
+M.PROTOCOL = 2
 
 ---@alias Filetree.Fs.Helper.Mode "auto"|false|string
 
@@ -210,6 +211,15 @@ end
 function M.drop(gen, method)
   state.handlers[gen] = nil
   if method and state.chan then pcall(vim.rpcnotify, state.chan, method, gen) end
+end
+
+---Say something more about a request that is still open: `"follow"` makes the watch `gen` watch the
+---folder `arg` too, whatever the ignore rules say about it. Nothing when the request is over.
+---@param gen integer
+---@param method "follow"
+---@param arg string
+function M.tell(gen, method, arg)
+  if state.handlers[gen] and state.chan then pcall(vim.rpcnotify, state.chan, method, gen, arg) end
 end
 
 ---An answer of the helper. Called by the helper itself (through `nvim_exec_lua`), never by the tree.

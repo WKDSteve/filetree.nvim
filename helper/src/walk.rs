@@ -7,6 +7,7 @@
 //!
 //! `size` counts what `du` counts: every file, ignored ones and `.git` too; links are not followed.
 
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use ignore::{DirEntry, Error, ParallelVisitor, ParallelVisitorBuilder, WalkBuilder, WalkState};
@@ -96,6 +97,19 @@ impl Drop for Visitor<'_> {
     }
 }
 
+/// What the deep listing walks into below `root`: hidden entries too, never `.git`, nothing an ignore
+/// file names, no link followed. The watch uses the same rules for the folders it watches.
+pub fn rules(root: impl AsRef<Path>) -> WalkBuilder {
+    let mut builder = WalkBuilder::new(root);
+    builder.hidden(false).follow_links(false).filter_entry(kept);
+    builder
+}
+
+/// The entries `rules` leaves out by name (its `filter_entry`: setting another one replaces it).
+pub fn kept(entry: &DirEntry) -> bool {
+    entry.file_name() != ".git"
+}
+
 /// List every file below `root`; `sink` gets the batches, from several threads.
 pub fn run(root: &str, cancel: &AtomicBool, sink: &(dyn Fn(Vec<String>) + Sync)) -> Summary {
     let shared = Shared {
@@ -103,12 +117,9 @@ pub fn run(root: &str, cancel: &AtomicBool, sink: &(dyn Fn(Vec<String>) + Sync))
         sink,
         files: AtomicU64::new(0),
     };
-    let walker = WalkBuilder::new(root)
-        .hidden(false)
-        .follow_links(false)
-        .filter_entry(|entry| entry.file_name() != ".git")
-        .build_parallel();
-    walker.visit(&mut Builder { shared: &shared });
+    rules(root)
+        .build_parallel()
+        .visit(&mut Builder { shared: &shared });
     Summary {
         ok: !cancel.load(Ordering::Relaxed),
         files: shared.files.load(Ordering::Relaxed),

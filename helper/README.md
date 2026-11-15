@@ -15,11 +15,11 @@ One child process per Neovim, msgpack-RPC over stdin/stdout:
 | --- | --- | --- |
 | deep listing (search) | a parallel walk with the ignore rules of `rg` (`ignore` crate); lists what `fd` lists for `native/fs/deep.lua` | `native/fs/deep.lua` |
 | size of a folder | a parallel walk without ignore rules, everything counted (as `du`) | `features/ui/size_info` |
-| recursive watch | `notify`: one recursive watch per root (on Linux new folders are added as they appear) | `native/fs/watch.lua`, on systems without recursive libuv handles (Linux) |
+| watch of a folder tree | `notify`. Linux: one inotify watch per folder the deep listing would walk into (never `.git`, nothing an ignore file names), new folders added as they appear, plus the folders the tree names with `follow`. Windows and macOS: one recursive watch per root | `native/fs/watch.lua`, on systems without recursive libuv handles (Linux) |
 | git status | gitoxide in the process; after the first answer only the delta | nothing: measured, `git` is as fast |
 
 Every request carries a generation number, every answer carries the generation of its request. The
-protocol (version 1) is described at the top of `src/main.rs`; the Lua side is
+protocol (version 2) is described at the top of `src/main.rs`; the Lua side is
 `lua/filetree/native/fs/helper.lua`.
 
 What it never does: open a socket, start a process, write to the file system, read file contents other
@@ -49,8 +49,13 @@ nvim --clean --headless -u NONE -l helper/bench/bench.lua helper/target/release/
 nvim --clean --headless -u NONE -l helper/bench/watch.lua helper/target/release/filetree-helper
 ```
 
+```bash
+nvim --clean --headless -u NONE -l helper/bench/watches.lua helper/target/release/filetree-helper <root>
+```
+
 `bench.lua` times every tier from the call until the last answer is on the editor's main loop; it only
-reads. `watch.lua` checks whether a change in a folder the tree never opened is reported.
+reads. `watch.lua` checks whether a change in a folder the tree never opened is reported. `watches.lua`
+(Linux) counts the inotify watches the helper holds for a root and says whether the watch stood.
 
 Without the protocol: `filetree-helper walk <root> [--print]`, `filetree-helper size <dir>`,
 `filetree-helper status <root> [--print]`.
@@ -81,6 +86,23 @@ the main loop. `fd` and `rg` called directly; through a scoop shim each start co
 Recursive watch (`bench/watch.lua`): on Windows both the Lua watcher and the helper report a change in
 a closed folder two levels down and in a folder made after the watch started; on Linux the Lua watcher
 reports neither, the helper both.
+
+### The watch on Linux: inotify watches (2026-11-15)
+
+`notify` watches recursively on Linux by setting an inotify watch on every folder below the root,
+`node_modules`, `target` and `.git` included. The helper sets them itself now, on the folders its deep
+listing would walk into. Measured with `bench/watches.lua` in WSL 2 (ext4) on a repository with 300
+folders of its own and a `node_modules` with 12 000 folders (12 304 folders with the root, `src`,
+`node_modules` and `.git`):
+
+| | recursive (before) | per folder, ignored ones left out (now) |
+| --- | ---: | ---: |
+| inotify watches | 12 304 | 302 |
+| until the watch stands | 81 ms | 27 ms |
+| with a limit of 8 192 watches | error after 8 176 watches: the tree falls back to handles per folder read for the session | 302, the watch stands (24 ms) |
+
+The limit of 8 192 (the default of many distributions) was set for one run in a user namespace
+(`user.max_inotify_watches`), the system's own stayed at 524 288.
 
 Against the threshold of concept section 10.6 (factor 2 over tier 2 in one row, or a capability Lua
 lacks): the deep listing beats `fd` by 4 to 10 times and `rg` by 3 to 5 times on every root, recursive
