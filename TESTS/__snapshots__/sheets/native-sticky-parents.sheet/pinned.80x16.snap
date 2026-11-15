@@ -1,0 +1,38 @@
+testing.nvim screen v1
+size: 80x16
+cursor: 5,1
+mode: n
+--- text
+01| Files  Buf  Git  Sym [!]  Dia  │ f07.lua
+02|  ▾ deep/                       │# Readme
+03|    ▾ a/                        │~
+04|      ▾ b/                      │~
+05|          f07.lua               │~
+06|          f08.lua               │~
+07|          f09.lua               │~
+08|          f10.lua               │~
+09|          f11.lua               │~
+10|          f12.lua               │~
+11|          f13.lua               │~
+12|          f14.lua               │~
+13|          f15.lua               │~
+14|          f16.lua               │~
+15|          f17.lua               │~
+16|
+--- attrs
+01|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabcdddddddaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+02|eefegggggeeeeeeeeeeeeeeeeeeeeeeebhhhhhhhh
+03|eeeefeggeeeeeeeeeeeeeeeeeeeeeeeebiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+04|eeeeeefeggeeeeeeeeeeeeeeeeeeeeeebiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+05|jjjjjjjjkjllllllljjjjjjjjjjjjjjjbiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+06|        i bbbbbbb               biiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+07|        i bbbbbbb               biiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+08|        i bbbbbbb               biiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+09|        i bbbbbbb               biiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+10|        i bbbbbbb               biiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+11|        i bbbbbbb               biiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+12|        i bbbbbbb               biiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+13|        i bbbbbbb               biiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+14|        i bbbbbbb               biiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+15|        i bbbbbbb               biiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+16|mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm
