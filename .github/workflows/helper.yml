@@ -1,0 +1,136 @@
+name: helper
+
+# The helper process of the own tree (helper/, `native.fs.helper`): built, linted and tested on every
+# system the release programs are for, the Lua side run against the program that was just built
+# (TESTS/native_helper_spec.lua), the programs kept as artifacts; a tag `helper-v*` attaches them to a
+# GitHub release, where `require("filetree.native.fs.helper").build()` downloads them from.
+#
+# The main suite (ci.yml) runs without the program on purpose: the Lua tiers stay tested on equal
+# footing there, and the helper spec reports n/a.
+
+on:
+  push:
+    branches: [main]
+    tags: ["helper-v*"]
+    paths:
+      - "helper/**"
+      - "lua/filetree/native/fs/**"
+      - "lua/filetree/features/ui/size_info/**"
+      - "TESTS/native_helper_spec.lua"
+      - ".github/workflows/helper.yml"
+  pull_request:
+    paths:
+      - "helper/**"
+      - "lua/filetree/native/fs/**"
+      - "TESTS/native_helper_spec.lua"
+      - ".github/workflows/helper.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: helper (${{ matrix.asset }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            asset: filetree-helper-linux-x86_64
+            exe: filetree-helper
+          - os: windows-latest
+            asset: filetree-helper-windows-x86_64.exe
+            exe: filetree-helper.exe
+          - os: macos-latest
+            asset: filetree-helper-macos-aarch64
+            exe: filetree-helper
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout filetree.nvim
+        uses: actions/checkout@v5
+        with:
+          path: filetree.nvim
+      - name: Checkout lib.nvim
+        uses: actions/checkout@v5
+        with:
+          repository: WKDSteve/lib.nvim
+          path: lib.nvim
+          ref: ci-verified
+      - name: Checkout ui.nvim
+        uses: actions/checkout@v5
+        with:
+          repository: WKDSteve/ui.nvim
+          path: ui.nvim
+          ref: ci-verified
+      - name: Install Neovim (stable)
+        uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: stable
+
+      - name: rustfmt and clippy
+        if: runner.os == 'Linux'
+        working-directory: filetree.nvim/helper
+        run: |
+          cargo fmt --check
+          cargo clippy --release --all-targets -- -D warnings
+      - name: cargo test
+        working-directory: filetree.nvim/helper
+        run: cargo test --release
+      - name: cargo build
+        working-directory: filetree.nvim/helper
+        run: cargo build --release --locked
+
+      # The Lua side against this program: tiers, cancel, sizes, the Linux watch, the end of the helper.
+      - name: TESTS/native_helper_spec.lua
+        working-directory: filetree.nvim
+        env:
+          FILETREE_HELPER_TEST: ${{ github.workspace }}/filetree.nvim/helper/target/release/${{ matrix.exe }}
+        run: |
+          nvim --clean --headless -u NONE -l TESTS/native_helper_spec.lua | tee "$RUNNER_TEMP/helper-spec.log"
+          test "${PIPESTATUS[0]}" -eq 0
+          # a spec that only says n/a proves nothing here: the program was built
+          if grep -q "n/a  the helper process" "$RUNNER_TEMP/helper-spec.log"; then
+            echo "::error::the helper spec did not find the program it was given"
+            exit 1
+          fi
+
+      - name: Name the program for the release
+        run: cp "filetree.nvim/helper/target/release/${{ matrix.exe }}" "${{ matrix.asset }}"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    name: release
+    needs: [build]
+    if: startsWith(github.ref, 'refs/tags/helper-v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: filetree-helper-*
+          path: dist
+          merge-multiple: true
+      - name: Create the release with the three programs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          ls -l dist
+          (cd dist && sha256sum filetree-helper-* > SHA256SUMS)
+          gh release create "$TAG" dist/* --repo "$REPO" --title "filetree-helper $TAG" \
+            --notes "The helper process of filetree.nvim's own tree (native.fs.helper). Built by the CI from $GITHUB_SHA."
