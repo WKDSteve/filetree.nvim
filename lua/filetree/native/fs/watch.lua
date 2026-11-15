@@ -7,7 +7,11 @@
 ---
 --- Key responsibilities:
 --- - `watch(dir)`: reference-counted; one recursive handle per root on Windows and macOS, one handle
----   per folder elsewhere (libuv cannot watch recursively there)
+---   per folder elsewhere (libuv cannot watch recursively there). Elsewhere with the helper process
+---   (`filetree.native.fs.helper`) one recursive watch of the helper per root: a closed folder and a
+---   folder made later are followed too. A helper that ends leaves each of its watches to a libuv
+---   handle on the same folder (and reports that folder, so that it is read again); the folders below
+---   it are followed again when they are read again
 --- - Group events by the folder whose listing changed, wait for a short quiet, tell the subscribers
 ---   and fire `User FiletreeFsChanged` (`data.dirs`)
 --- - Quarantine: a folder with an event storm is reported once, after it went quiet
@@ -24,7 +28,22 @@ local M = {}
 
 local sysname = uv.os_uname().sysname
 --- libuv watches a directory tree with one handle on these systems only.
-M.recursive = sysname == "Windows_NT" or sysname == "Darwin"
+M.native_recursive = sysname == "Windows_NT" or sysname == "Darwin"
+
+---Does the helper process watch here (a system without recursive handles, and a helper to use)?
+---@return boolean
+local function by_helper()
+  return not M.native_recursive and require("filetree.native.fs.helper").available()
+end
+M.by_helper = by_helper
+
+-- `M.recursive`: is a folder below a watched one covered by that one's watch? Read live: with the
+-- helper on a system without recursive handles it is true until the helper ends.
+setmetatable(M, {
+  __index = function(_, key)
+    if key == "recursive" then return M.native_recursive or by_helper() end
+  end,
+})
 
 ---@class Filetree.Fs.Watch.Options
 ---@field debounce_ms integer  Quiet time before dirty folders are reported.
@@ -35,7 +54,8 @@ M.recursive = sysname == "Windows_NT" or sysname == "Darwin"
 local options = { debounce_ms = 100, storm = 200, quiet_ms = 2000 }
 
 ---@class Filetree.Fs.Watch.Entry
----@field handle uv_fs_event_t
+---@field handle? uv_fs_event_t  A libuv handle, or:
+---@field helper? integer  the generation of a watch of the helper process.
 ---@field refs integer
 ---@field error? string
 
@@ -119,13 +139,19 @@ end
 ---@param watched string
 ---@param filename? string
 function M.on_event(watched, filename)
-  M.stats.events = M.stats.events + 1
   local changed = watched
   if filename and filename ~= "" then
     -- the listing that changed is the one of the folder the entry lies in
     local full = list.norm(list.join(watched, (filename:gsub("\\", "/"))))
     changed = list.parent(full) or watched
   end
+  M.on_changed(changed)
+end
+
+---One folder whose listing changed (what the helper process reports, and what `on_event` works out).
+---@param changed string  Normalized.
+function M.on_changed(changed)
+  M.stats.events = M.stats.events + 1
   local now = uv.now()
   local t = traffic[changed]
   if not t or (not t.held and now - t.since >= 1000) then
@@ -145,15 +171,69 @@ function M.on_event(watched, filename)
   arm(options.debounce_ms)
 end
 
+local open_handle
+
+---A watch of the helper process on `dir` and below. Nil when the helper cannot take it.
+---@param dir string
+---@return Filetree.Fs.Watch.Entry|nil
+local function open_helper(dir)
+  local helper = require("filetree.native.fs.helper")
+  ---@type Filetree.Fs.Watch.Entry
+  local entry = { refs = 0 }
+  local gen = helper.request("watch", dir, function(kind, payload)
+    if kind == "changed" and type(payload) == "table" then
+      for _, changed in ipairs(payload) do
+        M.on_changed(list.norm(changed))
+      end
+    elseif kind == "watching" then
+      -- A libuv handle watches from the call on; the helper only once it has read the request.
+      -- What came or went in between is caught by reading the folder once more.
+      M.on_changed(dir)
+    elseif kind == "error" then
+      entry.error = tostring(payload)
+    elseif kind == "lost" then
+      -- the helper ended: a libuv handle on the same folder from now on, and the folder is read
+      -- again (what changed below it in the meantime would be missed otherwise)
+      entry.helper = nil
+      if watchers[dir] == entry then
+        local fallback, err = open_handle(dir)
+        if fallback then
+          entry.handle = fallback.handle
+        else
+          entry.error = err
+        end
+        M.on_changed(dir)
+      end
+      return false
+    end
+    return true
+  end)
+  if not gen then return nil end
+  entry.helper = gen
+  return entry
+end
+
 ---@param dir string
 ---@return Filetree.Fs.Watch.Entry|nil entry
 ---@return string|nil err
 local function open(dir)
+  if by_helper() then
+    local entry = open_helper(dir)
+    if entry then return entry, nil end
+  end
+  return open_handle(dir)
+end
+
+---A libuv handle on `dir` (recursive where the system can).
+---@param dir string
+---@return Filetree.Fs.Watch.Entry|nil entry
+---@return string|nil err
+open_handle = function(dir)
   local handle, err = uv.new_fs_event()
   if not handle then return nil, tostring(err) end
   local ok, start_err = handle:start(
     dir,
-    { recursive = M.recursive },
+    { recursive = M.native_recursive },
     function(event_err, filename, events)
       if event_err then
         local entry = watchers[dir]
@@ -178,7 +258,12 @@ local function close(dir)
   local entry = watchers[dir]
   if not entry then return end
   watchers[dir] = nil
+  if entry.helper then
+    require("filetree.native.fs.helper").drop(entry.helper, "unwatch")
+    entry.helper = nil
+  end
   local handle = entry.handle
+  if not handle then return end
   pcall(handle.stop, handle)
   if not handle:is_closing() then pcall(handle.close, handle) end
 end
@@ -266,6 +351,7 @@ end
 function M.state()
   local out = {
     recursive = M.recursive,
+    by_helper = by_helper(),
     watchers = {},
     released = {},
     quarantined = {},
@@ -273,7 +359,8 @@ function M.state()
     stats = vim.deepcopy(M.stats),
   }
   for dir, entry in pairs(watchers) do
-    out.watchers[#out.watchers + 1] = { dir = dir, refs = entry.refs, error = entry.error }
+    out.watchers[#out.watchers + 1] =
+      { dir = dir, refs = entry.refs, error = entry.error, helper = entry.helper ~= nil or nil }
   end
   for dir, refs in pairs(released) do
     out.released[#out.released + 1] = { dir = dir, refs = refs }

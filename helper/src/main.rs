@@ -1,25 +1,28 @@
-//! filetree-helper: prototype of the helper process of filetree.nvim's own tree (stage E3h).
+//! filetree-helper: the helper process of filetree.nvim's own tree (`native.fs.helper`).
 //!
 //! One child process per Neovim, started by the editor, talking msgpack-RPC over stdin/stdout. It
-//! lists the files below a folder (with the ignore rules `rg` uses), watches a folder tree and reads
-//! the git status of a repository, reporting only what changed since it was last asked.
+//! lists the files below a folder (with the ignore rules `rg` uses), adds up the size of a folder,
+//! watches a folder tree, and can read the git status of a repository (measured, not used by the
+//! tree: `git` is as fast).
 //!
 //! What it never does: open a socket, start a process, write to the file system, read the content of
 //! a file other than ignore files and what git keeps below `.git`. It ends when its stdin closes.
 //!
-//! Protocol. The editor sends notifications `[2, method, params]`; every one carries a generation
-//! number as its first parameter, and every answer carries the generation of its request:
+//! Protocol (version 1). The editor sends notifications `[2, method, params]`; every one carries a
+//! generation number as its first parameter, and every answer carries the generation of its request:
 //!
-//! - `walk [gen, root, {sizes?: bool}]` -> `files [gen, paths]`*, then `done [gen, {ok, files, bytes, ms}]`
+//! - `walk [gen, root]` -> `files [gen, paths]`*, then `done [gen, {ok, files, ms}]`
 //! - `cancel [gen]`: the walk of that generation sends nothing more
-//! - `watch [gen, root]` -> `changed [gen, dirs]` after a short quiet, until `unwatch [gen]`
-//! - `status [gen, root]` -> `status [gen, {full, set, gone, ms}]` (a delta after the first answer)
-//! - request `ping` -> `{name, version, pid}`
+//! - `size [gen, dir]` -> `size [gen, {files, bytes, ms}]`
+//! - `watch [gen, root]` -> `watching [gen, root]`, then `changed [gen, dirs]` after a short quiet,
+//!   until `unwatch [gen]`; `error [gen, text]` when it cannot watch
+//! - `status [gen, root]` -> `status [gen, {full, set, gone, entries, ms}]` (a delta after the first)
+//! - request `ping` -> `{name, version, protocol, pid}`
 //!
 //! An answer is a notification the editor runs itself: `nvim_exec_lua(SINK, [kind, gen, payload])`.
 //!
-//! `filetree-helper walk <root>` and `filetree-helper status <root>` run one piece of work without
-//! the protocol and print what it cost (for measuring without the transport).
+//! `filetree-helper walk <root> [--print]`, `size <dir>` and `status <root> [--print]` run one piece
+//! of work without the protocol and print what it cost.
 
 mod paths;
 mod status;
@@ -38,20 +41,29 @@ use std::time::Instant;
 use rmpv::Value;
 
 /// The Lua the editor runs for every answer; its arguments are `kind, generation, payload`.
-const SINK: &str = "return require('filetree_helper').on(...)";
+const SINK: &str = "return require('filetree.native.fs.helper').on(...)";
+
+/// Bumped when a method or an answer changes shape.
+const PROTOCOL: u64 = 1;
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
         None | Some("serve") => serve(),
         Some("walk") => cli_walk(&args[1..]),
+        Some("size") => cli_size(&args[1..]),
         Some("status") => cli_status(&args[1..]),
         Some("--version") => {
-            println!("filetree-helper {}", env!("CARGO_PKG_VERSION"));
+            println!(
+                "filetree-helper {} (protocol {PROTOCOL})",
+                env!("CARGO_PKG_VERSION")
+            );
             ExitCode::SUCCESS
         }
         Some(other) => {
-            eprintln!("filetree-helper: unknown command '{other}' (serve, walk <root> [--sizes], status <root>)");
+            eprintln!(
+                "filetree-helper: unknown command '{other}' (serve, walk <root>, size <dir>, status <root>)"
+            );
             ExitCode::from(2)
         }
     }
@@ -62,12 +74,11 @@ fn cli_walk(args: &[String]) -> ExitCode {
         eprintln!("filetree-helper walk: missing <root>");
         return ExitCode::from(2);
     };
-    let sizes = args.iter().any(|arg| arg == "--sizes");
     let print = args.iter().any(|arg| arg == "--print");
     let started = Instant::now();
     let cancel = AtomicBool::new(false);
     let out = Mutex::new(BufWriter::new(io::stdout()));
-    let summary = walk::run(root, sizes, &cancel, &|batch| {
+    let summary = walk::run(root, &cancel, &|batch| {
         if print {
             let mut out = out.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
             for path in batch {
@@ -76,7 +87,20 @@ fn cli_walk(args: &[String]) -> ExitCode {
         }
     });
     let ms = started.elapsed().as_secs_f64() * 1000.0;
-    eprintln!("files={} bytes={} ms={ms:.1}", summary.files, summary.bytes);
+    eprintln!("files={} ms={ms:.1}", summary.files);
+    ExitCode::SUCCESS
+}
+
+fn cli_size(args: &[String]) -> ExitCode {
+    let Some(dir) = args.first() else {
+        eprintln!("filetree-helper size: missing <dir>");
+        return ExitCode::from(2);
+    };
+    let started = Instant::now();
+    let (files, bytes) = walk::size(dir);
+    let ms = started.elapsed().as_secs_f64() * 1000.0;
+    println!("{bytes}");
+    eprintln!("files={files} bytes={bytes} ms={ms:.1}");
     ExitCode::SUCCESS
 }
 
@@ -177,6 +201,7 @@ impl Server {
                         map(vec![
                             ("name", Value::from("filetree-helper")),
                             ("version", Value::from(env!("CARGO_PKG_VERSION"))),
+                            ("protocol", Value::from(PROTOCOL)),
                             ("pid", Value::from(std::process::id())),
                         ]),
                     ),
@@ -207,20 +232,27 @@ impl Server {
     fn notify(&mut self, method: &str, generation: u64, params: &[Value]) {
         let root = params.first().and_then(Value::as_str).map(str::to_owned);
         match (method, root) {
+            ("size", Some(dir)) => {
+                let out = self.out.clone();
+                thread::spawn(move || {
+                    let started = Instant::now();
+                    let (files, bytes) = walk::size(&dir);
+                    let answer = map(vec![
+                        ("files", Value::from(files)),
+                        ("bytes", Value::from(bytes)),
+                        ("ms", Value::from(started.elapsed().as_secs_f64() * 1000.0)),
+                    ]);
+                    let _ = out.send(event("size", generation, answer));
+                });
+            }
             ("walk", Some(root)) => {
-                let sizes = params
-                    .get(1)
-                    .and_then(Value::as_map)
-                    .and_then(|opts| opts.iter().find(|(key, _)| key.as_str() == Some("sizes")))
-                    .and_then(|(_, value)| value.as_bool())
-                    .unwrap_or(false);
                 let cancel = Arc::new(AtomicBool::new(false));
                 self.walks.retain(|_, flag| Arc::strong_count(flag) > 1);
                 self.walks.insert(generation, Arc::clone(&cancel));
                 let out = self.out.clone();
                 thread::spawn(move || {
                     let started = Instant::now();
-                    let summary = walk::run(&root, sizes, &cancel, &|batch| {
+                    let summary = walk::run(&root, &cancel, &|batch| {
                         if cancel.load(Ordering::Relaxed) {
                             return;
                         }
@@ -233,7 +265,6 @@ impl Server {
                     let done = map(vec![
                         ("ok", Value::from(summary.ok)),
                         ("files", Value::from(summary.files)),
-                        ("bytes", Value::from(summary.bytes)),
                         ("ms", Value::from(started.elapsed().as_secs_f64() * 1000.0)),
                     ]);
                     let _ = out.send(event("done", generation, done));

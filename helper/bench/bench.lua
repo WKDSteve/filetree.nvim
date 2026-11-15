@@ -39,27 +39,23 @@ local deep = require("filetree.native.fs.deep")
 local uv = vim.uv
 local TIMEOUT = 600000
 
--- ── the helper: one child, its answers land in `sink` ──────────────────────────
-local sink = {}
-package.loaded["filetree_helper"] = {
-  on = function(kind, gen, payload)
-    local fn = sink[gen]
-    if fn then fn(kind, payload) end
-  end,
-}
-local t_spawn = uv.hrtime()
-local chan = vim.fn.jobstart({ exe }, { rpc = true })
-assert(chan > 0, "cannot start " .. exe)
-local hello = vim.rpcrequest(chan, "ping")
-say(
-  ("helper %s %s pid %d, start and first answer %.1f ms"):format(
-    hello.name,
-    hello.version,
-    hello.pid,
-    (uv.hrtime() - t_spawn) / 1e6
+-- ── the helper: the plugin's own module, with this program ─────────────────────
+local helper = require("filetree.native.fs.helper")
+helper.configure(exe)
+do
+  local t_spawn = uv.hrtime()
+  local answered = false
+  assert(
+    helper.request("size", list.norm(vim.fn.getcwd()), function()
+      answered = true
+    end),
+    "cannot start " .. exe
   )
-)
-local generation = 0
+  vim.wait(TIMEOUT, function()
+    return answered
+  end, 1)
+  say(("helper %s, start and first answer %.1f ms"):format(exe, (uv.hrtime() - t_spawn) / 1e6))
+end
 
 ---@param work fun(done: fun(files: integer)): any
 ---@return number ms, integer files, number first_ms
@@ -94,21 +90,12 @@ local function deep_tier(tier)
   end
 end
 
-local function helper_walk(sizes)
-  return function(done, first)
-    generation = generation + 1
-    local gen, n = generation, 0
-    sink[gen] = function(kind, payload)
-      if kind == "files" then
-        first()
-        n = n + #payload
-      elseif kind == "done" then
-        sink[gen] = nil
-        done(n)
-      end
-    end
-    vim.rpcnotify(chan, "walk", gen, list.norm(_G.ROOT), { sizes = sizes })
-  end
+-- the size of a folder, everything counted, through the helper
+local function helper_size(done, first)
+  helper.request("size", list.norm(_G.ROOT), function(_, payload)
+    first()
+    done(payload.files or -1)
+  end)
 end
 
 -- recursive size in Lua: the walk of tier 1 and one stat per file, as a size column would need it
@@ -134,23 +121,20 @@ local function git_status(done, first)
 end
 
 local function helper_status(done, first)
-  generation = generation + 1
-  local gen = generation
-  sink[gen] = function(kind, payload)
+  ---@diagnostic disable-next-line: param-type-mismatch
+  helper.request("status", list.norm(_G.ROOT), function(kind, payload)
     first()
-    sink[gen] = nil
     done(kind == "status" and payload.entries or -1)
-  end
-  vim.rpcnotify(chan, "status", gen, _G.ROOT)
+  end)
 end
 
 local rows = {
   { "deep", "fd", deep_tier("fd") },
   { "deep", "rg", deep_tier("rg") },
   { "deep", "lua", deep_tier("lua") },
-  { "deep", "helper", helper_walk(false) },
+  { "deep", "helper", deep_tier("helper") },
   { "sizes", "lua", lua_sizes },
-  { "sizes", "helper", helper_walk(true) },
+  { "sizes", "helper", helper_size },
   { "status", "git", git_status },
   { "status", "helper", helper_status },
 }
@@ -186,5 +170,5 @@ for _, root in ipairs(roots) do
   end
 end
 
-vim.fn.jobstop(chan)
+helper.stop()
 vim.cmd("qa!")

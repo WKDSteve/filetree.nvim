@@ -6,11 +6,14 @@
 ---
 --- Key responsibilities:
 --- - `files(root, on_batch, on_done, opts)`: paths (normalized) in batches on the main loop; returns `cancel`
---- - Three tiers behind one call: `fd`, `rg --files`, else a walk with `uv.fs_scandir`
+--- - Four tiers behind one call: the helper process (`filetree.native.fs.helper`), `fd`, `rg --files`,
+---   else a walk with `uv.fs_scandir`
 --- - `tier()`: which one this machine uses, for `:checkhealth`
 ---
---- `.git` is never entered. `fd` and `rg` leave out what `.gitignore` names; the walk leaves out the
---- names of the ignore list, which is the nearest thing it has. A cancelled listing calls nothing more.
+--- `.git` is never entered. The helper, `fd` and `rg` leave out what `.gitignore` names; the walk leaves
+--- out the names of the ignore list, which is the nearest thing it has. A cancelled listing calls
+--- nothing more. A helper that ends during a listing hands it to the next tier, which leaves out what
+--- the helper had handed over already.
 ---
 --- Links: a link to a file (and a link whose target is gone) is listed like a file, a link to a folder
 --- is neither listed nor followed. `fd` and the walk agree on that; `fd --type f` alone leaves links
@@ -26,17 +29,26 @@ local M = {}
 --- How many paths the walk hands over at most (the tools have no such limit: they stream).
 M.WALK_LIMIT = 200000
 
----@alias Filetree.Fs.Deep.Tier "fd"|"rg"|"lua"
+---@alias Filetree.Fs.Deep.Tier "helper"|"fd"|"rg"|"lua"
 
----Which tool lists files on this machine.
+---Which external tool (or the walk) lists files, the helper left aside.
 ---@return Filetree.Fs.Deep.Tier tier
 ---@return string|nil exe
-function M.tier()
+local function tool_tier()
   for _, exe in ipairs({ "fd", "fdfind" }) do
     if vim.fn.executable(exe) == 1 then return "fd", exe end
   end
   if vim.fn.executable("rg") == 1 then return "rg", "rg" end
   return "lua", nil
+end
+
+---Which tier lists files on this machine.
+---@return Filetree.Fs.Deep.Tier tier
+---@return string|nil exe
+function M.tier()
+  local helper = require("filetree.native.fs.helper")
+  if helper.available() then return "helper", (helper.find()) end
+  return tool_tier()
 end
 
 ---@param tier Filetree.Fs.Deep.Tier
@@ -163,6 +175,57 @@ local function walk(root, on_batch, on_done)
   end
 end
 
+---List through the helper process. Nil when it cannot take the request.
+---@param root string
+---@param on_batch fun(paths: string[])
+---@param on_done fun(ok: boolean)
+---@param rest fun(on_batch: fun(paths: string[]), on_done: fun(ok: boolean)): fun()  The next tier, for a helper that ends on the way.
+---@return (fun())|nil cancel
+local function via_helper(root, on_batch, on_done, rest)
+  local helper = require("filetree.native.fs.helper")
+  local cancelled = false
+  ---@type table<string, true>  what was handed over: the next tier must not hand it over again
+  local given = {}
+  ---@type (fun())|nil
+  local cancel_rest = nil
+  local gen = helper.request("walk", root, function(kind, payload)
+    if cancelled then return false end
+    if kind == "files" then
+      for _, path in ipairs(payload) do
+        given[path] = true
+      end
+      vim.schedule(function()
+        if not cancelled then on_batch(payload) end
+      end)
+      return true
+    elseif kind == "done" then
+      vim.schedule(function()
+        if not cancelled then on_done(type(payload) ~= "table" or payload.ok ~= false) end
+      end)
+    elseif kind == "lost" then
+      -- after the batches already on their way: the rest from the next tier
+      vim.schedule(function()
+        if cancelled then return end
+        cancel_rest = rest(function(paths)
+          local fresh = {}
+          for _, path in ipairs(paths) do
+            if not given[path] then fresh[#fresh + 1] = path end
+          end
+          if #fresh > 0 then on_batch(fresh) end
+        end, on_done)
+      end)
+    end
+    return false
+  end)
+  if not gen then return nil end
+  return function()
+    if cancelled then return end
+    cancelled = true
+    helper.drop(gen, "cancel")
+    if cancel_rest then cancel_rest() end
+  end
+end
+
 ---List every file below `root`.
 ---@param root string  Normalized.
 ---@param on_batch fun(paths: string[])  Normalized absolute paths, in the order they are found.
@@ -173,12 +236,20 @@ function M.files(root, on_batch, on_done, opts)
   local tier, exe = M.tier()
   if opts and opts.tier then
     tier = opts.tier
-    if tier ~= "lua" then
-      local found, found_exe = M.tier()
+    if tier ~= "lua" and tier ~= "helper" then
+      local found, found_exe = tool_tier()
       -- a forced tool that is not installed: the walk, which every machine has
       exe = found == tier and found_exe or (vim.fn.executable(tier) == 1 and tier or nil)
       if not exe then tier = "lua" end
     end
+  end
+  if tier == "helper" then
+    local cancel = via_helper(root, on_batch, on_done, function(batch, done)
+      return M.files(root, batch, done, { tier = (tool_tier()) })
+    end)
+    if cancel then return cancel end
+    -- no helper after all (forced in a spec, or it could not start): the tools
+    tier, exe = tool_tier()
   end
   if tier == "lua" or not exe then return walk(root, on_batch, on_done) end
   if tier ~= "fd" then return spawn(command(tier, exe, root), on_batch, on_done) end

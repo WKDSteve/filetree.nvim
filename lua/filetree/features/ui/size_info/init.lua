@@ -2,9 +2,10 @@
 ---@brief Show file and directory sizes as eol extmarks on tree nodes.
 ---@description
 --- File sizes come from vim.uv.fs_stat() (fast, synchronous per node).
---- Directory sizes are computed asynchronously via `du -sh` (POSIX) or
---- PowerShell Get-ChildItem (Windows), since walking a full directory tree
---- is slow. Sizes are cached, each entry expiring after a bound so a size
+--- Directory sizes are computed asynchronously: by the own tree's helper
+--- process when it runs (`native.fs.helper`, one walk in that process),
+--- else via `du -sk` (POSIX) or PowerShell Get-ChildItem (Windows), since
+--- walking a full directory tree is slow. Sizes are cached, each entry expiring after a bound so a size
 --- measured once does not stay frozen for the rest of the session -- files
 --- (see FILE_CACHE_TTL) expire quickly since fs_stat is cheap to redo;
 --- directories (see DIR_CACHE_TTL) expire far less often since re-measuring
@@ -123,9 +124,37 @@ end
 
 local _pending = {} ---@type table<string, boolean>
 
+---The size through the helper process of the own tree (`filetree.native.fs.helper`): one walk in
+---that process, no process per folder. False when there is no helper to ask.
+---@param path string
+---@param callback fun(bytes: integer|nil)
+---@return boolean asked
+local function query_dir_size_helper(path, callback)
+  local ok, helper = pcall(require, "filetree.native.fs.helper")
+  if not ok or not helper.available() then return false end
+  local gen = helper.request("size", (path:gsub("\\", "/")), function(kind, payload)
+    vim.schedule(function()
+      _pending[path] = nil
+      if kind == "size" and type(payload) == "table" and type(payload.bytes) == "number" then
+        cache_set(path, fmt_bytes(payload.bytes))
+        M._render()
+        callback(payload.bytes)
+      elseif kind == "lost" then
+        -- the helper ended on the way: the same folder the way it is done without one
+        M._query_dir_size(path, callback)
+      else
+        callback(nil)
+      end
+    end)
+    return false
+  end)
+  return gen ~= nil
+end
+
 local function query_dir_size(path, callback)
   if _pending[path] then return end
   _pending[path] = true
+  if query_dir_size_helper(path, callback) then return end
 
   local cmd
   if vim.fn.has("win32") == 1 then

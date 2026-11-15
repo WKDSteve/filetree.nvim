@@ -19,11 +19,14 @@ end
 function M._native_lines()
   local watch = require("filetree.native.fs.watch")
   local opts = require("filetree.native").options()
+  -- the helper process first: the lines below say which work it took
+  require("filetree.native.fs.helper").health(vim.health.ok, note, vim.health.warn)
   if opts.watch == false then
     note("native: watching the disk is off (native.watch = false); R reads the folders again")
   else
-    local kind = watch.recursive and "one recursive handle per root"
-      or "one handle per folder read (no recursive handles on this system)"
+    local kind = watch.by_helper() and "one recursive watch of the helper process per root"
+      or watch.recursive and "one recursive handle per root"
+      or "one handle per folder read (no recursive handles on this system; closed folders are not followed without the helper process)"
     vim.health.ok(("native: %d watcher handle(s) open, %s"):format(watch.count(), kind))
     local stats = watch.stats
     vim.health.info(
@@ -37,6 +40,8 @@ function M._native_lines()
   local tier, exe = require("filetree.native.fs.deep").tier()
   if tier == "lua" then
     note("native: search lists files with a Lua walk (install fd or ripgrep for faster searches)")
+  elseif tier == "helper" then
+    vim.health.ok("native: search lists files and adds up folder sizes with the helper process")
   else
     vim.health.ok(("native: search lists files with %s"):format(exe or tier))
   end

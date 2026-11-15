@@ -34,6 +34,7 @@ local M = {}
 ---@field ai? Filetree.Ai.Opts  Words to tree actions through ai.nvim: `:Filetree ask <text>` and a microphone in the view bar (default off: `enabled = false`).
 ---@field expand_all_max? integer  Folders "expand all" (`E`) opens at most; it says how many it left closed (default 200).
 ---@field sticky_parents? integer|false  While the tree is scrolled, the folders the top row lies in stay pinned on top: at most this many, the nearest ones (default 3; 0 or false: none).
+---@field fs? { helper?: "auto"|false|string }  The helper process (`filetree.native.fs.helper`): `"auto"` (default) uses `helper/bin/filetree-helper` when it is there and not on a machine with `NVIM_MACHINE_ROLE=workstation`; `false` never; a path uses that program.
 ---@field views? (string|Filetree.Native.ViewSpec)[]  The views of the tree, in the order of the view bar: `{ "files" }` is one view with one source, `{ name = "work", "buffers", "git" }` one view with two sections (default: the files, then one view per registered source).
 
 ---One entry of `native.views`: the sources of the view as list items, and its name.

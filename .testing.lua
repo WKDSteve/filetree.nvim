@@ -76,6 +76,8 @@ return {
       -- TESTS/trash_linux_container_spec.lua runs the Linux trash backend in a container (n/a without podman/image).
       "podman",
       "ft-definitely-missing-tool-xyz",
+      -- TESTS/native_helper_spec.lua starts the helper process of the own tree (helper/; n/a when not built).
+      "filetree-helper",
     },
   },
   -- "c" = child started from a -c command (v:vim_did_enter is 0, <cword> works),

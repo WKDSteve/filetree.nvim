@@ -33,22 +33,22 @@ local unsubscribe = watch.subscribe(function(dirs)
     seen.lua[dir] = true
   end
 end)
+-- the Lua watcher without the helper (libuv handles), the helper's watch beside it
+local helper = require("filetree.native.fs.helper")
+helper.configure(false)
 local unwatch = watch.watch(root)
-
-package.loaded["filetree_helper"] = {
-  on = function(kind, _, payload)
-    if kind == "changed" then
-      for _, dir in ipairs(payload) do
-        seen.helper[dir] = true
-      end
-    elseif kind == "error" then
-      say("helper error: " .. tostring(payload))
+helper.configure(exe)
+local gen = helper.request("watch", root, function(kind, payload)
+  if kind == "changed" then
+    for _, dir in ipairs(payload) do
+      seen.helper[dir] = true
     end
-  end,
-}
-local chan = vim.fn.jobstart({ exe }, { rpc = true })
-assert(chan > 0, "cannot start " .. exe)
-vim.rpcnotify(chan, "watch", 1, root)
+  elseif kind == "error" then
+    say("helper error: " .. tostring(payload))
+  end
+  return true
+end)
+assert(gen, "cannot start " .. exe)
 vim.wait(500, function()
   return false
 end)
@@ -69,7 +69,9 @@ vim.wait(1500, function()
   return false
 end)
 
-say(("system %s, libuv recursive: %s"):format(uv.os_uname().sysname, tostring(watch.recursive)))
+say(
+  ("system %s, libuv recursive: %s"):format(uv.os_uname().sysname, tostring(watch.native_recursive))
+)
 for _, case in ipairs(cases) do
   say(
     ("  %-40s lua %-3s helper %s"):format(
@@ -80,8 +82,8 @@ for _, case in ipairs(cases) do
   )
 end
 
-vim.rpcnotify(chan, "unwatch", 1)
-vim.fn.jobstop(chan)
+helper.drop(gen, "unwatch")
+helper.stop()
 unwatch()
 unsubscribe()
 watch.stop_all()
