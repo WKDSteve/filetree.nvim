@@ -701,9 +701,10 @@ function View:_apply(changes)
       -- earlier one read too early, and the line count is checked below
       local fresh = self:_texts(c.from, c.new_count)
       local first, old_count = c.from - 1, c.old_count
-      -- A folder that was read again comes back as one block, "its rows out, its rows in", also when
-      -- one file was added to ten thousand. Writing a line costs far more than comparing one: only
-      -- the rows between the first and the last that differ are written.
+      -- A change that replaces many rows by many rows (another sort order, a whole view built
+      -- again) often leaves most lines as they were. Writing a line costs far more than comparing
+      -- one: only the rows between the first and the last that differ are written. (A folder that
+      -- was read again no longer comes as such a block: the tree core reports its changed rows.)
       if old_count >= TRIM_FROM and #fresh >= TRIM_FROM then
         local stale = api.nvim_buf_get_lines(buf, first, first + old_count, false)
         local head, limit = 0, math.min(#stale, #fresh)

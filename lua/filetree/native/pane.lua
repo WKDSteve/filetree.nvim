@@ -44,8 +44,9 @@ local M = {}
 ---@field private _source_of table<any, string>
 ---@field private _by_path table<string, any>
 ---@field private _above table<any, string>  Node id -> the path of the node itself or of the nearest node above it that has one.
----@field private _loaders table<any, function>
----@field private _loaded table<any, true>
+---@field private _loaded table<any, true>  Lazy nodes that were asked for their children.
+---@field private _asking boolean  A lazy node is being asked again right now, by `_reload`.
+---@field private _answer Filetree.Node[]?  What the loader answered to that question, when it answered at once.
 ---@field private _opened table<any, true>  Nodes with `open = true` that were opened once: closed by hand, they stay closed.
 ---@field private _pending_open table<any, true>  Such nodes that are waiting to be opened.
 ---@field private _stops (fun())[]
@@ -118,18 +119,22 @@ function Pane:_adopt(source, entry, node, is_root, above)
     end
   end
   if not load then return end
-  self._loaders[id] = load
   local wrapper = function(n, cb)
-    -- looked up when it runs: a node that was kept over a reload asks the loader of its newest twin
-    local current = self._loaders[n.id] or load
-    current(n, function(list, err)
+    load(n, function(list, err)
+      local again = self._loaded[n.id] == true
+      local at_once = self._asking
       if type(list) == "table" then
         self._loaded[n.id] = true
         for _, child in ipairs(list) do
           self:_adopt(source, entry, child, false, self._above[n.id])
         end
+        if at_once then self._answer = list end
       end
       cb(list, err)
+      -- An answer to "read again" that comes later: the tree has taken it over by now (and reported
+      -- it), so the lazy nodes below that were read can be asked in their turn. An answer that
+      -- comes at once is followed up by `_reload`, after its rows were written.
+      if again and not at_once and type(list) == "table" then self:_reload_below(list) end
     end)
   end
   wrapped[wrapper] = true
@@ -175,7 +180,7 @@ end
 
 ---Build the tree from scratch: every source is asked for its root again.
 function Pane:build()
-  self._source_of, self._by_path, self._loaders, self._loaded = {}, {}, {}, {}
+  self._source_of, self._by_path, self._loaded = {}, {}, {}
   self._above = {}
   self._opened, self._pending_open = {}, {}
   self._sections = {}
@@ -288,38 +293,52 @@ function Pane:_apply(changes)
   if #changes > 0 then self._hooks.apply(changes) end
 end
 
+---Ask a lazy node that was read before for its children again and take the answer over; what is
+---open below stays open (`Tree:reload`). The lazy nodes below it that were read are asked after it.
+---@private
+---@param id any
+function Pane:_reload(id)
+  local tree = self.tree
+  self._asking, self._answer = true, nil
+  local changes = tree:reload(id, { deep = true })
+  local answer = self._answer
+  self._asking, self._answer = false, nil
+  self:_apply(changes)
+  -- answered at once: its rows are written, now the level below (a later answer does this itself)
+  if answer then self:_reload_below(answer) end
+end
+
+---The lazy nodes in `list` (and below the lists in it) that were read before: ask each again.
+---@private
+---@param list Filetree.Node[]
+function Pane:_reload_below(list)
+  for _, child in ipairs(list) do
+    if type(child.children) == "table" then
+      self:_reload_below(child.children)
+    elseif self._loaded[child.id] and self.tree:node(child.id) then
+      self:_reload(child.id)
+    end
+  end
+end
+
 ---Bring the children of `id` in line with what its node carries or its loader answers now, and the
----same for every child below that has been read.
+---same for every node below that has been read.
 ---@private
 ---@param id any
 ---@param node Filetree.Node  The node as the source hands it over now.
 function Pane:_resync(id, node)
   local tree = self.tree
-  ---@param list Filetree.Node[]
-  local function take(list)
-    if self.tree ~= tree or not tree:node(id) then return end
-    -- applied per node: the splices of one merge are in terms of the rows as that merge left them
-    self:_apply(tree:merge_children(id, list))
-    for _, child in ipairs(list) do
-      if type(child.children) == "table" or self._loaded[child.id] then
-        self:_resync(child.id, child)
-      end
-    end
-  end
   if type(node.children) == "table" then
-    take(node.children)
-  elseif self._loaded[id] and self._loaders[id] then
-    self._loaders[id](node, function(list)
-      if type(list) ~= "table" then return end
-      local source = self._source_of[id]
-      local entry = source and self:_entry(source)
-      if entry then
-        for _, child in ipairs(list) do
-          self:_adopt(source, entry, child, false, self._above[id])
-        end
-      end
-      take(list)
-    end)
+    -- the whole subtree came with the node: mixed in level by level, what is open stays open
+    self:_apply(tree:merge_children(id, node.children, { deep = true }))
+    self:_reload_below(node.children)
+  elseif self._loaded[id] then
+    -- the node of the tree asks through the loader of its newest twin
+    local kept = tree:node(id)
+    if kept and kept ~= node and type(node.children) == "function" then
+      kept.children = node.children
+    end
+    self:_reload(id)
   end
 end
 
@@ -340,11 +359,17 @@ function Pane:reload(source)
       end
       self._sections[i] = fresh
       -- also for a source that still cannot load: its reason may be another one
+      -- what the head no longer carries goes: a section whose count fell away must not show the old one
+      local clear = {}
+      for _, field in ipairs({ "status", "columns" }) do
+        if root[field] == nil then clear[#clear + 1] = field end
+      end
       self:_apply(self.tree:push({
         id = root.id,
         label = root.label,
         status = root.status,
         columns = root.columns,
+        clear = clear,
       }))
       if fresh.available then self:_resync(root.id, root) end
     end
@@ -379,8 +404,8 @@ function Pane:_emit(source)
       end
       local node = tree:node(id)
       if not node or self._source_of[id] ~= source then return end
-      if self._loaded[id] and self._loaders[id] then
-        self:_resync(id, node)
+      if self._loaded[id] and type(node.children) == "function" then
+        self:_reload(id)
       else
         self:_apply(tree:invalidate(id, deep))
       end
@@ -448,8 +473,8 @@ function M.new(name, sources, hooks)
     _source_of = {},
     _by_path = {},
     _above = {},
-    _loaders = {},
     _loaded = {},
+    _asking = false,
     _opened = {},
     _pending_open = {},
     _stops = {},

@@ -10,9 +10,7 @@
 ---@class Filetree.Node : Lib.Tree.Node
 ---@field path? string absolute path, `/`-separated, drive letter upper case
 ---@field data? table belongs to the source; the tree never touches it. `data.chain` (string[]): the ids of the folders a merged line `a/b/c` stands for, outermost first. Read when the node is opened: `data.bufnr` (integer, the buffer to show instead of a file), `data.lnum` and `data.col` (1-based line, 0-based column to go to)
----@field hl? string highlight group for the name of the node
----@field open? boolean the node starts open (once: closed by hand, it stays closed)
----@field lazy? boolean the node has children the source answers through its `children(node, ctx, cb)`
+--- `hl`, `open`, `lazy` and `expandable` are declared on `Lib.Tree.Node` (lib.nvim).
 
 ---What a source, a decorator or an action is called with.
 ---@class Filetree.Ctx
@@ -32,7 +30,6 @@
 ---@class Filetree.Source : Lib.Tree.Registry.Source
 ---@field root fun(ctx: Filetree.Ctx): Filetree.Node
 ---@field children? fun(node: Filetree.Node, ctx: Filetree.Ctx, cb: fun(list?: Filetree.Node[], err?: string)) asked for the root when it carries no `children`, and for a node with `lazy = true`; answers like a node's own `children`
----@field mutable? boolean false: the nodes of this source are not to be changed (actions that need "mutable" step back)
 ---@field subscribe? fun(ctx: Filetree.Ctx, emit: Filetree.Emit): fun()
 ---@field actions? Filetree.Action[]
 ---@field preview? fun(node: Filetree.Node, ctx: Filetree.Ctx): table|nil

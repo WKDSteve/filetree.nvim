@@ -115,7 +115,7 @@ local remove_spec = registry.source({
     return {
       id = "spec:root",
       label = "Spec",
-      columns = { tostring(#spec.items) },
+      columns = not spec.no_count and { tostring(#spec.items) } or nil,
       -- a lazy root that answers a group with a list of its own, and a leaf that is no file
       children = function(_, cb)
         cb({
@@ -345,6 +345,14 @@ eq("the root took over its new column", view.tree:node("spec:root").columns, { "
 spec.items[#spec.items + 1] = { name = "four", file = "sub/inner/c.lua" }
 spec.emit.invalidate("spec:root")
 eq("emit.invalidate of the root does the same", lines()[5], "four")
+-- a head that no longer carries a field loses it (the old count must not stand there)
+spec.no_count = true
+spec.emit.reset()
+eq("a root that comes back without its column loses it", view.tree:node("spec:root").columns, nil)
+eq("... and nothing else of the view changed", lines()[5], "four")
+spec.no_count = nil
+spec.emit.reset()
+eq("... and gets it back", view.tree:node("spec:root").columns, { "3" })
 
 -- ── a subscription only while the view is on screen ────────────────────────────
 view:close()
