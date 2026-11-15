@@ -1014,6 +1014,87 @@ do
   remove_third()
 end
 
+-- A list of open nodes set for a view whose groups arrive later, each saying `open = true` (the
+-- groups of git come with the answer of `git status`): a group the list does not name stays closed.
+-- (Found by the session sheet of sessions.nvim: a group closed by hand was open again after a restart.)
+do
+  local shape, emit = "open", nil
+  local remove_late = registry.source({
+    name = "lategroups",
+    title = "Late",
+    root = function()
+      return {
+        id = "late:root",
+        label = "Late",
+        children = function(_, cb)
+          vim.defer_fn(function()
+            local groups = {}
+            for _, name in ipairs({ "changes", "untracked" }) do
+              groups[#groups + 1] = {
+                id = "late:" .. name,
+                label = name,
+                kind = "group",
+                open = shape == "open" or nil,
+                children = {
+                  { id = "late:" .. name .. ":file", label = name .. ".txt", kind = "note" },
+                },
+              }
+            end
+            cb(groups)
+          end, 10)
+        end,
+      }
+    end,
+    subscribe = function(_, e)
+      emit = e
+      return function()
+        emit = nil
+      end
+    end,
+  })
+  native.setup(vim.tbl_extend("force", native.options(), { views = {} }))
+  settle(60)
+  -- as a session does it: the list first, then the view
+  eq(
+    "(the list is set before the view is shown)",
+    adapter.set_open_nodes("lategroups", { "late:root", "late:changes" }),
+    true
+  )
+  ok("(the view shows)", (view:show("lategroups")))
+  ok(
+    "(its groups arrive)",
+    vim.wait(2000, function()
+      return view.tree:node("late:untracked") ~= nil and view.tree:is_expanded("late:changes")
+    end, 10)
+  )
+  settle(60)
+  eq(
+    "a group the list does not name stays closed, also when it says open = true",
+    adapter.get_open_nodes("lategroups"),
+    { "late:root", "late:changes" }
+  )
+  ok("... its file is not on screen", not vim.tbl_contains(lines(), "untracked.txt"))
+  ok("... the one it names is open", vim.tbl_contains(lines(), "changes.txt"))
+  -- asked again while it keeps saying open = true: still closed
+  emit.reset()
+  settle(120)
+  ok("asked again: it stays closed", not view.tree:is_expanded("late:untracked"))
+  -- a round without the word, then with it again: a new request
+  shape = "plain"
+  emit.reset()
+  settle(120)
+  shape = "open"
+  emit.reset()
+  ok(
+    "after a round without the word it opens as always",
+    vim.wait(2000, function()
+      return view.tree:is_expanded("late:untracked")
+    end, 10)
+  )
+  view:show("files")
+  remove_late()
+end
+
 remove_other()
 vim.notify = real_notify
 native.reset()

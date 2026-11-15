@@ -50,6 +50,7 @@ local M = {}
 ---@field private _opened table<any, true>  Nodes with `open = true` that were opened once: closed by hand, they stay closed, until they come once without saying it.
 ---@field private _pending_open table<any, true>  Such nodes that are waiting to be opened.
 ---@field private _asking_roots boolean?  The sources are being asked for their roots again (`reload`): nothing is opened until that is through.
+---@field private _exact { want: table<any, true>, seen: table<any, true> }?  The last list `set_open` was given, and the nodes that were adopted since: a node it does not name stays closed when it first arrives.
 ---@field private _wanted table<any, true>  Nodes somebody asked to have open (`set_open`) that are not in the tree yet.
 ---@field private _stops (fun())[]
 ---@field private _started boolean
@@ -91,6 +92,9 @@ end
 function Pane:_adopt(source, entry, node, is_root, above)
   local id = node.id
   self._source_of[id] = source
+  local exact = self._exact
+  local first_since_set = exact ~= nil and not exact.seen[id]
+  if exact then exact.seen[id] = true end
   if self._wanted[id] then
     -- somebody asked for it by name (`set_open`) before it was there
     self._wanted[id] = nil
@@ -98,7 +102,10 @@ function Pane:_adopt(source, entry, node, is_root, above)
     self._pending_open[id] = true
   elseif node.open == true and not self._opened[id] then
     self._opened[id] = true
-    self._pending_open[id] = true
+    -- A list of open nodes was set (`set_open`) and this node, which it does not name, arrives for
+    -- the first time since: it stays closed. "Exactly these" holds for what comes later too (the
+    -- groups of a source that answers after its view is shown, each saying `open = true`).
+    if not (first_since_set and not self._exact.want[id]) then self._pending_open[id] = true end
   elseif node.open ~= true then
     -- It comes without the word: the next time it says `open = true` that is a new request (a step
     -- of a pipeline that was red, ran again without findings and is red again). A node closed by
@@ -216,6 +223,7 @@ function Pane:build(keep)
   else
     -- another tree (the first build, another root): nothing is carried over
     self._wanted = {}
+    self._exact = nil
   end
   self._sections = {}
   local roots = {}
@@ -301,7 +309,8 @@ end
 
 ---Have exactly these nodes open: what is open and not named is closed (a section head too), what is
 ---named is opened, now or when it arrives (a node below a folder that is read later, a source that
----answers later). A node that says `open = true` and arrives later still opens itself.
+---answers later). A node that is not named and arrives later stays closed the first time, also when
+---it says `open = true`; when it says so again after a round without, it opens as always.
 ---@param ids (string|number)[]  As `open_nodes` answered them: a folder before what is in it.
 function Pane:set_open(ids)
   local tree = self.tree
@@ -327,6 +336,13 @@ function Pane:set_open(ids)
       self._wanted[id] = true
     end
   end
+  -- what is in the tree by now has been dealt with; a node that arrives later and is not named
+  -- stays closed the first time (`_adopt`)
+  local seen = {}
+  for id in pairs(self._source_of) do
+    seen[id] = true
+  end
+  self._exact = { want = want, seen = seen }
   self:open_pending()
 end
 
