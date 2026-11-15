@@ -9,6 +9,7 @@
 
 ---@type table<string, string>
 return {
+  ["ask"] = "Own tree, native.ai: turn a sentence into actions of the tree (ai.nvim)",
   ["breadcrumbs update"] = "Update breadcrumb display",
   ["clipboard clear"] = "Clear clipboard",
   ["clipboard copy"] = "Stage the marked nodes (else the current one) for copy",

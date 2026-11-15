@@ -50,6 +50,15 @@ autocommand. Dispatch is deferred with `vim.schedule()` so the callbacks land
 after the adapter (neo-tree and friends) has finished its own render-time
 keymap setup.
 
+The own tree (`adapter = "native"`) has two more when
+[`native.ai`](FEATURES/AI.md) is on and ai.nvim is installed (none otherwise);
+both go through its action table like every other key:
+
+| Key | Action | Option |
+| --- | --- | --- |
+| `<leader>at` | `ai.ask`: ask the tree in words; the sentence becomes actions of the tree | `native.ai.keys.ask` |
+| `<leader>aT` | `ai.listen`: speak to the tree, until a pause (again: stop); only with a recorder and media.nvim. The microphone at the right end of the view bar does the same | `native.ai.keys.listen` |
+
 ### User commands
 
 **Commands are global.** There is exactly one: `:Filetree`, built with

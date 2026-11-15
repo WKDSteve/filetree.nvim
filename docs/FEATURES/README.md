@@ -21,6 +21,8 @@ This folder regroups those categories into fewer, reader-facing themes:
   through all of it.
 - **[SEARCH_AND_PATHS](SEARCH_AND_PATHS.md)** — filtering, finding, grepping,
   and copying paths/links out of the tree.
+- **[AI](AI.md)** — the own tree asked in words or by voice: a sentence
+  becomes its own actions through ai.nvim (off by default).
 - **[INTEGRATIONS](INTEGRATIONS.md)** — external programs, git, LSP, diff,
   marks/session, and the PDF bridge to pdfport.nvim.
 

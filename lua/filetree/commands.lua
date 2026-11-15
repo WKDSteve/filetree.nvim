@@ -96,6 +96,17 @@ local TREE = {
     require("filetree.native.action").run(view, name, next(named) and named or nil)
   end,
 
+  -- `:Filetree ask <text>`: the sentence becomes actions of the own tree (native.ai, through ai.nvim);
+  -- without text it asks for one
+  ask = function(args)
+    local ai = require("filetree.native.ai")
+    if #args == 0 then
+      ai.prompt()
+    else
+      ai.ask(table.concat(args, " "))
+    end
+  end,
+
   -- ── trash ───────────────────────────────────────────────────────────────────
   trash = {
     undo = function(_)

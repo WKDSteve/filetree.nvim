@@ -298,9 +298,15 @@ filetree.action({
   when = function(node, ctx) return node.path:match("%.md$") ~= nil end, -- what `needs` cannot say
   mutates = true,              -- it changes files
   args = { where = { values = { "year", "month" }, default = "year" } },
+  ai = false,                  -- optional: keep it out of the catalog of native.ai
   run = function(nodes, ctx, args) ... end,
 })
 ```
+
+`args` and `mutates` are also what the tree tells a model when it is asked in
+words ([native.ai](FEATURES/AI.md)): a value outside `values` is refused before
+`run` is called, and an action with `mutates = true` runs only after the person
+said yes to the plan. `ai = false` leaves the action out of that catalog.
 
 An action says itself where it applies. On a node where it does not, its key
 falls through to the next action bound to that key, and when none applies the

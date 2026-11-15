@@ -72,6 +72,7 @@ require("filetree").setup({
   --   view_bar = true,          -- the views (files, buffers, git ...) as tabs in the winbar
   --   name_float = true,        -- full name in a float while the cursor is on a cut name
   --   views = nil,              -- e.g. { { "files" }, { name = "work", "buffers", "git" } }
+  --   ai = { enabled = false }, -- words to tree actions through ai.nvim (docs/FEATURES/AI.md)
   -- },
 
   -- Sources, decorators and actions for the own tree (see docs/api.md,

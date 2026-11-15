@@ -34,6 +34,7 @@ require("filetree").setup({
     view_bar = true,          -- the views as tabs in the winbar of the tree window
     name_float = true,        -- the full name next to the cursor line while that name is drawn cut
     views = nil,              -- which views there are; nil: files, the tree's sources, registered ones
+    ai = { enabled = false }, -- words to tree actions through ai.nvim: see AI.md
   },
 })
 ```
@@ -285,7 +286,8 @@ features bound, the actions other plugins registered
 ([api](../api.md#an-action)) and those of the view's source. The `?` cheatsheet
 opens on the page **here** (what applies to the node under the cursor, with the
 key that reaches it), the context menu lists the same, and
-`:Filetree action <name>` runs one by name.
+`:Filetree action <name>` runs one by name. The same table is the catalog a
+model picks from when the tree is asked in words ([AI](AI.md), off by default).
 
 ```
  key d on ...            node                  runs

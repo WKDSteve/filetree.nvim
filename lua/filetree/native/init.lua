@@ -30,6 +30,7 @@ local M = {}
 ---@field search_max? integer  Hits a search shows at most; a last line says how many more there are (default 1000).
 ---@field view_bar? boolean  Show the views as tabs in the winbar of the tree window, clickable (default true; with one view there is no bar).
 ---@field name_float? boolean  A name too long for the window is drawn cut; while the cursor is on such a line, show the full name in a small float next to it (default true).
+---@field ai? Filetree.Ai.Opts  Words to tree actions through ai.nvim: `:Filetree ask <text>` and a microphone in the view bar (default off: `enabled = false`).
 ---@field views? (string|Filetree.Native.ViewSpec)[]  The views of the tree, in the order of the view bar: `{ "files" }` is one view with one source, `{ name = "work", "buffers", "git" }` one view with two sections (default: the files, then one view per registered source).
 
 ---One entry of `native.views`: the sources of the view as list items, and its name.
@@ -63,6 +64,7 @@ function M.setup(opts)
   options = vim.tbl_extend("force", vim.deepcopy(DEFAULTS), opts or {})
   require("filetree.native.source").register()
   require("filetree.native.explorer").register()
+  require("filetree.native.ai").setup(options.ai)
   M.hijack_netrw(options.hijack_netrw ~= false)
 end
 
@@ -277,6 +279,7 @@ function M.reset()
   require("filetree.native.action").reset()
   require("filetree.native.source").unregister()
   require("filetree.native.explorer").unregister()
+  require("filetree.native.ai").reset()
 end
 
 ---A window a file can be opened in: not the tree, not a float, not a special buffer.

@@ -52,6 +52,8 @@ function M._native_lines()
   if #cannot > 0 then
     vim.health.info("native: cannot load right now: " .. table.concat(cannot, "; "))
   end
+  -- words to tree actions (native.ai): what is on, and what it misses
+  require("filetree.native.ai").health()
 end
 
 ---Run all :checkhealth filetree checks (lib.nvim, Neovim version, config,
