@@ -19,6 +19,7 @@
 --- No watcher here. The callers of the tree ask through `filetree.native.fs.service`.
 
 local uv = vim.uv
+local listing = require("lib.nvim.fs.listing")
 
 local M = {}
 
@@ -111,15 +112,15 @@ local function read(handle, dir)
     ---@type Filetree.Fs.Entry
     local entry = { name = name, path = full, is_dir = kind == "directory" }
     if kind == "link" then
-      local stat = uv.fs_stat(full)
+      -- a link to a directory is a folder (the rule of lib.nvim, shared with pickers.nvim)
+      local is_dir, exists = listing.is_dir(full, kind)
       entry.is_link = true
       entry.link_to = uv.fs_readlink(full)
-      entry.link_broken = stat == nil
-      entry.is_dir = stat ~= nil and stat.type == "directory"
+      entry.link_broken = not exists
+      entry.is_dir = is_dir
     elseif kind ~= "file" and kind ~= "directory" then
       -- a file system that does not say (some network mounts): ask
-      local stat = uv.fs_stat(full)
-      entry.is_dir = stat ~= nil and stat.type == "directory"
+      entry.is_dir = (listing.is_dir(full, kind))
     end
     out[#out + 1] = entry
   end

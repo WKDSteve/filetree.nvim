@@ -17,6 +17,7 @@
 --- and it has to stay a folder for everything that looks at the node.
 
 local service = require("filetree.native.fs.service")
+local listing = require("lib.nvim.fs.listing")
 
 local M = {}
 
@@ -45,28 +46,27 @@ end
 ---@return Filetree.Fs.Entry[]
 local function sorted(entries, sort)
   local out = vim.list_slice(entries)
-  local keys = {}
+  -- folders first, then the name without regard to case: the one rule of lib.nvim, shared with the
+  -- directory browser of pickers.nvim. A size or a time stands before the name, which breaks its ties.
+  local first = nil
   if sort.kind ~= "name" then
+    local keys = {}
     for _, entry in ipairs(out) do
       keys[entry] = stat_of(entry, sort.kind)
     end
-  end
-  local lower = {}
-  for _, entry in ipairs(out) do
-    lower[entry] = entry.name:lower()
-  end
-  table.sort(out, function(a, b)
-    if a.is_dir ~= b.is_dir then return a.is_dir end
-    if sort.kind ~= "name" and keys[a] ~= keys[b] then
+    first = function(a, b)
+      if keys[a] == keys[b] then return nil end
       if sort.descending then return keys[a] > keys[b] end
       return keys[a] < keys[b]
     end
-    if lower[a] ~= lower[b] then
-      if sort.descending and sort.kind == "name" then return lower[a] > lower[b] end
-      return lower[a] < lower[b]
-    end
-    return a.name < b.name
-  end)
+  end
+  table.sort(
+    out,
+    listing.sorter({
+      descending = sort.kind == "name" and sort.descending == true,
+      first = first,
+    })
+  )
   return out
 end
 
