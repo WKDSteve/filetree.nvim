@@ -23,6 +23,9 @@
 
 local list = require("filetree.native.fs.list")
 
+---@class Filetree.Fs.Service
+---@field deep table  `filetree.native.fs.deep`, loaded when first asked for.
+---@field watch table  `filetree.native.fs.watch`, loaded when first asked for.
 local M = {}
 
 ---Read a directory without blocking. `cb` runs on the main loop; at once when the folder is fresh.

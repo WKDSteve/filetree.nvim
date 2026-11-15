@@ -44,6 +44,9 @@ local errors = {}
 ---@type table<string, integer>  Counted up by `invalidate`: a read that started before is overtaken.
 local generation = {}
 
+--- Reads one request makes at most while the folder keeps being invalidated under it.
+local MAX_READS = 3
+
 --- How often a directory was really read (not served from the cache). For specs and health.
 M.stats = { scans = 0 }
 
@@ -163,8 +166,10 @@ function M.list(dir, cb)
   end
   pending[dir] = { cb }
   state[dir] = "loading"
+  local reads = 0
   local function scan()
     local asked = generation[dir] or 0
+    reads = reads + 1
     uv.fs_scandir(dir, function(err, handle)
       local entries = nil
       if handle then
@@ -172,7 +177,8 @@ function M.list(dir, cb)
         entries = read(handle, dir)
       end
       vim.schedule(function()
-        if (generation[dir] or 0) ~= asked then
+        local overtaken = (generation[dir] or 0) ~= asked
+        if overtaken and reads < MAX_READS then
           -- invalidated while it was read: what came back may be from before the change. Those who
           -- wait asked for the folder as it is, so it is read once more before anybody is answered.
           scan()
@@ -181,7 +187,11 @@ function M.list(dir, cb)
         local waiting = pending[dir] or {}
         pending[dir] = nil
         local why = nil
-        if entries then
+        if overtaken and entries then
+          -- a folder that changes faster than it can be read: those who wait are answered with the
+          -- last listing, which is not kept; the next request reads again
+          state[dir], errors[dir] = "dirty", nil
+        elseif entries then
           cache[dir] = entries
           state[dir], errors[dir] = "fresh", nil
         else

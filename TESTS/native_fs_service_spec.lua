@@ -192,6 +192,37 @@ eq("... that cost the stale read and one more", list.stats.scans, scans + 2)
 eq("... and what is cached is the new listing", names(service.cached(a)), { "new.lua", "one.lua" })
 eq("... the folder is fresh", service.status(a), "fresh")
 
+-- a folder that is invalidated under every read: the request ends all the same
+local b = dir .. "/b"
+local reads = 0
+uv.fs_scandir = function(path, cb)
+  if cb and path == b then
+    reads = reads + 1
+    return real_scandir(path, function(...)
+      service.invalidate(b)
+      cb(...)
+    end)
+  end
+  return real_scandir(path, cb)
+end
+local restless = nil
+service.list(b, function(got)
+  restless = got
+end)
+ok(
+  "a folder invalidated under every read: the request is answered",
+  wait(function()
+    return restless ~= nil
+  end)
+)
+uv.fs_scandir = real_scandir
+eq("... after three reads", reads, 3)
+eq("... with the last listing", names(restless), { "two.lua" })
+eq("... which is not kept", service.cached(b), nil)
+eq("... the folder is dirty", service.status(b), "dirty")
+eq("the next request reads it again", names((service.list_sync(b))), { "two.lua" })
+eq("... and it is fresh", service.status(b), "fresh")
+
 -- ── forget everything ──────────────────────────────────────────────────────────
 service.invalidate()
 eq(
