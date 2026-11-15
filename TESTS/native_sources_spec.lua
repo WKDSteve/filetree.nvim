@@ -876,10 +876,9 @@ do
   native.setup(vim.tbl_extend("force", native.options(), { views = {} }))
 
   eq("the files have paths for this: no ids", adapter.get_open_nodes("files"), nil)
-  eq("a name no view has: no ids", adapter.get_open_nodes("no-such-view"), nil)
-  eq("... and nothing to set", adapter.set_open_nodes("no-such-view", {}), false)
+  eq("a name no view has: nothing is known", adapter.get_open_nodes("no-such-view"), nil)
   eq("the files cannot be set this way", adapter.set_open_nodes("files", {}), false)
-  eq("a view that was never shown has nothing open", adapter.get_open_nodes("groups"), {})
+  eq("a view that was never shown: nothing is known", adapter.get_open_nodes("groups"), nil)
 
   ok("(the view shows)", (view:show("groups")))
   eq(
@@ -981,9 +980,35 @@ do
   view:show("groups")
   ok("... and on screen when the view comes back", vim.tbl_contains(lines(), "z"))
   ok("... what was open before is closed", not vim.tbl_contains(lines(), "a1"))
+  -- everything closed is a list, not "nothing known"
+  adapter.set_open_nodes("groups", {})
+  eq("everything closed by hand answers an empty list", adapter.get_open_nodes("groups"), {})
+  view:show("files")
+  eq("... also while the view is not on screen", adapter.get_open_nodes("groups"), {})
+  -- a view nobody registered yet: its plugin is set up after the session was loaded
+  eq(
+    "ids set for a name no view has yet are kept",
+    adapter.set_open_nodes("groups3", { "groups3:root", "groups3:a", math.huge, 0 / 0 }),
+    true
+  )
+  eq(
+    "... and read back (a number that is none is passed over)",
+    adapter.get_open_nodes("groups3"),
+    { "groups3:root", "groups3:a" }
+  )
+  local remove_third = register_groups("groups3")
+  native.setup(vim.tbl_extend("force", native.options(), { views = {} }))
+  settle(60)
+  ok("(the view of the source that came late shows)", (view:show("groups3")))
+  eq(
+    "registered later and shown: those nodes are open, the one that starts open by itself is not",
+    adapter.get_open_nodes(),
+    { "groups3:root", "groups3:a" }
+  )
   view:show("files")
   remove_groups()
   remove_later()
+  remove_third()
 end
 
 remove_other()

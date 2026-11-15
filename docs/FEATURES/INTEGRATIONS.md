@@ -116,8 +116,11 @@ on screen and `get_open_nodes(name)` / `set_open_nodes(name, ids)` for what is
 open in a view of other sources (the groups of the buffers, of git, of the
 tests): ids top to bottom, section heads among them. Setting them closes what
 is open and not named, and opens what is named, now or when it arrives; a view
-that was not shown yet takes them over when it is. A node that is open below a
-closed one is not among the ids. What is open in a view also outlives a source
+that was not shown yet takes them over when it is, and so does a view nobody
+registered yet (a plugin that is set up after the session was loaded). An empty
+list says "everything closed"; `get_open_nodes` answers `nil` for a view
+nothing is known of (never shown, nothing set): store nothing for it. A node
+that is open below a closed one is not among the ids. What is open in a view also outlives a source
 that registers again (its plugin set up late, or a second time): the view is
 built again in place, what was open is opened again, and a node closed by hand
 stays closed.

@@ -1871,31 +1871,41 @@ function View:_spec_of(name)
 end
 
 ---The ids of the open nodes of a view of sources, top to bottom (a folder before what is in it),
----section heads among them. For a view that was not shown yet: what `set_open_nodes` was last asked
----for, else nothing. The files have paths for this (`expanded_paths`).
+---section heads among them. A list, also an empty one, says what is open: everything closed by hand
+---is `{}`. nil says that nothing is known: the view was never shown and nobody set anything for it
+---(then what `set_open_nodes` was last asked for is answered). The files have paths for this
+---(`expanded_paths`).
 ---@param name? string  Default: the view on screen.
----@return (string|number)[]|nil ids  nil for the files and for a name no view has.
+---@return (string|number)[]|nil ids  nil for the files, and for a view nothing is known of.
 function View:open_nodes(name)
   name = name or self.view_name
-  if not self:_spec_of(name) then return nil end
+  if name == "files" then return nil end
   local pane = self._panes[name]
-  if pane then return pane:open_nodes() end
-  return vim.deepcopy(self._open_wanted[name] or {})
+  if pane and self:_spec_of(name) then return pane:open_nodes() end
+  local wanted = self._open_wanted[name]
+  return wanted and vim.deepcopy(wanted) or nil
 end
 
 ---Have exactly these nodes of a view of sources open (see `Pane:set_open`). A view that was not
----shown yet takes them over when it is.
+---shown yet takes them over when it is, and so does a view nobody registered yet (a plugin that is
+---set up after the session was loaded): the ids are kept under the name.
 ---@param name string
 ---@param ids (string|number)[]
----@return boolean ok  false for the files and for a name no view has.
+---@return boolean ok  false for the files.
 function View:set_open_nodes(name, ids)
-  if type(ids) ~= "table" or not self:_spec_of(name) then return false end
+  if type(ids) ~= "table" or type(name) ~= "string" or name == "" or name == "files" then
+    return false
+  end
   local clean = {}
   for _, id in ipairs(ids) do
-    if type(id) == "string" or type(id) == "number" then clean[#clean + 1] = id end
+    -- what can be written down and read back: a string, or a number that is one
+    local kind = type(id)
+    if kind == "string" or (kind == "number" and id == id and math.abs(id) ~= math.huge) then
+      clean[#clean + 1] = id
+    end
   end
   local pane = self._panes[name]
-  if not pane then
+  if not pane or not self:_spec_of(name) then
     self._open_wanted[name] = clean
     return true
   end

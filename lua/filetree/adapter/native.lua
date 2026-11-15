@@ -431,7 +431,7 @@ end
 ---The ids of the open nodes of a view of sources (buffers, git, tests ...), top to bottom, section
 ---heads among them: what a session stores next to the open folders of the files.
 ---@param name? string  Default: the view on screen.
----@return (string|number)[]|nil ids  nil for the files (they have `get_expanded_paths`), for a name no view has, and without a tree.
+---@return (string|number)[]|nil ids  A list (also an empty one: everything closed) says what is open. nil: nothing is known (the view was never shown and nothing was set for it), the files (they have `get_expanded_paths`), or no tree.
 function M.get_open_nodes(name)
   local view = native.current()
   if not view or (name ~= nil and type(name) ~= "string") then return nil end
@@ -439,10 +439,11 @@ function M.get_open_nodes(name)
 end
 
 ---Have exactly these nodes of a view of sources open: what is open and not named is closed, what
----is named is opened, now or when it arrives. A view that was not shown yet takes them over when it is.
+---is named is opened, now or when it arrives. A view that was not shown yet takes them over when it
+---is, and so does a view nobody registered yet (a plugin set up after the session was loaded).
 ---@param name string
 ---@param ids (string|number)[]
----@return boolean ok  false for the files, for a name no view has, and without a tree.
+---@return boolean ok  false for the files and without a tree.
 function M.set_open_nodes(name, ids)
   local view = native.current()
   if not view or type(name) ~= "string" then return false end
