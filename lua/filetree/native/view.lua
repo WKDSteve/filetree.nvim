@@ -17,6 +17,7 @@
 
 local tree_core = require("lib.nvim.tree")
 local list = require("filetree.native.fs.list")
+local service = require("filetree.native.fs.service")
 local files = require("filetree.native.source.files")
 local watch = require("filetree.native.fs.watch")
 local render = require("filetree.native.render.line")
@@ -284,11 +285,11 @@ function View:_loader()
     end
     -- The cache may hold this folder from a look into it (merging `a/b/c` reads ahead). Without a
     -- watcher on it nobody would have said that it changed since: read it now.
-    if not watch.covers(dir) then list.invalidate(dir) end
+    if not watch.covers(dir) then service.invalidate(dir) end
     if self._sync then
-      done(list.list_sync(dir))
+      done(service.list_sync(dir))
     else
-      list.list(dir, done)
+      service.list(dir, done)
     end
   end
   return loader
@@ -363,7 +364,7 @@ function View:_build()
   self._loader_fn = self:_loader()
   -- The root is read here and handed over as a list: the tree core counts a root as open from the
   -- start, so it never asks a lazy root for its children.
-  local entries, err = list.list_sync(root)
+  local entries, err = service.list_sync(root)
   local built
   self.root_error = entries == nil and err or nil
   self._loaded[root] = true
@@ -434,7 +435,7 @@ end
 function View:_changed(dirs)
   local seen = {}
   for _, dir in ipairs(dirs) do
-    list.invalidate(dir)
+    service.invalidate(dir)
     local id = self:id_of(dir)
     -- a folder of a merged line `a/b/c` (the innermost one too, while it is not loaded): what has
     -- to be listed again is the folder the line is in
@@ -473,7 +474,7 @@ function View:refresh_path(path)
   if id ~= parent then
     -- a folder inside a merged line `a/b/c` got or lost an entry: the line may be another one now,
     -- and what says so is the listing of the folder the line stands in (as `_changed` reads it)
-    list.invalidate(parent)
+    service.invalidate(parent)
     id = self.main:parent(id) or id
   end
   if not (self._loaded[id] and self.main:node(id)) then return false end
@@ -507,8 +508,8 @@ function View:refresh_dir(id)
   self._reading[id] = false
   local generation = self._generation
   local dir = node.path
-  list.invalidate(dir)
-  list.list(dir, function(entries)
+  service.invalidate(dir)
+  service.list(dir, function(entries)
     -- the view shows another tree by now: this answer belongs to none of its folders
     if generation ~= self._generation then return end
     ---Take the answer over. Until here the folder counts as being read: a change that arrives while
@@ -915,7 +916,7 @@ function View:open(position, focus)
   self:_watch()
   if self._seen_closed and not was_watching and self._unsubscribe_watch then
     -- nothing was followed while the window was away: read what this view shows again, in the background
-    list.invalidate()
+    service.invalidate()
     for id in pairs(self._loaded) do
       self:refresh_dir(id)
     end
@@ -1076,8 +1077,8 @@ function View:_keep(dir, path)
   local before = self._kept_in[node.path]
   if before then self._kept[before] = nil end
   self._kept_in[node.path], self._kept[path] = path, true
-  list.invalidate(node.path)
-  local entries = list.list_sync(node.path)
+  service.invalidate(node.path)
+  local entries = service.list_sync(node.path)
   if not entries then return end
   self:_apply_main(self.main:merge_children(id, self:_nodes(node.path, entries, self._loader_fn)))
 end
@@ -1457,7 +1458,7 @@ function View:refresh()
     self:_after_draw()
     return
   end
-  list.invalidate()
+  service.invalidate()
   local ids = vim.tbl_keys(self._loaded)
   table.sort(ids, function(a, b)
     if #a ~= #b then return #a < #b end
@@ -1470,7 +1471,7 @@ function View:refresh()
     if not node then
       self._loaded[id] = nil
     else
-      local entries = list.list_sync(node.path)
+      local entries = service.list_sync(node.path)
       local changes
       if entries then
         changes = self.main:merge_children(id, self:_nodes(node.path, entries, self._loader_fn))

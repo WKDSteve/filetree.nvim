@@ -16,7 +16,7 @@
 --- Every folder node has `kind = "dir"`: the tree core calls a folder that turned out empty a leaf,
 --- and it has to stay a folder for everything that looks at the node.
 
-local list = require("filetree.native.fs.list")
+local service = require("filetree.native.fs.service")
 
 local M = {}
 
@@ -80,7 +80,7 @@ local function chain_of(entry, hide)
   local current = entry
   -- a link is never merged: the line would hide that it is one
   while not current.is_link do
-    local inner = list.list_sync(current.path)
+    local inner = service.list_sync(current.path)
     if not inner then break end
     local only = nil
     for _, child in ipairs(inner) do

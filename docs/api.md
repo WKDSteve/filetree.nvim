@@ -460,6 +460,7 @@ local state = require("filetree").fs_state()
 | `quarantined` | folders held back after an event storm (more than 200 events a second), reported once they went quiet |
 | `changed` | folders whose listing changed and that are not reported yet (the short quiet before a report) |
 | `reading` | folders being read right now |
+| `folders` | `{ fresh, loading, dirty, error, errors }`: how many folders the tree asked for have a cached listing, are being read, changed and were not read again yet, or failed; `errors` is `{ dir, error }[]`, sorted, with the reason |
 | `roots` | the roots of the trees there are, one per tab that opened one |
 | `stats` | `{ events, reports, quarantined }`, counted since Neovim started |
 

@@ -21,6 +21,7 @@
 --- - `loaded`: the folders read, for "which folders are open"
 
 local list = require("filetree.native.fs.list")
+local service = require("filetree.native.fs.service")
 local watch = require("filetree.native.fs.watch")
 local files = require("filetree.native.source.files")
 
@@ -110,11 +111,11 @@ function Section:_loader()
       cb(self:_nodes(dir, entries, loader))
     end
     -- without a handle on it nobody would have said that the folder changed since it was cached
-    if not watch.covers(dir) then list.invalidate(dir) end
+    if not watch.covers(dir) then service.invalidate(dir) end
     if self._view._sync then
-      done(list.list_sync(dir))
+      done(service.list_sync(dir))
     else
-      list.list(dir, done)
+      service.list(dir, done)
     end
   end
   return loader
@@ -169,9 +170,9 @@ function M.new(view)
       ---@param dir string
       local function changed(dir)
         if not list.inside(root, dir) then return end
-        list.invalidate(dir)
+        service.invalidate(dir)
         local stale = self:_stale(dir)
-        if stale ~= dir then list.invalidate(stale) end
+        if stale ~= dir then service.invalidate(stale) end
         emit.invalidate(self:id_of(stale))
       end
 

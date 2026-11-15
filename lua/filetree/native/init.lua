@@ -13,6 +13,7 @@
 
 local View = require("filetree.native.view")
 local list = require("filetree.native.fs.list")
+local service = require("filetree.native.fs.service")
 
 local api = vim.api
 
@@ -161,7 +162,8 @@ function M.fs_state()
   local state = require("filetree.native.fs.watch").state()
   state.active = adapter ~= nil and adapter.name == "native"
   state.watch = options.watch ~= false
-  state.reading = require("filetree.native.fs.list").reading()
+  state.reading = service.reading()
+  state.folders = service.states()
   state.roots = M.roots()
   return state
 end
@@ -309,7 +311,7 @@ function M.reset()
   end
   views = {}
   M.roots_changed()
-  list.invalidate()
+  service.invalidate()
   require("filetree.native.fs.watch").stop_all()
   require("filetree.native.decor").stop()
   require("filetree.native.action").reset()

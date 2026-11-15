@@ -116,6 +116,7 @@
 ---@field active boolean the own tree is the active backend (`adapter = "native"`)
 ---@field watch boolean `native.watch`: false = the tree does not follow the disk, and holds no handle
 ---@field reading string[] folders being read right now, sorted
+---@field folders Filetree.Fs.States how many folders the tree asked for are fresh, loading, dirty (changed, not read again yet) or in error, and the ones that failed with the reason
 ---@field roots string[] the roots of the trees there are (one per tab that opened one), sorted
 
 ---Something that wants room right of the name.

@@ -26,6 +26,7 @@
 
 local tree_core = require("lib.nvim.tree")
 local list = require("filetree.native.fs.list")
+local service = require("filetree.native.fs.service")
 local files = require("filetree.native.source.files")
 local render = require("filetree.native.render.line")
 
@@ -160,7 +161,7 @@ function Embed:_build()
   self._loaded = { [root] = true }
   self._loader = function(node, cb)
     -- read at once: the caller draws a float that is on screen now, and reads `rows()` right after
-    local entries, err = list.list_sync(node.path)
+    local entries, err = service.list_sync(node.path)
     if not entries then
       cb(nil, err)
       return
@@ -169,7 +170,7 @@ function Embed:_build()
     if self._watching then self:_watch_dir(node.path) end
     cb(self:_nodes(node.path, entries))
   end
-  local entries, err = list.list_sync(root)
+  local entries, err = service.list_sync(root)
   self.error = entries == nil and err or nil
   self._tree = tree_core.new({
     root = {
@@ -205,8 +206,8 @@ function Embed:refresh()
     if not node then
       self._loaded[id] = nil
     else
-      list.invalidate(node.path)
-      local entries = list.list_sync(node.path)
+      service.invalidate(node.path)
+      local entries = service.list_sync(node.path)
       if entries then
         tree:merge_children(id, self:_nodes(node.path, entries))
       elseif id ~= self.root then

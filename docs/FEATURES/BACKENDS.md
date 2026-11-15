@@ -49,7 +49,7 @@ flowchart TB
     CORE["lib.nvim.tree<br/>nodes, folding, rows, splices"]
   end
   subgraph NATIVE["lua/filetree/native/"]
-    LIST["fs/list<br/>one read per folder,<br/>shared by all views"]
+    LIST["fs/service in front of fs/list<br/>one read per folder, shared by all views;<br/>a state per folder: fresh, loading, dirty, error"]
     FILES["source/files<br/>sort, hide, merge a/b/c"]
     VIEW["view<br/>buffer, cursor, window"]
     LINE["render/line<br/>row to text + spans (pure)"]

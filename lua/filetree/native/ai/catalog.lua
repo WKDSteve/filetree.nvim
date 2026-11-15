@@ -20,6 +20,7 @@
 --- The context holds names and paths only, never what is in a file.
 
 local list = require("filetree.native.fs.list")
+local service = require("filetree.native.fs.service")
 
 local M = {}
 
@@ -200,7 +201,7 @@ function M.known(view, cap)
   end
   local queue, at = { root }, 1
   while at <= #queue and #order < cap do
-    local entries = list.cached(queue[at])
+    local entries = service.cached(queue[at])
     at = at + 1
     for _, entry in ipairs(entries or {}) do
       add(entry.path, entry.is_dir)

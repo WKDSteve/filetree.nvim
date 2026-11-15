@@ -10,8 +10,13 @@
 --- - One spelling per path (`norm`, `join`): `/`-separated, drive letter upper case
 --- - Single flight: a second request for a folder that is being read waits for the first
 --- - `invalidate(dir?)`: forget a folder (or all) so that the next request reads again
+--- - A state per folder that was asked for (`state_of`, `states`): `loading` while it is read, `fresh`
+---   once its listing is cached, `dirty` after it was invalidated and before it is read again, `error`
+---   when the last read failed (with the message)
+--- - A generation per folder: a read that was overtaken by `invalidate` is not cached and not handed
+---   out; the folder is read once more first
 ---
---- No watcher and no generations here; they belong to the fs service of the next stage.
+--- No watcher here. The callers of the tree ask through `filetree.native.fs.service`.
 
 local uv = vim.uv
 
@@ -29,6 +34,15 @@ local M = {}
 local cache = {}
 ---@type table<string, (fun(entries?: Filetree.Fs.Entry[], err?: string))[]>
 local pending = {}
+
+---@alias Filetree.Fs.State "fresh"|"loading"|"dirty"|"error"
+
+---@type table<string, Filetree.Fs.State>  Every folder that was asked for and not forgotten.
+local state = {}
+---@type table<string, string>  Why the last read of a folder failed.
+local errors = {}
+---@type table<string, integer>  Counted up by `invalidate`: a read that started before is overtaken.
+local generation = {}
 
 --- How often a directory was really read (not served from the cache). For specs and health.
 M.stats = { scans = 0 }
@@ -117,10 +131,20 @@ function M.list_sync(dir)
   local hit = cache[dir]
   if hit then return hit, nil end
   local handle, err = uv.fs_scandir(dir)
-  if not handle then return nil, tostring(err or ("cannot read " .. dir)) end
+  if not handle then
+    local why = tostring(err or ("cannot read " .. dir))
+    -- a read without blocking that is on its way decides the state when it answers
+    if not pending[dir] then
+      state[dir], errors[dir] = "error", why
+    end
+    return nil, why
+  end
   M.stats.scans = M.stats.scans + 1
   local entries = read(handle, dir)
   cache[dir] = entries
+  if not pending[dir] then
+    state[dir], errors[dir] = "fresh", nil
+  end
   return entries, nil
 end
 
@@ -138,21 +162,39 @@ function M.list(dir, cb)
     return
   end
   pending[dir] = { cb }
-  uv.fs_scandir(dir, function(err, handle)
-    local entries = nil
-    if handle then
-      M.stats.scans = M.stats.scans + 1
-      entries = read(handle, dir)
-    end
-    vim.schedule(function()
-      local waiting = pending[dir] or {}
-      pending[dir] = nil
-      if entries then cache[dir] = entries end
-      for _, fn in ipairs(waiting) do
-        fn(entries, entries == nil and tostring(err or ("cannot read " .. dir)) or nil)
+  state[dir] = "loading"
+  local function scan()
+    local asked = generation[dir] or 0
+    uv.fs_scandir(dir, function(err, handle)
+      local entries = nil
+      if handle then
+        M.stats.scans = M.stats.scans + 1
+        entries = read(handle, dir)
       end
+      vim.schedule(function()
+        if (generation[dir] or 0) ~= asked then
+          -- invalidated while it was read: what came back may be from before the change. Those who
+          -- wait asked for the folder as it is, so it is read once more before anybody is answered.
+          scan()
+          return
+        end
+        local waiting = pending[dir] or {}
+        pending[dir] = nil
+        local why = nil
+        if entries then
+          cache[dir] = entries
+          state[dir], errors[dir] = "fresh", nil
+        else
+          why = tostring(err or ("cannot read " .. dir))
+          state[dir], errors[dir] = "error", why
+        end
+        for _, fn in ipairs(waiting) do
+          fn(entries, why)
+        end
+      end)
     end)
-  end)
+  end
+  scan()
 end
 
 ---The folders being read right now (a read without blocking that has not answered yet), sorted.
@@ -170,13 +212,62 @@ function M.cached(dir)
   return cache[dir]
 end
 
----Forget one directory, or every one.
+---The state of a folder: nil for one that was never asked for (or was forgotten with everything).
+---@param dir string  Normalized.
+---@return Filetree.Fs.State|nil state
+---@return string|nil err  Why the last read failed, for `error`.
+function M.state_of(dir)
+  return state[dir], errors[dir]
+end
+
+---@class Filetree.Fs.States
+---@field fresh integer  Folders whose listing is cached.
+---@field loading integer  Folders being read.
+---@field dirty integer  Folders that were invalidated and not read again yet.
+---@field error integer  Folders whose last read failed.
+---@field errors { dir: string, error: string }[]  Those, sorted by folder.
+
+---How many folders are in which state, and the ones that failed.
+---@return Filetree.Fs.States
+function M.states()
+  ---@type Filetree.Fs.States
+  local out = { fresh = 0, loading = 0, dirty = 0, error = 0, errors = {} }
+  for dir, what in pairs(state) do
+    out[what] = out[what] + 1
+    if what == "error" then
+      out.errors[#out.errors + 1] = { dir = dir, error = errors[dir] or "" }
+    end
+  end
+  table.sort(out.errors, function(a, b)
+    return a.dir < b.dir
+  end)
+  return out
+end
+
+---Forget one directory, or every one. A folder that is being read is read again before its read
+---answers (see `list`).
 ---@param dir? string
 function M.invalidate(dir)
   if dir then
     cache[dir] = nil
-  else
-    cache = {}
+    -- a folder nobody asked for has nothing to forget, and gets no state
+    if state[dir] == nil then return end
+    generation[dir] = (generation[dir] or 0) + 1
+    if not pending[dir] then
+      state[dir], errors[dir] = "dirty", nil
+    end
+    return
+  end
+  cache = {}
+  local reading = {}
+  for folder in pairs(pending) do
+    reading[folder] = "loading"
+    generation[folder] = (generation[folder] or 0) + 1
+  end
+  -- everything else is forgotten for good: no state, as if it had never been asked for
+  state, errors = reading, {}
+  for folder in pairs(generation) do
+    if not pending[folder] then generation[folder] = nil end
   end
 end
 
