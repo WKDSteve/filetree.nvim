@@ -128,11 +128,13 @@ local _paused_until = 0
 ---@type integer  monotonic timestamp (vim.uv.hrtime) after which reveals are active
 local _tree_pause_until = 0
 
----Last real file seen in an editor window, as the fallback for
+---Last real file seen in an editor window of each tab, as the fallback for
 ---`current_file_path()` when the window we came from holds something else
----(a terminal, help, a picker) or is already gone.
----@type string?
-local _last_editor_path = nil
+---(a terminal, help, a picker) or is already gone. Per tab: every tab has its
+---own tree, and the file entered last in another tab belongs to another
+---project (revealing it re-rooted the tree of this tab to that project).
+---@type table<integer, string>
+local _last_editor_path = {}
 
 ---Whether the window that was left last is a floating one. Focus that comes back to the tree from a
 ---float (a menu, a dialog, a prompt, a viewer) is not the user stepping into the tree: the float was
@@ -338,9 +340,8 @@ local function current_file_path()
       end
     end
   end
-  if _last_editor_path and vim.fn.filereadable(_last_editor_path) == 1 then
-    return _last_editor_path
-  end
+  local last = _last_editor_path[vim.api.nvim_get_current_tabpage()]
+  if last and vim.fn.filereadable(last) == 1 then return last end
   return nil
 end
 
@@ -447,7 +448,11 @@ function M.setup(config, adapter)
       if should_ignore(ctx.buf) then return end
       local path = vim.api.nvim_buf_get_name(ctx.buf)
       if path and path ~= "" and vim.fn.filereadable(path) == 1 then
-        _last_editor_path = path
+        -- forget the tabs that are gone, so the table does not grow with every tab ever opened
+        for tab in pairs(_last_editor_path) do
+          if not vim.api.nvim_tabpage_is_valid(tab) then _last_editor_path[tab] = nil end
+        end
+        _last_editor_path[vim.api.nvim_get_current_tabpage()] = path
         schedule_reveal(path)
       end
     end,
@@ -488,7 +493,7 @@ function M.teardown()
   _resolve_target_dir = nil
   _paused_until = 0
   _tree_pause_until = 0
-  _last_editor_path = nil
+  _last_editor_path = {}
   if _debounce then
     if _debounce then _debounce.cancel() end
     _debounce = nil
