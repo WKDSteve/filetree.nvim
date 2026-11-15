@@ -141,6 +141,9 @@ function M.nodes(entries, opts)
       id = (opts.dir or "") .. "//more",
       label = ("… %d more (showing %d, native.max_entries)"):format(cut, limit + kept),
       kind = "more",
+      -- which folder it counts for and how many entries it stands for: for a reader that makes
+      -- something of the line (a hover that steps into the folder), not to be read off the id
+      data = { dir = opts.dir, more = cut },
     }
   end
   return out

@@ -505,7 +505,9 @@ first argument may also be a table (`{ buf = b, root = dir, ... }` or
 | `tree:close()` | give the watcher handles back and clear the highlights; safe twice. The buffer keeps its lines |
 
 `kind` is `"dir"`, `"file"`, or `"more"` for the line that counts what
-`max_entries` left out (it has no `path`). Folders are read when they are
+`max_entries` left out. That row has no `path`; it carries `dir`, the folder
+whose entries it counts, and `more`, how many it stands for (its `id` is not
+part of the contract). Folders are read when they are
 opened, at once, so `rows()` right after `expand()` has the new rows.
 
 ### For plugin authors: registering without loading filetree.nvim

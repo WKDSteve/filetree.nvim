@@ -221,6 +221,16 @@ eq("as a table: the root as the first row, the cut announced", lines(), {
   "    … 4 more (showing 2, native.max_entries)",
 })
 eq("select = false: no selection", rooted:current(), nil)
+do
+  local rows = rooted:rows()
+  local counting = rows[#rows]
+  eq(
+    "the row that counts what is left out says for which folder, and how many",
+    { counting.kind, counting.path, counting.dir, counting.more },
+    { "more", nil, dir, 4 }
+  )
+  eq("... a row of a file or a folder has neither", { rows[2].dir, rows[2].more }, {})
+end
 eq("... and no line highlighted", #vim.tbl_filter(function(mark)
   return mark[4].line_hl_group ~= nil
 end, vim.api.nvim_buf_get_extmarks(buf, -1, 0, -1, { details = true })), 0)

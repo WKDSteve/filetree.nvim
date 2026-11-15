@@ -58,6 +58,8 @@ local icon_groups = {}
 ---@field line integer  1-based line of the buffer.
 ---@field expandable boolean
 ---@field expanded boolean
+---@field dir string?  For a row of kind "more": the folder whose entries it counts.
+---@field more integer?  ... and how many entries it stands for.
 
 ---@class Filetree.Embed
 ---@field buf integer
@@ -236,14 +238,18 @@ end
 function Embed:_describe(line)
   local row = self._tree:row(line)
   if not row then return nil end
+  local node = row.node
+  local counts = node.kind == "more" and type(node.data) == "table" and node.data or nil
   return {
     id = row.id,
-    path = row.node.path,
-    kind = row.node.kind or "file",
-    label = tostring(row.node.label),
+    path = node.path,
+    kind = node.kind or "file",
+    label = tostring(node.label),
     line = line,
     expandable = row.expandable == true,
     expanded = row.expanded == true,
+    dir = counts and counts.dir or nil,
+    more = counts and counts.more or nil,
   }
 end
 
