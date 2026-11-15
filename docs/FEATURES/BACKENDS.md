@@ -174,6 +174,12 @@ flowchart LR
   a file is found like a file, a link to a folder is not followed (the helper,
   `fd` and the walk; `rg --files` lists no links at all). A new root
   (`set_root`) ends a search.
+- **Tools behind a launcher.** `fd` and `rg` installed with scoop are started
+  through a shim, a small launcher in front of the program. The tree starts the
+  program the shim names instead: a start through the shim costs 40 to 70 ms,
+  and ending the shim left the program running, so every cancelled search
+  listed the whole root to the end. With the program itself the two runs of
+  `fd` (files, links) go side by side.
 
 ### The helper process
 

@@ -9,6 +9,7 @@
 --- - Four tiers behind one call: the helper process (`filetree.native.fs.helper`), `fd`, `rg --files`,
 ---   else a walk with `uv.fs_scandir`
 --- - `tier()`: which one this machine uses, for `:checkhealth`
+--- - `resolve(path)`: the program behind a scoop shim; `running()`: tools that have not ended
 ---
 --- `.git` is never entered. The helper, `fd` and `rg` leave out what `.gitignore` names; the walk leaves
 --- out the names of the ignore list, which is the nearest thing it has. A cancelled listing calls
@@ -19,6 +20,12 @@
 --- is neither listed nor followed. `fd` and the walk agree on that; `fd --type f` alone leaves links
 --- out, so its links come from a second run. `rg --files` cannot list a link without following it:
 --- on a machine that has `rg` and no `fd`, links are not found.
+---
+--- A tool is started by the program itself, not by a launcher in front of it (`resolve`): a scoop
+--- shim costs 40 to 70 ms per start, and ending it leaves the program it started running, so a
+--- cancelled listing (one per keystroke of a search) listed the whole root to the end. With the
+--- program itself the two runs of `fd` go side by side; behind a launcher they still go one after
+--- the other. `running()` counts the tools that have not ended.
 
 local list = require("filetree.native.fs.list")
 
@@ -30,6 +37,54 @@ local M = {}
 M.WALK_LIMIT = 200000
 
 ---@alias Filetree.Fs.Deep.Tier "helper"|"fd"|"rg"|"lua"
+
+---The program behind a launcher. Scoop puts `<name>.exe` next to `<name>.shim`, a text file that
+---names the real program (`path = "..."`); started through the shim, the program is a grandchild.
+---@param path string  The full path of the executable that was found.
+---@return string exe  The program to start: the one the shim names, else `path`.
+---@return boolean direct  false when a launcher stays in between (a shim with arguments of its own, or one whose target is gone).
+function M.resolve(path)
+  local shim = (path:gsub("%.[^.\\/]+$", "")) .. ".shim"
+  local file = io.open(shim, "r")
+  if not file then return path, true end
+  local text = file:read("*a") or ""
+  file:close()
+  local target = text:match('path%s*=%s*"([^"\r\n]+)"') or text:match("path%s*=%s*([^\r\n]+)")
+  -- a shim that brings arguments is not the program alone: it stays
+  if target and not text:match("args%s*=") and uv.fs_stat(target) then return target, true end
+  return path, false
+end
+
+---@type table<string, { exe: string, direct: boolean }>  by the name asked for; a tool does not move while Neovim runs
+local resolved = {}
+
+---What to start for a tool name, and whether that is the program itself.
+---@param name string
+---@return string exe
+---@return boolean direct
+local function program(name)
+  local hit = resolved[name]
+  if not hit then
+    local path = vim.fn.exepath(name)
+    if path == "" then
+      hit = { exe = name, direct = true }
+    else
+      local exe, direct = M.resolve(path)
+      hit = { exe = exe, direct = direct }
+    end
+    resolved[name] = hit
+  end
+  return hit.exe, hit.direct
+end
+
+--- Tools started by `files` that have not ended yet.
+local live = 0
+
+---How many tools started for a listing are still running (a cancelled one ends at once).
+---@return integer
+function M.running()
+  return live
+end
 
 ---Which external tool (or the walk) lists files, the helper left aside.
 ---@return Filetree.Fs.Deep.Tier tier
@@ -83,6 +138,8 @@ end
 local function spawn(cmd, on_batch, on_done)
   local cancelled = false
   local tail = ""
+  cmd = vim.list_slice(cmd)
+  cmd[1] = program(cmd[1])
   local ok, job = pcall(vim.system, cmd, {
     text = true,
     stdout = function(_, data)
@@ -102,12 +159,14 @@ local function spawn(cmd, on_batch, on_done)
       end
     end,
   }, function(result)
+    live = live - 1
     vim.schedule(function()
       if cancelled then return end
       if tail ~= "" then on_batch({ list.norm(tail) }) end
       on_done(result.code == 0)
     end)
   end)
+  if ok then live = live + 1 end
   if not ok then
     vim.schedule(function()
       if not cancelled then on_done(false) end
@@ -255,20 +314,41 @@ function M.files(root, on_batch, on_done, opts)
   if tier ~= "fd" then return spawn(command(tier, exe, root), on_batch, on_done) end
 
   -- `fd --type f` leaves every link out; a second run lists the links, and what points at a folder
-  -- is dropped here, as the walk drops it. One run after the other, never both at once: with two
-  -- children started side by side, killing the first left its `fd` behind for good on Windows (a
-  -- scoop shim in between; seen as one stuck `fd.exe` per cancelled search).
+  -- is dropped here, as the walk drops it.
+  ---@param paths string[]
+  local function links(paths)
+    local batch = {}
+    for _, path in ipairs(paths) do
+      if (uv.fs_stat(path) or {}).type ~= "directory" then batch[#batch + 1] = path end
+    end
+    if #batch > 0 then on_batch(batch) end
+  end
   local cancelled = false
+  local _, direct = program(exe)
+  if direct then
+    -- the program itself: both runs side by side, the listing takes as long as the longer one
+    local left, all_ok = 2, true
+    ---@param ok boolean
+    local function one_done(ok)
+      all_ok = all_ok and ok
+      left = left - 1
+      if left == 0 and not cancelled then on_done(all_ok) end
+    end
+    local cancel_files = spawn(command(tier, exe, root), on_batch, one_done)
+    local cancel_links = spawn(command(tier, exe, root, "l"), links, one_done)
+    return function()
+      cancelled = true
+      cancel_files()
+      cancel_links()
+    end
+  end
+  -- A launcher in between: one run after the other, never both at once. With two children started
+  -- side by side, ending the first left its `fd` behind for good on Windows (seen as one stuck
+  -- `fd.exe` per cancelled search).
   local cancel_run
   cancel_run = spawn(command(tier, exe, root), on_batch, function(files_ok)
     if cancelled then return end
-    cancel_run = spawn(command(tier, exe, root, "l"), function(paths)
-      local batch = {}
-      for _, path in ipairs(paths) do
-        if (uv.fs_stat(path) or {}).type ~= "directory" then batch[#batch + 1] = path end
-      end
-      if #batch > 0 then on_batch(batch) end
-    end, function(links_ok)
+    cancel_run = spawn(command(tier, exe, root, "l"), links, function(links_ok)
       on_done(files_ok and links_ok)
     end)
   end)

@@ -170,6 +170,23 @@ do
       cancel()
       settle(400)
       eq("a cancelled fd listing calls nothing more, from neither of its runs", calls, 0)
+      ok(
+        "... and no tool is left running",
+        vim.wait(3000, function()
+          return deep.running() == 0
+        end, 20)
+      )
+      -- a listing that is cancelled while the tool is at work: a root with many files
+      local big = vim.fn.fnamemodify(root, ":h")
+      local stop = deep.files(big, function() end, function() end, { tier = "fd" })
+      ok("(a listing of a large root is on its way)", deep.running() > 0)
+      stop()
+      ok(
+        "cancelled in the middle: the tool ends, it does not list the root to the end",
+        vim.wait(3000, function()
+          return deep.running() == 0
+        end, 20)
+      )
     else
       say("  n/a  fd is not installed here")
     end
@@ -183,6 +200,33 @@ do
     vim.uv.fs_unlink(dir .. "/docs/" .. name)
     vim.uv.fs_rmdir(dir .. "/docs/" .. name)
   end
+end
+
+-- ── the program behind a launcher ──────────────────────────────────────────────
+do
+  local bin = dir .. "/_bin"
+  vim.fn.mkdir(bin .. "/apps", "p")
+  local function touch(path, content)
+    vim.fn.writefile(content or { "" }, path)
+    return path
+  end
+  local real = touch(bin .. "/apps/tool.exe")
+  local plain = touch(bin .. "/plain.exe")
+  eq("a program without a shim next to it is itself", { deep.resolve(plain) }, { plain, true })
+  local shimmed = touch(bin .. "/tool.exe")
+  touch(bin .. "/tool.shim", { 'path = "' .. real .. '"' })
+  eq(
+    "a scoop shim names the program: that one is started",
+    { deep.resolve(shimmed) },
+    { real, true }
+  )
+  touch(bin .. "/tool.shim", { "path = " .. real })
+  eq("... also written without quotes", { deep.resolve(shimmed) }, { real, true })
+  touch(bin .. "/tool.shim", { 'path = "' .. real .. '"', "args = --flag" })
+  eq("a shim that brings arguments stays in between", { deep.resolve(shimmed) }, { shimmed, false })
+  touch(bin .. "/tool.shim", { 'path = "' .. bin .. '/apps/gone.exe"' })
+  eq("... and so does one whose program is gone", { deep.resolve(shimmed) }, { shimmed, false })
+  vim.fn.delete(bin, "rf")
 end
 
 -- a cancelled listing calls nothing more
