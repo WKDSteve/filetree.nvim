@@ -386,6 +386,20 @@ function M.open(buf, root, opts)
           return
         end
       end
+    end, function()
+      -- The watch that covered everything below the root is gone (the helper process ended). What
+      -- was held for a folder below the root was one more reference to that watch: given back,
+      -- and taken again as a handle of the folder's own.
+      if self.closed then return end
+      for dir, unwatch in pairs(self._unwatch) do
+        if dir ~= root then
+          unwatch()
+          self._unwatch[dir] = nil
+        end
+      end
+      for id in pairs(self._loaded) do
+        self:_watch_dir(id)
+      end
     end)
   end
   self:_draw()

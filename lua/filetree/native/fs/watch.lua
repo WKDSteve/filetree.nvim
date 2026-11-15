@@ -178,6 +178,9 @@ end
 
 local open_handle
 
+---@type table<integer, fun(dir: string)>  by subscriber: told when a watch stops covering what lies below its folder
+local on_narrowed = {}
+
 ---A watch of the helper process on `dir` and below. Nil when the helper cannot take it.
 ---@param dir string
 ---@return Filetree.Fs.Watch.Entry|nil
@@ -197,6 +200,11 @@ local function open_helper(dir)
       entry.error = err
     end
     M.on_changed(dir)
+    -- The watch below `dir` is gone with the helper: the handle that replaces it sees `dir` alone.
+    -- Who follows folders below it is told, and watches the ones it has read one by one.
+    for _, fn in pairs(on_narrowed) do
+      pcall(fn, dir)
+    end
   end
   local gen
   gen = helper.request("watch", dir, function(kind, payload)
@@ -331,13 +339,16 @@ end
 
 ---Be told which folders changed (normalized paths, sorted), a short quiet after the events.
 ---@param fn fun(dirs: string[])
+---@param narrowed? fun(dir: string)  Called when the watch on `dir` stops covering what lies below it (the helper process ended): watch the folders you have read below it yourself.
 ---@return fun() unsubscribe
-function M.subscribe(fn)
+function M.subscribe(fn, narrowed)
   local id = next_id
   next_id = id + 1
   subscribers[id] = fn
+  on_narrowed[id] = narrowed
   return function()
     subscribers[id] = nil
+    on_narrowed[id] = nil
   end
 end
 

@@ -403,17 +403,32 @@ function View:_watch()
   if self._opts.watch == false or self._unsubscribe_watch then return end
   self._unsubscribe_watch = watch.subscribe(function(dirs)
     self:_changed(dirs)
+  end, function()
+    -- The watch that covered everything below the root is gone (the helper process ended). What
+    -- was held for a folder below the root was one more reference to that watch: given back, and
+    -- taken again as a handle of the folder's own.
+    for dir, unwatch in pairs(self._watches) do
+      if dir ~= self.root then
+        unwatch()
+        self._watches[dir] = nil
+      end
+    end
+    self:_watch_loaded()
   end)
   self:_watch_dir(self.root)
-  if not watch.recursive then
-    for id in pairs(self._loaded) do
-      local node = self.main:node(id)
-      if node and node.path then self:_watch_dir(node.path) end
-    end
-    for member, id in pairs(self._alias) do
-      self:_watch_dir(member)
-      self:_watch_dir(id)
-    end
+  if not watch.recursive then self:_watch_loaded() end
+end
+
+---Watch every folder this view has read, one by one: what a system without recursive handles needs.
+---@private
+function View:_watch_loaded()
+  for id in pairs(self._loaded) do
+    local node = self.main:node(id)
+    if node and node.path then self:_watch_dir(node.path) end
+  end
+  for member, id in pairs(self._alias) do
+    self:_watch_dir(member)
+    self:_watch_dir(id)
   end
 end
 

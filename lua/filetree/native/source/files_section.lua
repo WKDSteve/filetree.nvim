@@ -189,6 +189,24 @@ function M.new(view)
           for _, dir in ipairs(dirs) do
             changed(dir)
           end
+        end, function()
+          -- The watch that covered everything below the root is gone (the helper process ended).
+          -- What was held for a folder below the root was one more reference to that watch: given
+          -- back, and taken again as a handle of the folder's own.
+          for dir, unwatch in pairs(self._unwatch or {}) do
+            if dir ~= root then
+              unwatch()
+              self._unwatch[dir] = nil
+            end
+          end
+          for id in pairs(self.loaded) do
+            self:_watch_dir(id)
+          end
+          for _, members in pairs(self._chains) do
+            for _, member in ipairs(members) do
+              self:_watch_dir(member)
+            end
+          end
         end)
       end
       -- a finished file operation of filetree.nvim: the folders it names, also without a watcher
