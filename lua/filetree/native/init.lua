@@ -31,6 +31,7 @@ local M = {}
 ---@field view_bar? boolean  Show the views as tabs in the winbar of the tree window, clickable (default true; with one view there is no bar).
 ---@field name_float? boolean  A name too long for the window is drawn cut; while the cursor is on such a line, show the full name in a small float next to it (default true).
 ---@field ai? Filetree.Ai.Opts  Words to tree actions through ai.nvim: `:Filetree ask <text>` and a microphone in the view bar (default off: `enabled = false`).
+---@field expand_all_max? integer  Folders "expand all" (`E`) opens at most; it says how many it left closed (default 200).
 ---@field views? (string|Filetree.Native.ViewSpec)[]  The views of the tree, in the order of the view bar: `{ "files" }` is one view with one source, `{ name = "work", "buffers", "git" }` one view with two sections (default: the files, then one view per registered source).
 
 ---One entry of `native.views`: the sources of the view as list items, and its name.
@@ -51,6 +52,7 @@ local DEFAULTS = {
   search_max = 1000,
   view_bar = true,
   name_float = true,
+  expand_all_max = 200,
 }
 
 ---@type Filetree.Native.Opts
@@ -276,6 +278,7 @@ function M.ensure(root)
     views = M.views,
     view_bar = options.view_bar,
     name_float = options.name_float,
+    expand_all_max = options.expand_all_max,
   })
   views[api.nvim_get_current_tabpage()] = view
   M.roots_changed()

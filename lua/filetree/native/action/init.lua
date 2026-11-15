@@ -187,6 +187,50 @@ function M.builtins()
       end,
     },
     {
+      name = "root_back",
+      key = "<BS>",
+      desc = "Go back to the root shown before",
+      needs = { "source:files" },
+      menu = false,
+      run = function(_, ctx)
+        if not view_of(ctx):root_step(-1) then notify.info("no root to go back to") end
+      end,
+    },
+    {
+      name = "root_forward",
+      key = "g<BS>",
+      desc = "Go forward again to the root gone back from",
+      needs = { "source:files" },
+      menu = false,
+      run = function(_, ctx)
+        if not view_of(ctx):root_step(1) then notify.info("no root to go forward to") end
+      end,
+    },
+    {
+      name = "expand_all",
+      key = "E",
+      desc = "Open every folder below this one (up to native.expand_all_max)",
+      run = function(nodes, ctx)
+        local view = view_of(ctx)
+        local row = view:current()
+        local node = nodes[1] or (row and row.node)
+        -- on a file: the folder it lies in; on nothing: everything
+        local id = node and node.id or nil
+        if id ~= nil and row and not row.expandable then id = view.tree:parent(id) end
+        local opened, left = view:expand_all(id)
+        if left > 0 then
+          notify.info(
+            ("opened %d folder(s), %d more left closed (native.expand_all_max)"):format(
+              opened,
+              left
+            )
+          )
+        else
+          notify.info(("opened %d folder(s)"):format(opened))
+        end
+      end,
+    },
+    {
       name = "open_picked",
       key = "sw",
       desc = "Open the file in a window you pick",

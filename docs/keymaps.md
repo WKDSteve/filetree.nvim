@@ -46,6 +46,8 @@ on it as on any backend.
 | `R` | read the folders again |
 | `H` | show or hide the names of the ignore list |
 | `-` | show the parent folder as the root (`tree_traverse`'s `-` does the same when it is on) |
+| `<BS>`, `g<BS>` | go back to the root shown before, and forward again |
+| `E` | open every folder below the one under the cursor (up to `native.expand_all_max`) |
 | `sw` | open the file in a window you pick (`ui.windowpicker`) |
 | `q` | close the tree |
 

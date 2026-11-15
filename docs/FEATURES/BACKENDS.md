@@ -33,6 +33,7 @@ require("filetree").setup({
     search_max = 1000,        -- hits a search shows at most; a last line says how many more
     view_bar = true,          -- the views as tabs in the winbar of the tree window
     name_float = true,        -- the full name next to the cursor line while that name is drawn cut
+    expand_all_max = 200,     -- folders "expand all" (E) opens at most
     views = nil,              -- which views there are; nil: files, the tree's sources, registered ones
     ai = { enabled = false }, -- words to tree actions through ai.nvim: see AI.md
   },
@@ -275,6 +276,8 @@ the same buffer.
 | `"`, `!` | show the next, the previous view |
 | `H` | show or hide the names of the ignore list |
 | `-` | show the parent folder as the root |
+| `<BS>`, `g<BS>` | go back to the root shown before, and forward again (up to 50 roots per tree) |
+| `E` | open every folder below the one under the cursor, level by level, up to `native.expand_all_max`; it says how many it opened and how many it left closed |
 | `sw` | open the file in a window you pick |
 | `q` | close the tree |
 

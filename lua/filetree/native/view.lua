@@ -59,6 +59,9 @@ local QUIET = { more = true, unavailable = true, note = true }
 --- milliseconds and a tick more would only delay it.
 local SLICE_FROM = 1000
 
+--- Roots a tree remembers for the way back.
+local ROOT_HISTORY = 50
+
 ---@type table<integer, Filetree.View>  buffer -> view
 local by_buf = {}
 ---@type table<string, string>  icon name -> highlight group, created once
@@ -98,6 +101,8 @@ local left_col = {}
 ---@field _alone_size integer?  The width (height) a docked tree had before it became the only window of its tab.
 ---@field _ask_again boolean?  The sources of the view are about to be asked again after a file operation.
 ---@field _name_win integer?  The float that shows the full name of the cursor line while it is drawn cut.
+---@field _root_back string[]  The roots shown before this one, the last one last.
+---@field _root_forward string[]  The roots gone back from, for the way forward again.
 ---@field _name_shown { name: string, lnum: integer, col: integer }?  What that float says, and where.
 ---@field private _sync boolean
 ---@field private _loaded table<string, true>  Folder ids whose children were read.
@@ -148,6 +153,7 @@ View.__index = View
 ---@field views? fun(): Filetree.View.Spec[]  The views there are, in the order of the view bar (default: the files only).
 ---@field view_bar? boolean  Show the views as tabs in the winbar of the tree window (default true).
 ---@field name_float? boolean  Show the full name next to the cursor line while that name is drawn cut (default true).
+---@field expand_all_max? integer  Folders "expand all" opens at most (default 200).
 
 ---One view: a name and the sources it shows, one section each.
 ---@class Filetree.View.Spec
@@ -1497,14 +1503,22 @@ function View:_relist()
   end
 end
 
----Show another directory.
+---Show another directory. The root it replaces is remembered (`root_back`).
 ---@param root string
+---@param opts? { history?: boolean }  `history = false`: a step through the history itself, nothing is remembered.
 ---@return boolean
-function View:set_root(root)
+function View:set_root(root, opts)
   root = list.norm(root)
   if root == self.root then return true end
   local stat = vim.uv.fs_stat(root)
   if not stat or stat.type ~= "directory" then return false end
+  if not opts or opts.history ~= false then
+    local back = self._root_back
+    back[#back + 1] = self.root
+    -- the oldest goes first: the history is for "where was I", not a log
+    if #back > ROOT_HISTORY then table.remove(back, 1) end
+    self._root_forward = {}
+  end
   self.root = root
   if self._pane then
     -- a source is asked with the root of the view: the one on screen is asked again now, the others
@@ -1521,6 +1535,99 @@ function View:set_root(root)
   if self.buf and api.nvim_buf_is_valid(self.buf) then self:_draw_all() end
   require("filetree.native").roots_changed()
   return true
+end
+
+---Go back to the root the tree showed before this one, or forward again. The cursor lands on the
+---root it came from when that lies below the new one. Roots that are gone are passed over.
+---@param step integer  -1: back, 1: forward.
+---@return boolean moved  false at the end of the history.
+function View:root_step(step)
+  local from, to = self._root_back, self._root_forward
+  if step > 0 then
+    from, to = to, from
+  end
+  while #from > 0 do
+    local target = table.remove(from)
+    local came_from = self.root
+    if target ~= came_from and self:set_root(target, { history = false }) then
+      to[#to + 1] = came_from
+      if list.inside(target, came_from) then self:reveal(came_from) end
+      return true
+    end
+  end
+  return false
+end
+
+---Open every folder below a node, level by level, until `max` folders were opened.
+---@param id? any  Default: the root (every section of a view of sources).
+---@param max? integer  Folders opened at most (default: `expand_all_max`, 200).
+---@return integer opened
+---@return integer left  Folders that are on screen and still closed.
+function View:expand_all(id, max)
+  max = max or self._opts.expand_all_max or 200
+  self:sync_cursor()
+  local tree = self.tree
+  ---@type table<any, true>  Asked once: a folder that cannot be read is not asked again and again.
+  local tried = {}
+  ---The closed folders in the subtree of `id` (all rows without it), shallowest first.
+  ---@return any[]
+  local function closed()
+    local first, last = 1, tree:count()
+    if id ~= nil then
+      local at = tree:row_of(id)
+      if not at then return {} end
+      local depth = tree:row(at).depth
+      first, last = at, at
+      while tree:row(last + 1) and tree:row(last + 1).depth > depth do
+        last = last + 1
+      end
+    end
+    local out = {}
+    for i = first, last do
+      local row = tree:row(i)
+      local node = row.node
+      -- a link to a folder is not followed: it may point back up
+      local link = type(node.data) == "table" and node.data.is_link == true
+      if
+        row.expandable
+        and not row.expanded
+        and not row.loading
+        and not link
+        and not tried[row.id]
+      then
+        out[#out + 1] = { id = row.id, depth = row.depth }
+      end
+    end
+    table.sort(out, function(a, b)
+      return a.depth < b.depth
+    end)
+    return out
+  end
+  local opened = 0
+  self:_now(function()
+    while opened < max do
+      local todo = closed()
+      if #todo == 0 then break end
+      local progressed = false
+      for _, item in ipairs(todo) do
+        if opened >= max then break end
+        if tree:node(item.id) and not tree:is_expanded(item.id) then
+          tried[item.id] = true
+          self:_apply(tree:expand(item.id))
+          local at = tree:row_of(item.id)
+          -- a folder that could not be read (deleted since, no permission) is no folder opened
+          if tree:is_expanded(item.id) and not (at and tree:row(at).error) then
+            opened = opened + 1
+          end
+          progressed = true
+        end
+      end
+      if not progressed then break end
+    end
+  end)
+  self:_place_cursor()
+  tried = {}
+  return opened, #closed()
 end
 
 ---@param kind "name"|"size"|"mtime"
@@ -1808,6 +1915,8 @@ function M.new(opts)
     _loaded = {},
     _alias = {},
     _chains = {},
+    _root_back = {},
+    _root_forward = {},
     _kept = {},
     _kept_in = {},
     _watches = {},
