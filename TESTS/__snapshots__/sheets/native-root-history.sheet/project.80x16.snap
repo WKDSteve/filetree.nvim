@@ -1,0 +1,38 @@
+testing.nvim screen v1
+size: 80x16
+cursor: 2,1
+mode: n
+--- text
+01| Files  Buf  Git  Sym [!]  Dia  │
+02|▾ proj/                         │x
+03|  ▸ a/                          │~
+04|  ▸ b/                          │~
+05|    README.md                   │~
+06|~                               │~
+07|~                               │~
+08|~                               │~
+09|~                               │~
+10|~                               │~
+11|~                               │~
+12|~                               │~
+13|~                               │~
+14|~                               │~
+15|~                               │~
+16|[filetree.native] no root to go back to
+--- attrs
+01|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabccccccccccccccccccccccccccccccccccccccccccccccc
+02|defffffeeeeeeeeeeeeeeeeeeeeeeeeeb
+03|  g hh                          bggggggggggggggggggggggggggggggggggggggggggggggg
+04|  g hh                          bggggggggggggggggggggggggggggggggggggggggggggggg
+05|  g iiiiiiiii                   bggggggggggggggggggggggggggggggggggggggggggggggg
+06|ggggggggggggggggggggggggggggggggbggggggggggggggggggggggggggggggggggggggggggggggg
+07|ggggggggggggggggggggggggggggggggbggggggggggggggggggggggggggggggggggggggggggggggg
+08|ggggggggggggggggggggggggggggggggbggggggggggggggggggggggggggggggggggggggggggggggg
+09|ggggggggggggggggggggggggggggggggbggggggggggggggggggggggggggggggggggggggggggggggg
+10|ggggggggggggggggggggggggggggggggbggggggggggggggggggggggggggggggggggggggggggggggg
+11|ggggggggggggggggggggggggggggggggbggggggggggggggggggggggggggggggggggggggggggggggg
+12|ggggggggggggggggggggggggggggggggbggggggggggggggggggggggggggggggggggggggggggggggg
+13|ggggggggggggggggggggggggggggggggbggggggggggggggggggggggggggggggggggggggggggggggg
+14|ggggggggggggggggggggggggggggggggbggggggggggggggggggggggggggggggggggggggggggggggg
+15|ggggggggggggggggggggggggggggggggbggggggggggggggggggggggggggggggggggggggggggggggg
+16|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj

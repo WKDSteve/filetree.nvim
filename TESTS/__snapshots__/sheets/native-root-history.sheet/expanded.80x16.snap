@@ -1,0 +1,38 @@
+testing.nvim screen v1
+size: 80x16
+cursor: 3,1
+mode: n
+--- text
+01| Files  Buf  Git  Sym [!]  Dia  │
+02|▾ proj/                         │x
+03|  ▾ a/                          │~
+04|    ▾ one/                      │~
+05|        x.lua                   │~
+06|    ▾ two/                      │~
+07|      ▾ deep/                   │~
+08|        ▾ er/                   │~
+09|            z.lua               │~
+10|          y.lua                 │~
+11|        t.lua                   │~
+12|  ▸ b/                          │~
+13|    README.md                   │~
+14|~                               │~
+15|~                               │~
+16|[filetree.native] opened 5 folder(s)
+--- attrs
+01|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabccccccccccccccccccccccccccccccccccccccccccccccc
+02|d eeeee                         b
+03|ffgfhhffffffffffffffffffffffffffbddddddddddddddddddddddddddddddddddddddddddddddd
+04|    d iiii                      bddddddddddddddddddddddddddddddddddddddddddddddd
+05|      d bbbbb                   bddddddddddddddddddddddddddddddddddddddddddddddd
+06|    d iiii                      bddddddddddddddddddddddddddddddddddddddddddddddd
+07|      d iiiii                   bddddddddddddddddddddddddddddddddddddddddddddddd
+08|        d iii                   bddddddddddddddddddddddddddddddddddddddddddddddd
+09|          d bbbbb               bddddddddddddddddddddddddddddddddddddddddddddddd
+10|        d bbbbb                 bddddddddddddddddddddddddddddddddddddddddddddddd
+11|      d bbbbb                   bddddddddddddddddddddddddddddddddddddddddddddddd
+12|  d ii                          bddddddddddddddddddddddddddddddddddddddddddddddd
+13|  d jjjjjjjjj                   bddddddddddddddddddddddddddddddddddddddddddddddd
+14|ddddddddddddddddddddddddddddddddbddddddddddddddddddddddddddddddddddddddddddddddd
+15|ddddddddddddddddddddddddddddddddbddddddddddddddddddddddddddddddddddddddddddddddd
+16|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk

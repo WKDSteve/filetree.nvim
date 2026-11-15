@@ -11,14 +11,14 @@ return {
   },
   {
     id = "filetree.native-root-history",
-    title = "<BS> goes back to the root shown before, g<BS> forward again",
-    surface = { "binding:<BS>", "binding:g<BS>" },
-    docs = "docs/FEATURES/BACKENDS.md",
-  },
-  {
-    id = "filetree.native-expand-all",
-    title = "E opens every folder below the one under the cursor, up to a cap, and says how many",
-    surface = { "binding:E", "config:native.expand_all_max" },
+    title = "<BS> and g<BS> go back and forward through the roots shown, E opens every folder below one up to a cap",
+    surface = {
+      "binding:<BS>",
+      "binding:g<BS>",
+      "binding:-",
+      "binding:E",
+      "config:native.expand_all_max",
+    },
     docs = "docs/FEATURES/BACKENDS.md",
   },
   {

@@ -1,0 +1,38 @@
+testing.nvim screen v1
+size: 80x16
+cursor: 2,1
+mode: n
+--- text
+01| F  Buffers  G  S [!]  D        │ init.lua
+02|▾ Buffers                      2│x
+03|    lua/init.lua                │~
+04|    README.md                   │~
+05|~                               │~
+06|~                               │~
+07|~                               │~
+08|~                               │~
+09|~                               │~
+10|~                               │~
+11|~                               │~
+12|~                               │~
+13|~                               │~
+14|~                               │~
+15|~                               │~
+16|
+--- attrs
+01|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabcddddddddaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+02|efgggggggfffffffffffffffffffffhhb
+03|  i jjjjjjjjjjjj                biiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+04|  i jjjjjjjjj                   biiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+05|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiibiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+06|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiibiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+07|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiibiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+08|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiibiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+09|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiibiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+10|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiibiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+11|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiibiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+12|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiibiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+13|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiibiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+14|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiibiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+15|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiibiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+16|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk
