@@ -358,6 +358,13 @@ mapped on the tree buffer is left alone. An action that presses its own key whil
 it runs (a feature wrapping what was on the key before it) reaches the next
 action of that key, not itself.
 
+So a key a filetree feature already has (`gs` live search, `D` diff, `m`
+mark, and the others in [Keymaps](keymaps.md)) wins over an action another
+plugin registers on it (at the same `priority`): that action runs only on a node
+where the feature does not apply. A plugin that names a key for its action in its docs therefore
+names a leader key (`<leader>dc`), not a free-looking letter of the tree
+buffer.
+
 ### A previewer
 
 The preview (`<Tab>`, [features](FEATURES/UI.md)) shows the file of a node.
