@@ -190,10 +190,41 @@ local function reopen(count)
   T.settle(80)
   scroll_to(row_of("deep/a/b/c/f01.lua") + 5)
 end
+-- a mapping somebody sets on the filetype is theirs
+local theirs = api.nvim_create_autocmd("FileType", {
+  pattern = view_mod.FILETYPE,
+  callback = function(ev)
+    vim.keymap.set("n", "<LeftMouse>", "<Nop>", { buffer = ev.buf, desc = "theirs" })
+  end,
+})
 reopen(1)
 eq("sticky_parents = 1: the nearest folder only", pinned(), { row_of("deep/a/b/c") })
+api.nvim_set_current_win(win)
+eq(
+  "a click mapped on the filetype stays theirs",
+  vim.fn.maparg("<LeftMouse>", "n", false, true).desc,
+  "theirs"
+)
+api.nvim_del_autocmd(theirs)
+-- the same line for other rows: the float is asked to draw again, a changed line is written anyway
+local redrawn = 0
+local real_redraw = sticky.redraw
+sticky.redraw = function(...)
+  redrawn = redrawn + 1
+  return real_redraw(...)
+end
+local shown = sticky.state(view)
+shown.rows = { row_of("deep/a/b") }
+view:_sticky()
+eq("the same text for another row: drawn again", redrawn, 1)
+eq("... and the rows are the right ones", pinned(), { row_of("deep/a/b/c") })
+view:_sticky()
+eq("nothing changed: nothing is drawn again", redrawn, 1)
+sticky.redraw = real_redraw
 reopen(0)
 eq("sticky_parents = 0: nothing is pinned", pinned(), nil)
+api.nvim_set_current_win(win)
+eq("... and the click is not mapped", vim.fn.maparg("<LeftMouse>", "n", false, true).buffer, nil)
 reopen(false)
 eq("sticky_parents = false: nothing either", pinned(), nil)
 

@@ -9,6 +9,7 @@
 --- - `close(view)`: take it away
 --- - `state(view)`: what is pinned right now (rows of the tree, top to bottom)
 --- - `click(view, pos)`: a mouse position on a pinned row jumps to that folder
+--- - `redraw(view)`: draw the pinned rows again, their text untouched
 ---
 --- Nothing is computed while the window shows the first row of the tree.
 
@@ -89,6 +90,14 @@ function M.state(view)
   return nil
 end
 
+---Draw the pinned rows again (their lines are untouched, only what is drawn on them): a badge of
+---a pinned folder changed, or the float stands for other rows than before.
+---@param view Filetree.View
+function M.redraw(view)
+  local state = M.state(view)
+  if state then pcall(api.nvim__redraw, { win = state.win, valid = false }) end
+end
+
 ---Which buffer of a tree, and which of its rows, the lines of a float stand for.
 ---@param buf integer
 ---@return integer? tree_buf
@@ -165,10 +174,14 @@ function M.update(view, max, reason)
 
   local state = M.state(view)
   if state then
+    local moved = not vim.deep_equal(state.rows, rows)
     state.rows = rows
     if state.text ~= text then
       api.nvim_buf_set_lines(state.buf, 0, -1, false, lines)
       state.text = text
+    elseif moved then
+      -- the same text for other rows (two folders of one name): their badges may differ
+      M.redraw(view)
     end
     local now = api.nvim_win_get_config(state.win)
     if now.height ~= config.height or now.width ~= config.width or now.row ~= config.row then

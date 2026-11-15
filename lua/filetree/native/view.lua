@@ -560,6 +560,15 @@ function View:_ensure_buf()
   -- set before FileType, so that whoever reacts to the filetype can already ask which view this is
   vim.b[buf].filetree_view = self.view_name
   require("filetree.native.action").attach(self, buf)
+  if (tonumber(self._opts.sticky_parents) or 0) > 0 then
+    -- A click on a pinned folder jumps to it; every other click is Vim's. Set before FileType: a
+    -- mapping somebody sets on the filetype is theirs and stays.
+    vim.keymap.set("n", "<LeftMouse>", function()
+      local ok, pos = pcall(vim.fn.getmousepos)
+      if ok and sticky.click(self, pos) then return "" end
+      return "<LeftMouse>"
+    end, { buffer = buf, expr = true, desc = "Jump to a pinned parent folder" })
+  end
   self:_draw_all()
   vim.bo[buf].filetype = M.FILETYPE
   api.nvim_create_autocmd("CursorMoved", {
@@ -578,12 +587,6 @@ function View:_ensure_buf()
       self:_name_float()
     end,
   })
-  -- a click on a pinned folder (`sticky_parents`) jumps to it; every other click is Vim's
-  vim.keymap.set("n", "<LeftMouse>", function()
-    local ok, pos = pcall(vim.fn.getmousepos)
-    if ok and sticky.click(self, pos) then return "" end
-    return "<LeftMouse>"
-  end, { buffer = buf, expr = true, desc = "Jump to a pinned parent folder" })
   api.nvim_create_autocmd({ "WinLeave", "BufLeave" }, {
     group = AUGROUP,
     buffer = buf,
@@ -1976,6 +1979,7 @@ redraw_views = function()
     if win and api.nvim_win_is_valid(win) and api.nvim_win_get_buf(win) == view.buf then
       -- `valid = false` re-runs the decoration provider for the window without touching the buffer
       if not pcall(api.nvim__redraw, { win = win, valid = false }) then vim.cmd("redraw") end
+      sticky.redraw(view)
     end
   end
 end
