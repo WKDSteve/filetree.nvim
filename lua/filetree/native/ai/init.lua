@@ -209,10 +209,12 @@ local function describe(step, view, affected)
   end
   table.sort(args)
   local on
-  if step.target then
+  if affected and #affected > 1 then
+    on = #affected .. " marked entries"
+  elseif affected and #affected == 1 then
+    on = rel(affected[1], view.root)
+  elseif step.target then
     on = rel(step.target, view.root)
-  elseif affected and #affected > 0 then
-    on = #affected == 1 and rel(affected[1], view.root) or (#affected .. " marked entries")
   else
     on = "the entry under the cursor"
   end
@@ -275,10 +277,11 @@ function M.execute(view, steps)
     return
   end
   local affected = {}
-  if changes.target then
-    affected = { changes.target }
-  elseif marked then
+  -- with marks the action acts on all of them, also when the step names one of them
+  if marked then
     affected = marked
+  elseif changes.target then
+    affected = { changes.target }
   else
     local row = view:current()
     if row and row.node and row.node.path then affected = { list.norm(row.node.path) } end
@@ -290,8 +293,10 @@ function M.execute(view, steps)
       describe(step, view, step == changes and affected or nil)
     )
   end
-  for _, path in ipairs(changes.target and {} or affected) do
-    body[#body + 1] = "     " .. rel(path, view.root)
+  if #affected > 1 then
+    for _, path in ipairs(affected) do
+      body[#body + 1] = "     " .. rel(path, view.root)
+    end
   end
   -- never skipped: not by a feature's `confirm = false`, not by anything in the answer
   require("filetree.util.confirm")({
@@ -451,6 +456,14 @@ function M.ask(text, view)
     notify.warn("ai: the request failed: " .. plan.shown(err, 200))
     return false
   end
+  -- a provider that never calls back must not block the next request for the rest of the session
+  -- (ai.nvim ends a request at timeout_ms; this is the backstop behind it, a little later)
+  local timeout = tonumber(options.timeout_ms) or DEFAULTS.timeout_ms
+  vim.defer_fn(function()
+    if pending ~= token then return end
+    pending = nil
+    notify.info("ai: no answer to " .. plan.shown(text, 40) .. "; ask again")
+  end, timeout + math.min(timeout, 5000))
   return true
 end
 

@@ -160,6 +160,8 @@ function M.target(raw, env)
     path = path == "." and env.root or join(env.root, path)
   end
   if env.known[path] ~= nil then return path, nil, nil end
+  -- an absolute path names one file: another one of the same name is not what was meant
+  if absolute then return nil, nil, ("%q is not an entry the tree knows"):format(M.shown(raw)) end
   -- not a path the tree knows: a name ("init.lua", "the init") among the known ones
   local hits = {}
   for _, known in ipairs(env.order or vim.tbl_keys(env.known)) do
@@ -290,12 +292,18 @@ function M.check(steps, env)
     end
     if item.mutates then
       mutating = mutating + 1
-      -- one change per request, and nothing after it: the next step would run while its dialog is open
-      if mutating > 1 then return nil, where .. "one step that changes files per request" end
-    elseif mutating > 0 then
-      return nil, where .. "comes after a step that changes files; ask for it on its own"
+      -- the root is the tree itself: changing it is not asked for in a sentence
+      if step.target == env.root then
+        return nil, where .. name .. " on the root of the tree is not done this way"
+      end
     end
     out[#out + 1] = step
+  end
+  -- A step that changes files runs alone: a step before it could move the cursor or the marks, so
+  -- the question would name other entries than the ones it acts on; a step after it would run while
+  -- its dialog is open.
+  if mutating > 0 and #out > 1 then
+    return nil, "a step that changes files is asked for on its own, not in a plan of several"
   end
   return out, nil
 end

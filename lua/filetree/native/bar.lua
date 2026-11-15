@@ -177,12 +177,12 @@ function M.write(view)
     return
   end
   local line = ""
-  -- the microphone of native.ai stands at the right end and takes its width from the tabs
-  local mic, mic_width = require("filetree.native.ai").button(view)
   if view:bar_enabled() then
+    -- the microphone of native.ai stands at the right end and takes its width from the tabs
+    local mic, mic_width = require("filetree.native.ai").button(view)
     line = (M.render(M.items(view), api.nvim_win_get_width(win) - mic_width))
+    if mic ~= "" then line = line .. "%=" .. mic end
   end
-  if mic ~= "" then line = line .. "%=" .. mic end
   local wo = vim.wo[win][0]
   if wo.winbar ~= line then wo.winbar = line end
 end

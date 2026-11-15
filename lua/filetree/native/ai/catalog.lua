@@ -38,7 +38,8 @@ M.READ_ONLY = {
   buffer_cycle = true,
   marks = true,
   node_info = true,
-  preview = true,
+  -- `open` (its <CR>) hands some files to the program of the system
+  preview = { toggle = true },
   filter = true,
   live_search = true,
   find_files = true,
@@ -52,8 +53,8 @@ M.READ_ONLY = {
   markdown_links = { link = true, link_recursive = true, link_from_marked = true },
   -- `save` writes a file
   copy_file_list = { files_abs = true, files_rel = true, dirs_abs = true, dirs_rel = true },
-  pdf_open = true,
-  mdview_open = true,
+  -- `system` and `terminal` start another program, as mdview_open starts a browser: those ask
+  pdf_open = { text = true, picker = true },
 }
 
 --- Features a plan never names: a shell command, global keys and modes that take over the keyboard.
@@ -187,7 +188,7 @@ function M.known(view, cap)
   end
   add(root, true)
   local i = 1
-  while true do
+  while #order < cap do
     local row = view.tree and view.tree:row(i)
     if not row then break end
     local node = row.node

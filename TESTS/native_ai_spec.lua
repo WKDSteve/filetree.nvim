@@ -147,6 +147,37 @@ for _, item in ipairs(items) do
 end
 eq("no shell command, no global keys", never, {})
 eq("a feature not on the read-only list changes files", catalog.read_only("move", "move"), false)
+eq(
+  "a key that hands a file to another program asks (preview's <CR>, a PDF in the system viewer, mdview)",
+  {
+    catalog.read_only("preview", "open"),
+    catalog.read_only("pdf_open", "system"),
+    catalog.read_only("pdf_open", "terminal"),
+    catalog.read_only("mdview_open", "open"),
+    catalog.read_only("preview", "toggle"),
+  },
+  { false, false, false, false, true }
+)
+eq(
+  "... and so preview's <CR> is in the catalog as changing",
+  by_name["preview.open"] and by_name["preview.open"].mutates,
+  true
+)
+-- the known paths stop at the cap: a tree of many rows is not walked to its end
+local rows_read = 0
+local known, order = catalog.known({
+  root = "/r",
+  tree = {
+    row = function(_, i)
+      rows_read = rows_read + 1
+      if i > 1000 then return nil end
+      return { node = { path = "/r/f" .. i, kind = "file" } }
+    end,
+  },
+}, 3)
+eq("at most the cap of known paths", #order, 3)
+ok("... and the rows after it are not read", rows_read <= 3)
+ok("... the root is one of them, as a folder", known["/r"] == true)
 
 -- ── the keys and the request ───────────────────────────────────────────────────
 ok("enabled with ai.nvim: the key ai.ask is in the table", view.actions:get("ai.ask") ~= nil)
@@ -290,12 +321,27 @@ local refused = {
   {
     "two steps that change files",
     '[{"action": "trash.trash", "target": "README.md"}, {"action": "trash.trash", "target": "docs/guide.md"}]',
-    "one step that changes files",
+    "on its own",
+  },
+  {
+    "a step that moves the marks before one that changes files",
+    '[{"action": "marks.toggle", "target": "lua/mod/b.lua"}, {"action": "trash.trash"}]',
+    "on its own",
+  },
+  {
+    "a step that moves the cursor before one that changes files",
+    '[{"action": "open_variants.vsplit", "target": "lua/init.lua"}, {"action": "trash.trash"}]',
+    "on its own",
+  },
+  {
+    "a step that changes the root itself",
+    '[{"action": "trash.trash", "target": "."}]',
+    "on the root of the tree",
   },
   {
     "a step after one that changes files",
     '[{"action": "trash.trash", "target": "README.md"}, {"action": "open_variants.vsplit", "target": "lua/init.lua"}]',
-    "comes after a step that changes files",
+    "on its own",
   },
   { "no JSON at all", "Sure! Run rm -rf / and you are done.", "no plan" },
   { "broken JSON", '[{"action": "open"}', "not JSON" },
@@ -344,6 +390,24 @@ T.wait(function()
 end, 500)
 ok("a failed request says so in one line", T.told("no route to host", before_fail))
 
+-- a provider that never answers does not block the next request
+local real_ask = ai_stub.ask
+ai_stub.ask = function(hang_req)
+  requests[#requests + 1] = hang_req
+end
+ai.setup({ enabled = true, timeout_ms = 20 })
+local before_hang = T.mark()
+ai.ask("hang", view)
+T.wait(function()
+  return T.told("no answer to", before_hang)
+end, 1000)
+ok("no answer: one line says so after the timeout", T.told("no answer to hang", before_hang))
+ai_stub.ask = real_ask
+ok("... and the next request is sent", (ask("open the readme", "[]")))
+ok("... not refused as still waiting", not T.told("still waiting", before_hang))
+ai.setup({ enabled = true })
+T.settle(50)
+
 -- ── a plan that changes files: never without the question ─────────────────────
 T.answer("confirm", false)
 _, at = ask("trash the guide", '[{"action": "trash.trash", "target": "docs/guide.md"}]')
@@ -385,6 +449,18 @@ T.feed("m")
 T.settle(80)
 _, at = ask("open b", '[{"action": "open_variants.vsplit", "target": "lua/mod/b.lua"}]')
 ok("with marks, a step on another entry is refused", T.told("entries are marked", at))
+-- a step on one of the marked entries acts on all of them: the question says so
+T.on("README.md")
+T.feed("m")
+T.settle(80)
+T.answer("confirm", false)
+ask("trash the readme", '[{"action": "trash.trash", "target": "README.md"}]')
+ok(
+  "with marks, the question names all the marked entries, not only the target",
+  T.asked[1] and T.asked[1].prompt:find("trash.trash 2 marked entries", 1, true)
+)
+ok("... and No keeps them", T.exists("README.md") and T.exists("lua/mod/a.lua"))
+T.asked = {}
 local marks = T.filetree.feature("marks")
 if marks and marks.clear then
   marks.clear()
@@ -409,6 +485,11 @@ eq(
   { "C:/a.lua" }
 )
 ok("a prefix of the root is not inside it", select(3, plan.target("C:/px/a.lua", env)) ~= nil)
+eq(
+  "an absolute path the tree does not know is not taken for another file of that name",
+  { plan.target("C:/p/other/a.lua", env) },
+  { nil, nil, '"C:/p/other/a.lua" is not an entry the tree knows' }
+)
 eq("read: one object is one step", plan.read('{"action": "open"}'), { { action = "open" } })
 eq("read: a plan under a key", plan.read('{"plan": [{"action": "open"}]}'), { { action = "open" } })
 
@@ -499,6 +580,10 @@ ok(
   "... and the winbar of the tree shows it",
   vim.wo[view.win].winbar:find("__filetree_ai_mic", 1, true) ~= nil
 )
+view._opts.view_bar = false
+require("filetree.native.bar").write(view)
+eq("with the view bar off there is no microphone either", vim.wo[view.win].winbar, "")
+view._opts.view_bar = true
 eq("the first click starts a recording", ai.listen(view), true)
 eq("... once", started, 1)
 ok("... and the button says so", select(1, ai.button(view)):find(" rec ", 1, true))

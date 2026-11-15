@@ -82,7 +82,8 @@ untrusted input, and every field is checked before anything runs:
 | a path the tree does not know | `step 1: "nope.lua" is not an entry the tree knows` |
 | an action that does not apply there (`needs`) | `step 1: notes.archive: needs a file` |
 | an argument the action does not declare, or a value outside its list | `step 1: argument where of notes.archive is one of year/month, not "…"` |
-| more than 5 steps; more than one step that changes files, or a step after it | `the plan has 100 steps, at most 5 run at a time` |
+| more than 5 steps; a step that changes files together with other steps | `the plan has 100 steps, at most 5 run at a time` |
+| a step that changes the root of the tree itself | `step 1: trash.trash on the root of the tree is not done this way` |
 | no JSON, or no list of steps | `the answer has no plan in it` |
 
 A name that is not a path ("init", "the readme") is looked up among the known
@@ -92,16 +93,21 @@ instead.
 
 ## Actions that change files
 
-A plan with a step that changes files is **always** shown first, with the
-entries it acts on, and runs only on Yes — whatever `confirm` options the
-features have, and whatever the answer says. The feature's own question (the
-trash's, for one) follows as it does by hand.
+A step that changes files runs on its own, never in a plan of several (a step
+before it could move the cursor or the marks, and the question would name other
+entries than the ones it acts on). It is **always** shown first, with the
+entries it acts on (all marked ones, while there are marks), and runs only on
+Yes — whatever `confirm` options the features have, and whatever the answer
+says. The feature's own question (the trash's, for one) follows as it does by
+hand.
 
 Which actions count as changing files: the tree's own keys never do; another
 plugin's action or a source's does when it says `mutates = true`; of the
-features only a list of reading ones runs without the question (opening,
-moving the root or the cwd, copying paths, marks, filter, search, preview,
-node info, ...). Every other feature key, also one that is new, asks first.
+features only a list of reading ones runs without the question (opening in the
+editor, moving the root or the cwd, copying paths, marks, filter, search, the
+preview float, node info, ...). Every other feature key, also one that is new,
+asks first, and so does one that starts another program (a PDF in the system
+viewer, the browser preview of mdview, a file `<CR>` hands to the system).
 
 ## Privacy and policy
 
