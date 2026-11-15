@@ -1,0 +1,24 @@
+[package]
+name = "filetree-helper"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Prototype (E3h): read-only helper of filetree.nvim's own tree: deep listing, recursive watch, git status delta over msgpack-RPC on stdio"
+license = "MIT"
+
+[[bin]]
+name = "filetree-helper"
+path = "src/main.rs"
+
+[dependencies]
+ignore = "0.4"
+notify = "8"
+rmpv = "1"
+gix = { version = "0.90", default-features = false, features = ["status", "parallel", "sha1"] }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+strip = true
