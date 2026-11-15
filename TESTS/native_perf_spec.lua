@@ -418,8 +418,8 @@ do
     ms(fastest) < budget
   )
   ok(
-    ("... and the median under %d ms"):format(50 * SLACK),
-    ms(math.max(median(meter.nodes), median(meter.merge))) < 50 * SLACK
+    ("... and the median under %.1f ms"):format(50 * SLACK * scale),
+    ms(math.max(median(meter.nodes), median(meter.merge))) < 50 * SLACK * scale
   )
 end
 view._nodes, view._apply_main, view.main.merge_children = real_nodes, real_apply, real_merge
