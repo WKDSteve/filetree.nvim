@@ -379,10 +379,8 @@ function M.open(buf, root, opts)
     local watch = require("filetree.native.fs.watch")
     self._watching = true
     self:_watch_dir(root)
-    if not watch.recursive then
-      for id in pairs(self._loaded) do
-        self:_watch_dir(id)
-      end
+    for id in pairs(self._loaded) do
+      self:_watch_dir(id)
     end
     self._unsubscribe = watch.subscribe(function(dirs)
       if self.closed then return end

@@ -329,11 +329,12 @@ function View:_nodes(dir, entries, loader)
         self._alias[chain[i]] = node.id
         members[#members + 1] = chain[i]
       end
-      if not watch.recursive then
-        -- every folder of the line decides what the line is; none of them is loaded
-        for _, member in ipairs(chain) do
-          self:_watch_dir(member)
-        end
+      -- Every folder of the line decides what the line is; none of them is loaded. Named to the
+      -- watcher on every system: where a watch on the root covers them that is one more reference
+      -- to it, and a watcher that leaves folders out (the helper process skips ignored ones)
+      -- learns which of them the tree shows.
+      for _, member in ipairs(chain) do
+        self:_watch_dir(member)
       end
     end
   end
@@ -416,10 +417,12 @@ function View:_watch()
     self:_watch_loaded()
   end)
   self:_watch_dir(self.root)
-  if not watch.recursive then self:_watch_loaded() end
+  -- also where one watch covers the root: see `_nodes`
+  self:_watch_loaded()
 end
 
----Watch every folder this view has read, one by one: what a system without recursive handles needs.
+---Name every folder this view has read to the watcher: a handle per folder on a system without
+---recursive handles, one more reference to the watch on the root elsewhere.
 ---@private
 function View:_watch_loaded()
   for id in pairs(self._loaded) do

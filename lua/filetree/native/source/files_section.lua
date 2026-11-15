@@ -84,11 +84,10 @@ function Section:_nodes(dir, entries, loader)
         self._alias[chain[i]] = node.id
         members[#members + 1] = chain[i]
       end
-      if not watch.recursive then
-        -- every folder of the line decides what the line is; none of them is loaded
-        for _, member in ipairs(chain) do
-          self:_watch_dir(member)
-        end
+      -- every folder of the line decides what the line is; none of them is loaded. Named to the
+      -- watcher on every system (see `View:_nodes`).
+      for _, member in ipairs(chain) do
+        self:_watch_dir(member)
       end
     end
   end
@@ -180,10 +179,8 @@ function M.new(view)
       if view._opts.watch ~= false then
         self._unwatch = {}
         self:_watch_dir(root)
-        if not watch.recursive then
-          for id in pairs(self.loaded) do
-            self:_watch_dir(id)
-          end
+        for id in pairs(self.loaded) do
+          self:_watch_dir(id)
         end
         unsubscribe = watch.subscribe(function(dirs)
           for _, dir in ipairs(dirs) do
