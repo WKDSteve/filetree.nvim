@@ -24,7 +24,8 @@ function M._native_lines()
   if opts.watch == false then
     note("native: watching the disk is off (native.watch = false); R reads the folders again")
   else
-    local kind = watch.by_helper() and "one recursive watch of the helper process per root"
+    local kind = watch.by_helper()
+        and "one watch of the helper process per root (a watch per folder below it, none for ignored folders)"
       or watch.recursive and "one recursive handle per root"
       or "one handle per folder read (no recursive handles on this system; closed folders are not followed without the helper process)"
     vim.health.ok(("native: %d watcher handle(s) open, %s"):format(watch.count(), kind))
