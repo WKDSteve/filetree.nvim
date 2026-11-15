@@ -26,7 +26,7 @@ mod status;
 mod walk;
 mod watch;
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::io::{self, BufReader, BufWriter, Write};
 use std::process::ExitCode;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -130,7 +130,7 @@ struct Server {
     walks: HashMap<u64, Arc<AtomicBool>>,
     watches: HashMap<u64, watch::Watch>,
     /// The last status sent, per repository root: what the next answer is a delta against.
-    seen: Arc<Mutex<HashMap<String, BTreeMap<String, String>>>>,
+    seen: Arc<Mutex<status::Seen>>,
 }
 
 fn serve() -> ExitCode {
@@ -279,11 +279,15 @@ impl Server {
                             return;
                         }
                     };
-                    let mut seen = seen.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-                    let before = seen.get(&root);
-                    let delta = status::delta(before, &now);
+                    let entries = now.len();
+                    let answer = seen
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner())
+                        .advance(&root, generation, now);
+                    // a newer generation was answered first: this one would be dropped anyway
+                    let Some((full, delta)) = answer else { return };
                     let payload = map(vec![
-                        ("full", Value::from(before.is_none())),
+                        ("full", Value::from(full)),
                         (
                             "set",
                             Value::Map(
@@ -298,10 +302,9 @@ impl Server {
                             "gone",
                             Value::Array(delta.gone.into_iter().map(Value::from).collect()),
                         ),
-                        ("entries", Value::from(now.len())),
+                        ("entries", Value::from(entries)),
                         ("ms", Value::from(started.elapsed().as_secs_f64() * 1000.0)),
                     ]);
-                    seen.insert(root, now);
                     let _ = out.send(event("status", generation, payload));
                 });
             }

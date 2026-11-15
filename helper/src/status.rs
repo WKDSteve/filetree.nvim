@@ -5,7 +5,7 @@
 //! `git status --porcelain`: the first letter is the index against `HEAD`, the second the working
 //! tree against the index, `??` is untracked.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use gix::bstr::ByteSlice;
 use gix::status::index_worktree::iter::Summary;
@@ -99,9 +99,58 @@ pub fn delta(before: Option<&BTreeMap<String, String>>, now: &BTreeMap<String, S
     Delta { set, gone }
 }
 
+/// The last status answered per repository root, and its generation: what the next answer is a delta
+/// against.
+#[derive(Default)]
+pub struct Seen {
+    by_root: HashMap<String, (u64, BTreeMap<String, String>)>,
+}
+
+impl Seen {
+    /// The answer for the status `now` of request `generation`: whether it is the full status, and the
+    /// delta. `None` when a newer generation was answered already: the editor drops an older answer
+    /// (L6), so it must not become the base of the next delta either, or that delta would be relative
+    /// to a status the editor never saw.
+    pub fn advance(
+        &mut self,
+        root: &str,
+        generation: u64,
+        now: BTreeMap<String, String>,
+    ) -> Option<(bool, Delta)> {
+        let before = self.by_root.get(root);
+        if before.is_some_and(|(answered, _)| *answered >= generation) {
+            return None;
+        }
+        let full = before.is_none();
+        let delta = delta(before.map(|(_, status)| status), &now);
+        self.by_root.insert(root.to_owned(), (generation, now));
+        Some((full, delta))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_older_generation_that_ends_last_is_not_answered_and_not_the_base() {
+        let mut seen = Seen::default();
+        let (full, _) = seen
+            .advance("/r", 1, status(&[("/r/a", " M")]))
+            .expect("the first answer");
+        assert!(full);
+        // generation 3 ends before generation 2, which read the disk earlier
+        let (_, newer) = seen
+            .advance("/r", 3, status(&[("/r/a", " M"), ("/r/b", "??")]))
+            .expect("the newer answer");
+        assert_eq!(newer.set, vec![("/r/b".to_owned(), "??".to_owned())]);
+        assert!(seen.advance("/r", 2, status(&[("/r/a", " M")])).is_none());
+        // the next delta is relative to generation 3, which the editor has
+        let (_, next) = seen
+            .advance("/r", 4, status(&[("/r/a", " M"), ("/r/b", "??")]))
+            .expect("the next answer");
+        assert!(next.set.is_empty() && next.gone.is_empty());
+    }
 
     fn status(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
         pairs
