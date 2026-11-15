@@ -1,5 +1,6 @@
 -- Live check: the E:/W: diagnostic badges in a real neo-tree
--- (task filetree.nvim/diag-badges-vanish-live-check, part "Diagnostik-Badges").
+-- (task filetree.nvim/neo-tree-only-findings-collected, which holds the former
+-- diag-badges-vanish-live-check, part "Diagnostik-Badges").
 -- Automated: a real neo-tree (the commits CI pins, see TESTS/minimal_init_sheet_neotree.lua) on a
 -- small project, `lsp_diagnostics` on. Diagnostics are published with vim.diagnostic.set (no
 -- language server needed: the feature reads vim.diagnostic.get); the file nodes get their own
@@ -12,7 +13,7 @@
 return {
   id = "filetree.diag-badges-neotree",
   title = "filetree.nvim: E:/W: diagnostic badges in neo-tree stay, and go with the diagnostics",
-  task = "filetree.nvim/diag-badges-vanish-live-check",
+  task = "filetree.nvim/neo-tree-only-findings-collected",
   engine = "rpc",
   minit = "TESTS/minimal_init_sheet_neotree.lua",
   sizes = { { rows = 16, cols = 80 } },
