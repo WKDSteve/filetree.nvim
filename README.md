@@ -33,8 +33,12 @@ of it.
 no tree plugin behind it: lazy, one read per folder shared by every tab, the
 cursor bound to its entry. Its window shows more than files: open buffers, git
 changes, document symbols and diagnostics are views of it, one key or one click
-apart. It is new and chosen by name; see
-[the native adapter](docs/FEATURES/BACKENDS.md#native-adapter-the-own-tree).
+apart. An optional small helper program (Rust, read-only) makes searching
+below unopened folders and folder sizes several times faster and lets it follow
+closed folders on Linux; without it the tree does all of that itself. It is new
+and chosen by name; see
+[the native adapter](docs/FEATURES/BACKENDS.md#native-adapter-the-own-tree) and
+[the helper process](docs/FEATURES/BACKENDS.md#the-helper-process).
 
 **Screenshots, readable.** `<CR>` on an image opens an
 [image viewer](docs/FEATURES/UI.md#image-viewer): zoom into the corner that

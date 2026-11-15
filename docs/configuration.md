@@ -75,6 +75,7 @@ require("filetree").setup({
   --   sticky_parents = 3,       -- folders pinned on top while scrolled (0/false: none)
   --   views = nil,              -- e.g. { { "files" }, { name = "work", "buffers", "git" } }
   --   ai = { enabled = false }, -- words to tree actions through ai.nvim (docs/FEATURES/AI.md)
+  --   fs = { helper = "auto" }, -- the helper process: "auto" | false | a path (BACKENDS.md, "The helper process")
   -- },
 
   -- Sources, decorators and actions for the own tree (see docs/api.md,

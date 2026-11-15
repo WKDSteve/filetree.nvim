@@ -37,6 +37,7 @@ require("filetree").setup({
     sticky_parents = 3,       -- folders pinned on top while the tree is scrolled (0 or false: none)
     views = nil,              -- which views there are; nil: files, the tree's sources, registered ones
     ai = { enabled = false }, -- words to tree actions through ai.nvim: see AI.md
+    fs = { helper = "auto" }, -- the helper process: "auto" | false | a path (see "The helper process")
   },
 })
 ```
@@ -123,6 +124,9 @@ sequenceDiagram
 
 - **Handles.** One recursive handle per root on Windows and macOS, one per
   folder the tree has read elsewhere (libuv cannot watch recursively there).
+  Elsewhere with the [helper process](#the-helper-process): one recursive watch
+  of the helper per root, so closed folders and folders made later are followed
+  too.
   Views of the same root share them; they close with the last window that shows
   the tree, and a tree that is opened again catches up in the background.
 - **One read per folder.** At most one read of a folder runs; changes that
@@ -135,10 +139,10 @@ sequenceDiagram
 - With the own watcher on, the `file_watcher` feature stands down on this
   backend (its answer to any event is a refresh of the whole tree).
 
-A limit where handles are per folder (Linux): a closed folder is not watched, so
-a change inside it shows when it is opened, and a plain closed folder that
-gains its only subfolder is not merged into one line until its parent is read
-again.
+A limit where handles are per folder (Linux without the helper process): a
+closed folder is not watched, so a change inside it shows when it is opened,
+and a plain closed folder that gains its only subfolder is not merged into one
+line until its parent is read again. The helper process closes that gap.
 
 ### Search
 
@@ -149,7 +153,7 @@ folder below the root, opened or not.
 ```mermaid
 flowchart LR
   Q["query 'needle'"] --> K["what the view has read<br/>(hits at once)"]
-  Q --> D["fs/deep: every file below the root<br/>fd → rg --files → Lua walk<br/>streamed, cancellable"]
+  Q --> D["fs/deep: every file below the root<br/>helper → fd → rg --files → Lua walk<br/>streamed, cancellable"]
   K --> H["hits"]
   D -->|"batches, drawn every 60 ms"| H
   H --> O["overlay tree<br/>(the folders on the way, all open)"]
@@ -165,11 +169,53 @@ flowchart LR
 - **Only the last search reaches the screen.** A search replaced or cleared
   while it lists stops its listing, and a late answer of it is dropped.
 - **Limits.** At most `search_max` hits are shown, a last line says how many
-  more there are. `.git` is never listed; `fd` and `rg` leave out what
-  `.gitignore` names, the Lua walk the names of the ignore list. A link to a
-  file is found like a file, a link to a folder is not followed (`fd` and the
-  walk; `rg --files` lists no links at all). A new root
+  more there are. `.git` is never listed; the helper, `fd` and `rg` leave out
+  what `.gitignore` names, the Lua walk the names of the ignore list. A link to
+  a file is found like a file, a link to a folder is not followed (the helper,
+  `fd` and the walk; `rg --files` lists no links at all). A new root
   (`set_root`) ends a search.
+
+### The helper process
+
+Three kinds of work can go to a small program of this repository (`helper/`,
+Rust), `filetree-helper`: the deep listing of a search, the size of a folder
+(the `size_info` column), and on Linux the watching of a whole folder tree.
+Without it the tree does all of this itself; nothing else changes.
+
+| Work | Without the helper | With it (measured, STEVESPC, 2026-11-15) |
+| --- | --- | --- |
+| deep listing | `fd`, `rg --files` or a Lua walk: 50 to 380 ms on 1 500 to 100 000 files | 8 to 55 ms, the same files as `fd` |
+| size of a folder | `du -sk` or PowerShell, a process per folder; the Lua walk took 0.8 to 4.5 s | 16 to 56 ms, in the process |
+| watching on Linux | one handle per folder read: closed folders are not followed | one recursive watch per root |
+
+Measurement and decision: `helper/README.md`. The git status stays with `git`:
+the helper was not reliably faster there.
+
+```lua
+native = { fs = { helper = "auto" } }  -- "auto" | false | "/path/to/filetree-helper"
+```
+
+- **`"auto"`** (default) uses `helper/bin/filetree-helper` (`.exe` on Windows)
+  when it is there. **On a machine with `NVIM_MACHINE_ROLE=workstation` it uses
+  nothing**: no native program is started there before an EDR check has cleared
+  it. `false` never starts one; a path uses exactly that program.
+- **Getting it:** `require("filetree.native.fs.helper").build()`, e.g. as the
+  `build` step of the plugin manager, compiles it with cargo when a Rust
+  toolchain is there and otherwise downloads the release program (Windows and
+  Linux on x86_64, macOS on Apple silicon; other systems build from source).
+  It refuses on the workstation.
+- **One process per Neovim**, started on first need, ended with Neovim, talking
+  msgpack-RPC over stdin/stdout. It only reads directories (and ignore files):
+  no network, no socket, no other process, no writes.
+- **Every answer carries the generation of its request**; an answer of a
+  cancelled or replaced request is dropped before anybody sees it.
+- **When it ends or cannot start**, it is not started again in the session: a
+  listing on its way is finished by the next tier without a path twice, a size
+  is asked of `du` / PowerShell, each of its watches becomes a libuv handle on
+  the same folder (which is read again), and it is said once. On Linux the
+  folders below an open root are followed again once they are read again.
+- **`:checkhealth filetree`** names its state: not installed (and where it
+  looked), off and why, found, running with its pid, or ended and why.
 
 ### Views and sources
 

@@ -2971,7 +2971,38 @@ Module: lua/filetree/features/ui/window_style/
 
   "neotree"   neo-tree.nvim (requires: folke/neo-tree.nvim)
   "nvimtree"  nvim-tree.lua (requires: nvim-tree/nvim-tree.lua)
+  "native"    The own tree (built in), see docs/FEATURES/BACKENDS.md.
   "auto"      Try neotree first, then nvimtree.
+
+The helper process of the own tree                    *filetree-native-helper*
+
+  The own tree can hand three kinds of work to a small program of this
+  repository (`helper/`, Rust): the deep listing of a search, the size of a
+  folder (`size_info`), and on Linux the watching of a whole folder tree
+  (closed folders and folders made later included; libuv cannot do that
+  there). One process per Neovim, started on first need, ended with Neovim,
+  talking over stdin/stdout. It only reads: no network, no other process, no
+  writes. Without it the tree does all of this itself, as before.
+>lua
+  require("filetree").setup({
+    adapter = "native",
+    native = { fs = { helper = "auto" } },  -- "auto" | false | "/path/to/filetree-helper"
+  })
+<
+  "auto" (the default) uses `helper/bin/filetree-helper` (`.exe` on Windows)
+  when it is there, and nothing on a machine with
+  `NVIM_MACHINE_ROLE=workstation`. `false` never starts it. A path uses
+  exactly that program. A helper that ends or cannot start is not started
+  again in the session: the Lua tiers take over and it is said once.
+
+  Getting the program, e.g. as the build step of lazy.nvim: >lua
+  build = function() assert(require("filetree.native.fs.helper").build()) end
+<
+  `build()` compiles it with cargo when a Rust toolchain is there, else it
+  downloads the release program for Windows (x86_64), Linux (x86_64) or macOS
+  (Apple silicon). Other systems build from source:
+  `cargo build --release --manifest-path helper/Cargo.toml` and copy the
+  program into `helper/bin/`. `:checkhealth filetree` names its state.
 
 ==============================================================================
 7. PUBLIC API                                                  *filetree-api*

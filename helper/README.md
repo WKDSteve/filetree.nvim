@@ -1,32 +1,45 @@
-# filetree-helper (prototype, stage E3h)
+# filetree-helper
 
-A prototype of the helper process the own tree of filetree.nvim (`adapter = "native"`) may use as a
-third tier behind its file-system layer. It is **not wired into the plugin**: nothing in `lua/` starts
-it. It exists to measure whether a helper is worth a second code base (concept section 10.6); the
-numbers and the decision are in the task `filetree.nvim/native-fs-helper-measure`.
+The helper process of the own tree of filetree.nvim (`adapter = "native"`, option
+`native.fs.helper`): a small read-only program the tree hands three kinds of work to, as a third tier
+behind its file-system layer. Without it the tree does all of this itself. Users: see
+[the helper process](../docs/FEATURES/BACKENDS.md#the-helper-process) and `:help filetree-native-helper`.
+Started as a prototype to measure whether it is worth a second code base (concept section 10.6); the
+numbers and the decision are below and in the task `filetree.nvim/native-fs-helper-measure`.
 
 ## What it does
 
 One child process per Neovim, msgpack-RPC over stdin/stdout:
 
-| Work | How |
-| --- | --- |
-| deep listing (search, expand all) | a parallel walk with the ignore rules of `rg` (`ignore` crate); lists what `fd` lists for `native/fs/deep.lua` |
-| recursive sizes | the same walk, one `stat` per file |
-| recursive watch | `notify`: one recursive watch per root on every system (on Linux new folders are added as they appear) |
-| git status | gitoxide in the process; after the first answer only the delta |
+| Work | How | Used by |
+| --- | --- | --- |
+| deep listing (search) | a parallel walk with the ignore rules of `rg` (`ignore` crate); lists what `fd` lists for `native/fs/deep.lua` | `native/fs/deep.lua` |
+| size of a folder | a parallel walk without ignore rules, everything counted (as `du`) | `features/ui/size_info` |
+| recursive watch | `notify`: one recursive watch per root (on Linux new folders are added as they appear) | `native/fs/watch.lua`, on systems without recursive libuv handles (Linux) |
+| git status | gitoxide in the process; after the first answer only the delta | nothing: measured, `git` is as fast |
 
 Every request carries a generation number, every answer carries the generation of its request. The
-protocol is described at the top of `src/main.rs`.
+protocol (version 1) is described at the top of `src/main.rs`; the Lua side is
+`lua/filetree/native/fs/helper.lua`.
 
 What it never does: open a socket, start a process, write to the file system, read file contents other
 than ignore files and what git keeps below `.git`. It ends when its stdin closes (that is, with Neovim).
 
-## Build and measure
+## Build, test, measure
 
 ```bash
 cargo build --release --manifest-path helper/Cargo.toml
 ```
+
+```bash
+cargo test --release --manifest-path helper/Cargo.toml
+```
+
+`require("filetree.native.fs.helper").build()` does the build and copies the program to `helper/bin/`,
+where `"auto"` finds it; without cargo it downloads the release program. The CI
+(`.github/workflows/helper.yml`) builds and tests it on Windows, Linux and macOS, runs
+`TESTS/native_helper_spec.lua` against it, keeps the programs as artifacts and attaches them to a
+release for every tag `helper-v*`.
 
 ```bash
 nvim --clean --headless -u NONE -l helper/bench/bench.lua helper/target/release/filetree-helper 5 <root> [<root> ...]
@@ -39,7 +52,8 @@ nvim --clean --headless -u NONE -l helper/bench/watch.lua helper/target/release/
 `bench.lua` times every tier from the call until the last answer is on the editor's main loop; it only
 reads. `watch.lua` checks whether a change in a folder the tree never opened is reported.
 
-Without the protocol: `filetree-helper walk <root> [--sizes] [--print]`, `filetree-helper status <root> [--print]`.
+Without the protocol: `filetree-helper walk <root> [--print]`, `filetree-helper size <dir>`,
+`filetree-helper status <root> [--print]`.
 
 ## Measured (2026-11-15)
 
@@ -71,5 +85,8 @@ reports neither, the helper both.
 Against the threshold of concept section 10.6 (factor 2 over tier 2 in one row, or a capability Lua
 lacks): the deep listing beats `fd` by 4 to 10 times and `rg` by 3 to 5 times on every root, recursive
 sizes are 9 to 80 times faster than the Lua walk, and the recursive watch on Linux is the capability.
-The git status is no reliable gain (slower than `git` at 100 000 files). Whether it is built out is the
-author's decision, recorded in the task.
+The git status is no reliable gain (slower than `git` at 100 000 files).
+
+Decision (author, 2026-11-15): build it out narrow, before the trial period: deep listing, sizes and
+the Linux watch; the git status stays with `git`. The size row above was measured with the walk's own
+sizes; the size column now uses a walk without ignore rules (everything counted, as `du`).
