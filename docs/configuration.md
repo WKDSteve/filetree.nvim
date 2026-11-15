@@ -72,6 +72,7 @@ require("filetree").setup({
   --   view_bar = true,          -- the views (files, buffers, git ...) as tabs in the winbar
   --   name_float = true,        -- full name in a float while the cursor is on a cut name
   --   expand_all_max = 200,     -- folders `E` (expand all) opens at most
+  --   sticky_parents = 3,       -- folders pinned on top while scrolled (0/false: none)
   --   views = nil,              -- e.g. { { "files" }, { name = "work", "buffers", "git" } }
   --   ai = { enabled = false }, -- words to tree actions through ai.nvim (docs/FEATURES/AI.md)
   -- },

@@ -24,6 +24,7 @@ local columns = require("filetree.native.render.columns")
 local decor = require("filetree.native.decor")
 local pane_mod = require("filetree.native.pane")
 local bar = require("filetree.native.bar")
+local sticky = require("filetree.native.sticky")
 
 local api = vim.api
 
@@ -47,6 +48,7 @@ M.HL = {
   FiletreeOpened = "Special",
   FiletreeModified = "DiagnosticWarn",
   FiletreeNameFloat = "NormalFloat",
+  FiletreeSticky = "NormalFloat",
   FiletreeEmbedSelection = "CursorLine",
 }
 
@@ -154,6 +156,7 @@ View.__index = View
 ---@field view_bar? boolean  Show the views as tabs in the winbar of the tree window (default true).
 ---@field name_float? boolean  Show the full name next to the cursor line while that name is drawn cut (default true).
 ---@field expand_all_max? integer  Folders "expand all" opens at most (default 200).
+---@field sticky_parents? integer|false  Folders pinned on top while the tree is scrolled, at most (default 0: none).
 
 ---One view: a name and the sources it shows, one section each.
 ---@class Filetree.View.Spec
@@ -571,9 +574,16 @@ function View:_ensure_buf()
         local row = self.tree:row(api.nvim_win_get_cursor(self.win)[1])
         self.cursor_id = row and row.id or self.cursor_id
       end
+      self:_sticky("cursor")
       self:_name_float()
     end,
   })
+  -- a click on a pinned folder (`sticky_parents`) jumps to it; every other click is Vim's
+  vim.keymap.set("n", "<LeftMouse>", function()
+    local ok, pos = pcall(vim.fn.getmousepos)
+    if ok and sticky.click(self, pos) then return "" end
+    return "<LeftMouse>"
+  end, { buffer = buf, expr = true, desc = "Jump to a pinned parent folder" })
   api.nvim_create_autocmd({ "WinLeave", "BufLeave" }, {
     group = AUGROUP,
     buffer = buf,
@@ -739,6 +749,7 @@ function View:_after_draw()
   if self._pane then self._pane:open_pending() end
   bar.update(self)
   self:_place_cursor()
+  self:_sticky()
   self:_name_float()
   local buf = self.buf
   for _, fn in ipairs(render_listeners) do
@@ -949,6 +960,7 @@ end
 ---@private
 function View:_window_gone()
   self:_name_float_close()
+  sticky.close(self)
   self.win = nil
   self._alone_size = nil
   self._seen_closed = true
@@ -2109,17 +2121,20 @@ end
 ---@param lnum integer  0-based.
 ---@param win? integer  The window being drawn; its width decides which badges fit.
 ---@return integer drawn  How many highlights and badges were placed (0 for a buffer that is no tree).
-function M.decorate_line(buf, lnum, win)
+---@param into_buf? integer  Draw into this buffer instead (a copy of the line: a pinned folder).
+---@param into_lnum? integer  ... at this line of it (0-based).
+function M.decorate_line(buf, lnum, win, into_buf, into_lnum)
   local view = by_buf[buf]
   local row = view and view.tree:row(lnum + 1)
   if not view or not row then return 0 end
   local line, badges, layout, cut = measure(view, row, win)
   local drawn = 0
+  local at_buf, at_lnum = into_buf or buf, into_lnum or lnum
   local function mark(col, opts)
     opts.ephemeral = true
     -- counted whether or not it could be placed: outside a redraw an ephemeral mark is refused
     drawn = drawn + 1
-    pcall(api.nvim_buf_set_extmark, buf, NS, lnum, col, opts)
+    pcall(api.nvim_buf_set_extmark, at_buf, NS, at_lnum, col, opts)
   end
   for _, span in ipairs(line.spans) do
     mark(span.col_start, { end_col = span.col_end, hl_group = span.hl, priority = 90 })
@@ -2162,6 +2177,13 @@ function M.decorate_line(buf, lnum, win)
     mark(0, { virt_text = chunks, virt_text_pos = "right_align", priority = 100 })
   end
   return drawn
+end
+
+---Bring the folders pinned on top of the window in line with where it is scrolled to.
+---@private
+---@param reason? "scroll"|"cursor"
+function View:_sticky(reason)
+  sticky.update(self, tonumber(self._opts.sticky_parents) or 0, reason)
 end
 
 ---@private
@@ -2248,7 +2270,7 @@ end
 -- the whole tree.
 api.nvim_set_decoration_provider(NS, {
   on_win = function(_, win, buf)
-    if by_buf[buf] == nil then return false end
+    if by_buf[buf] == nil and sticky.source(buf) == nil then return false end
     -- once per redraw of the window, not once per line
     local info = vim.fn.getwininfo(win)[1]
     text_width[win] = api.nvim_win_get_width(win) - (info and info.textoff or 0)
@@ -2256,6 +2278,13 @@ api.nvim_set_decoration_provider(NS, {
     return true
   end,
   on_line = function(_, win, buf, lnum)
+    local tree_buf, rows = sticky.source(buf)
+    if tree_buf and rows then
+      -- a pinned folder: drawn as the row of the tree it is a copy of
+      local row = rows[lnum + 1]
+      if row then M.decorate_line(tree_buf, row - 1, win, buf, lnum) end
+      return
+    end
     M.decorate_line(buf, lnum, win)
   end,
 })
@@ -2277,8 +2306,31 @@ api.nvim_create_autocmd("WinResized", {
         local view = by_buf[api.nvim_win_get_buf(win)]
         if view and view.win == win then
           bar.update(view)
+          view:_sticky()
           view:_name_float()
         end
+      end
+    end
+  end,
+})
+
+-- the folders pinned on top follow the scroll position
+api.nvim_create_autocmd("WinScrolled", {
+  group = AUGROUP,
+  callback = function()
+    local event = vim.v.event or {}
+    if next(event) == nil then
+      -- fired by hand (`doautocmd`, a script): no window is named, every tree is looked at
+      for _, view in pairs(by_buf) do
+        view:_sticky("scroll")
+      end
+      return
+    end
+    for key in pairs(event) do
+      local win = tonumber(key)
+      if win and api.nvim_win_is_valid(win) then
+        local view = by_buf[api.nvim_win_get_buf(win)]
+        if view and view.win == win then view:_sticky("scroll") end
       end
     end
   end,

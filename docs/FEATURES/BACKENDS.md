@@ -34,6 +34,7 @@ require("filetree").setup({
     view_bar = true,          -- the views as tabs in the winbar of the tree window
     name_float = true,        -- the full name next to the cursor line while that name is drawn cut
     expand_all_max = 200,     -- folders "expand all" (E) opens at most
+    sticky_parents = 3,       -- folders pinned on top while the tree is scrolled (0 or false: none)
     views = nil,              -- which views there are; nil: files, the tree's sources, registered ones
     ai = { enabled = false }, -- words to tree actions through ai.nvim: see AI.md
   },
@@ -82,6 +83,14 @@ flowchart TB
   to it (`native.name_float = false` turns that off; highlight
   `FiletreeNameFloat`). A window scrolled sideways (`zl`) shows the text as it
   is.
+- **The folders the top row lies in stay on top.** While the tree is scrolled,
+  the folders of the first visible row are pinned over the first lines of the
+  window: one line each, the nearest three (`native.sticky_parents`; `0` or
+  `false` turns it off; highlight `FiletreeSticky`). They are drawn as their
+  rows of the tree are, badges included. The cursor never ends under them: a
+  scroll takes it along, a move up scrolls the window. A click on a pinned
+  folder (with the tree focused) puts the cursor on that folder. Nothing is
+  there, and nothing is computed, while the window shows the first row.
 - **State per tab.** What is open, the cursor, the sort order and the position
   belong to the view of a tab and survive closing its window.
 

@@ -48,6 +48,7 @@ on it as on any backend.
 | `-` | show the parent folder as the root (`tree_traverse`'s `-` does the same when it is on) |
 | `<BS>`, `g<BS>` | go back to the root shown before, and forward again |
 | `E` | open every folder below the one under the cursor (up to `native.expand_all_max`) |
+| `<LeftMouse>` | on a folder pinned on top (`native.sticky_parents`): put the cursor on it; anywhere else the click is Vim's |
 | `sw` | open the file in a window you pick (`ui.windowpicker`) |
 | `q` | close the tree |
 
