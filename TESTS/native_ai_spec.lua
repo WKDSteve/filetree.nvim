@@ -86,15 +86,26 @@ local plan = require("filetree.native.ai.plan")
 local registry = require("lib.nvim.tree.registry")
 local native = require("filetree.native")
 
--- a plugin action with an argument of fixed values, and one that is kept out of the catalog
+-- a plugin action with an argument of fixed values that says it changes nothing, one that says
+-- nothing about it (the AI module knows nothing of it), and one that is kept out of the catalog
 local plugin_runs = {} ---@type table[]
 registry.action({
   name = "notes.archive",
   desc = "Archive this note",
   needs = { "file" },
+  mutates = false,
   args = { where = { values = { "year", "month" }, default = "year" } },
   run = function(nodes, _, args)
     plugin_runs[#plugin_runs + 1] = { path = nodes[1] and nodes[1].path, args = args }
+  end,
+})
+local unknown_runs = 0
+registry.action({
+  name = "other.touch",
+  desc = "Something another plugin does with a file",
+  needs = { "file" },
+  run = function()
+    unknown_runs = unknown_runs + 1
   end,
 })
 registry.action({
@@ -134,6 +145,16 @@ eq(
 )
 eq("the trash changes files", by_name["trash.trash"] and by_name["trash.trash"].mutates, true)
 eq("the tree's own open reads", by_name["open"] and by_name["open"].mutates, false)
+eq(
+  "a plugin action that says mutates = false reads",
+  by_name["notes.archive"] and by_name["notes.archive"].mutates,
+  false
+)
+eq(
+  "a plugin action that says nothing about it counts as changing files",
+  by_name["other.touch"] and by_name["other.touch"].mutates,
+  true
+)
 eq(
   "a plugin action keeps its arguments",
   by_name["notes.archive"] and by_name["notes.archive"].args.where.values,
@@ -418,6 +439,17 @@ ok(
 )
 ok("No: the file stays", T.exists("docs/guide.md"))
 ok("... and one line says nothing was done", T.told("ai: nothing done", at))
+T.asked = {}
+
+-- an action this module knows nothing of (another plugin's, without `mutates`) asks too
+T.answer("confirm", false)
+ask("touch the readme", '[{"action": "other.touch", "target": "README.md"}]')
+eq("an unknown plugin action without mutates asks first", T.asked[1] and T.asked[1].kind, "confirm")
+eq("... and No: it does not run", unknown_runs, 0)
+T.asked = {}
+T.answer("confirm", true)
+ask("touch the readme", '[{"action": "other.touch", "target": "README.md"}]')
+eq("... Yes: it runs once", unknown_runs, 1)
 T.asked = {}
 
 T.answer("confirm", true)

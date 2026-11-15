@@ -9,7 +9,7 @@
 --- Whether an entry changes files decides whether a plan runs at once or asks first:
 ---
 ---   the tree's own actions          read only (open, fold, views, root)
----   another plugin's or a source's  as it declares: `mutates = true` changes files
+---   another plugin's or a source's  read only when it says `mutates = false`; without a word it asks
 ---   a filetree feature's key        read only when the feature is on the list below; any other one,
 ---                                   or a key whose feature cannot be told, counts as changing files
 ---
@@ -153,8 +153,9 @@ function M.build(view)
       else
         item = {
           name = action.name,
-          -- the tree's own actions change no file; the others say so themselves
-          mutates = action.origin ~= "builtin" and action.mutates == true,
+          -- the tree's own actions change no file; another one runs without the question only
+          -- when it says so (`mutates = false`): one that says nothing may change anything
+          mutates = action.origin ~= "builtin" and action.mutates ~= false,
           args = type(action.args) == "table" and action.args or nil,
         }
       end

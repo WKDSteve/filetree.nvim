@@ -305,8 +305,10 @@ filetree.action({
 
 `args` and `mutates` are also what the tree tells a model when it is asked in
 words ([native.ai](FEATURES/AI.md)): a value outside `values` is refused before
-`run` is called, and an action with `mutates = true` runs only after the person
-said yes to the plan. `ai = false` leaves the action out of that catalog.
+`run` is called, and an action runs there without the question only when it
+says `mutates = false`; one with `mutates = true`, or without the field, runs
+only after the person said yes to the plan. `ai = false` leaves the action out
+of that catalog.
 
 An action says itself where it applies. On a node where it does not, its key
 falls through to the next action bound to that key, and when none applies the

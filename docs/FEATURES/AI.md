@@ -101,13 +101,16 @@ Yes — whatever `confirm` options the features have, and whatever the answer
 says. The feature's own question (the trash's, for one) follows as it does by
 hand.
 
-Which actions count as changing files: the tree's own keys never do; another
-plugin's action or a source's does when it says `mutates = true`; of the
-features only a list of reading ones runs without the question (opening in the
+Which actions run without the question: the tree's own keys; another plugin's
+action or a source's only when it says `mutates = false` (one that says nothing
+asks); of the features only those on a list of reading ones (opening in the
 editor, moving the root or the cwd, copying paths, marks, filter, search, the
-preview float, node info, ...). Every other feature key, also one that is new,
-asks first, and so does one that starts another program (a PDF in the system
-viewer, the browser preview of mdview, a file `<CR>` hands to the system).
+preview float, node info, ...). That list lives in the AI module
+(`filetree.native.ai.catalog`, `READ_ONLY`) because a feature's key reaches the
+action table without saying whether it changes files; so every other feature
+key, also one that is new, asks first, and so does one that starts another
+program (a PDF in the system viewer, the browser preview of mdview, a file
+`<CR>` hands to the system).
 
 ## Privacy and policy
 
