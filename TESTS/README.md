@@ -139,11 +139,10 @@ Covers, with real (not merely load-time) assertions, in risk order:
   `refs/pathutil.lua` (the reference engine's Windows-safe path core —
   backslash/forward-slash equivalence, case-insensitive comparison, the
   three `resolve_candidates()` target styles, `retarget()`'s per-style
-  spelling, `remap_under()`'s directory-move cascade), `util/markdown_refs.lua`
-  (disk + live-buffer patch layer, content-verified skip of a drifted line),
-  `features/infra/safety/backup.lua` (real mkdir/copy/prune against a
-  **stubbed `lib.nvim.cross.run_argv`** — no real `xcopy`/`cp` process
-  spawned, but the real argv shape is asserted), `features/fileops/buffer_save`
+  spelling, `remap_under()`'s directory-move cascade),
+  `features/infra/safety/backup.lua` (real in-process copy of a file and of a
+  folder tree, and prune; `lib.nvim.cross.run_argv` is stubbed only to prove
+  that no program is started), `features/fileops/buffer_save`
   (force-save the adjacent editor buffer or the node under the cursor, incl.
   three no-crash error paths).
 - **the refs↔fileops.nvim bridge**: a contract pin asserting
@@ -181,7 +180,7 @@ they are exempt from the "raise coverage" goal):
 - `features/system/pdf_create.lua`/`pdf_open.lua` — delegate to
   `util/pdf.lua`'s soft dependency on pdfport.nvim; not audited deeply
   enough this round to say whether that wrapper is cleanly stubbable the
-  way `util/markdown_refs.lua`'s soft dependency was.
+  way the soft dependency of the old markdown-refs bridge was.
 - `features/org/session.lua` — real fs read/write is straightforward to
   stub, but its `VimLeavePre`/`BufHidden` autosave timing and stdpath("data")
   override need more care than this pass's budget allowed.

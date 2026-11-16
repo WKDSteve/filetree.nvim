@@ -35,9 +35,6 @@ local M = {}
 
 -- ── Summaries ─────────────────────────────────────────────────────────────────
 
---- CDX: near-identical to `filetree.util.markdown_refs.unique_files` (same
---- dedup-by-file, ":."-relative logic over a different ref shape). Possible
---- consolidation, out of scope for this pass.
 ---Deduplicated, cwd-relative list of the files a set of refs lives in, in
 ---order of first appearance.
 ---@param refs FiletreeRef[]
