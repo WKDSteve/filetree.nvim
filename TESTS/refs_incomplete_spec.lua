@@ -133,6 +133,44 @@ eq(
   "/p/locked.md"
 )
 
+-- Without ripgrep the fallback walk filters the candidates by their content: a file it cannot
+-- read must stay a candidate (run_plan then reports it), not be dropped there in silence.
+local work = vim.fn.tempname():gsub("\\", "/")
+vim.fn.mkdir(work, "p")
+vim.fn.writefile({ "See [n](./notes.md)." }, work .. "/index.md")
+vim.fn.writefile({ "Also [n](./notes.md)." }, work .. "/locked.md")
+vim.fn.writefile({ "nothing here" }, work .. "/other.md")
+local real_rg = scan.rg_binary
+scan.rg_binary = function()
+  return "filetree-no-such-ripgrep"
+end
+scan.lines_of = function(file)
+  if file:match("/locked%.md$") then return nil end
+  return real_lines_of(file)
+end
+local walked
+scan.candidates(
+  work,
+  { "notes.md" },
+  { "md" },
+  { respect_gitignore = false, max_files = 100, timeout_ms = 3000 },
+  function(files)
+    walked = files
+  end
+)
+vim.wait(5000, function()
+  return walked ~= nil
+end, 10)
+scan.rg_binary, scan.lines_of = real_rg, real_lines_of
+local names = {}
+for _, f in ipairs(walked or {}) do
+  names[vim.fs.basename(f)] = true
+end
+eq("walk: the readable hit is a candidate", names["index.md"], true)
+eq("walk: the unreadable file stays a candidate", names["locked.md"], true)
+eq("walk: a readable file without a hit is not", names["other.md"], nil)
+vim.fn.delete(work, "rf")
+
 print(("\nfiletree.nvim refs_incomplete_spec: %d passed, %d failed"):format(passed, failed))
 if failed > 0 then
   vim.cmd("cq")

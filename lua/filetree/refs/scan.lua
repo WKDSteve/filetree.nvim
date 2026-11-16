@@ -277,13 +277,15 @@ end
 local WALK_CHUNK_SIZE = 20
 
 ---@internal
----Whether `file` holds any of `needles` in its content.
+---Whether `file` holds any of `needles` in its content. A file that cannot be read (locked, no
+---permission) counts as a hit: it may hold one, and `run_plan` then reports it as unreadable, as it
+---does for a file ripgrep named. Dropping it here left the count looking final without ripgrep.
 ---@param file string
 ---@param needles string[]
 ---@return boolean
 local function file_hits(file, needles)
   local lines = M.lines_of(file)
-  if not lines then return false end
+  if not lines then return true end
   for _, line in ipairs(lines) do
     local lower = line:lower()
     for _, n in ipairs(needles) do
