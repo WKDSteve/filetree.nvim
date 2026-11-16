@@ -30,13 +30,28 @@ local function run(argv, err_msg, cb, timeout_ms)
     return
   end
 
-  vim.system(argv, { text = true, timeout = timeout_ms }, function(res)
-    -- vim.system callbacks run off the main loop; every caller of `cb` goes on
-    -- to touch buffers, notify and the tree adapter.
+  -- vim.system throws when the program cannot be started (ENOENT): without the
+  -- pcall the error escaped and `cb` never ran, so the delete hung.
+  local started, spawn_err = pcall(
+    vim.system,
+    argv,
+    { text = true, timeout = timeout_ms },
+    function(res)
+      -- vim.system callbacks run off the main loop; every caller of `cb` goes on
+      -- to touch buffers, notify and the tree adapter.
+      vim.schedule(function()
+        cb({ ok = res.code == 0, err = res.code ~= 0 and err_msg or nil })
+      end)
+    end
+  )
+  if not started then
     vim.schedule(function()
-      cb({ ok = res.code == 0, err = res.code ~= 0 and err_msg or nil })
+      cb({
+        ok = false,
+        err = ("%s: %s could not be started (%s)"):format(err_msg, argv[1], spawn_err),
+      })
     end)
-  end)
+  end
 end
 
 ---@internal
@@ -93,8 +108,9 @@ local function trash_windows(path, cb, is_dir)
     method,
     win_path
   )
+  -- Also the WSL route (trash_wsl below): there only `powershell.exe` is on PATH.
   run(
-    { "powershell", "-NoProfile", "-NonInteractive", "-Command", script },
+    { platform.powershell_exe(), "-NoProfile", "-NonInteractive", "-Command", script },
     "PowerShell trash failed",
     cb
   )

@@ -262,7 +262,8 @@ local function restore_windows(name, original_path)
     RESTORE_VERB_PATTERN
   )
   local ok, err = require("lib.nvim.cross.run_argv").run_blocking({
-    "powershell",
+    -- A trash made in WSL is restored from there too, where only `powershell.exe` is on PATH.
+    require("filetree.util.platform").powershell_exe(),
     "-NoProfile",
     "-NonInteractive",
     "-Command",

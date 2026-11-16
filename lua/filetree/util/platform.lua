@@ -104,6 +104,13 @@ function M.chocolatey_target(exe)
   return nil
 end
 
+---The Windows PowerShell program to start. In WSL only its full name is on PATH (Windows programs
+---keep their `.exe` there); native Windows finds it by either.
+---@return string
+function M.powershell_exe()
+  return M.is_wsl() and "powershell.exe" or "powershell"
+end
+
 ---Return the current working directory (never nil).
 ---@return string
 function M.get_cwd()
