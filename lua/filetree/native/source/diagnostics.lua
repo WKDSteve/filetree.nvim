@@ -185,6 +185,8 @@ function M.source()
   return {
     name = "diagnostics",
     title = "Diagnostics",
+    -- the tab of its view in the bar of the tree (a Nerd Font glyph)
+    icon = "\u{f071}",
     severity = M.SEVERITY,
     root = function(ctx)
       return {

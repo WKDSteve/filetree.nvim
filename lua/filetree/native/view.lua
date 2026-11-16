@@ -164,6 +164,8 @@ View.__index = View
 ---@class Filetree.View.Spec
 ---@field name string
 ---@field sources string[]
+---@field title? string  Set in `native.views`; else the bar takes the title of the source.
+---@field icon? string  Set in `native.views`; else the bar takes the icon of the source.
 
 local function define_highlights()
   for group, link in pairs(M.HL) do

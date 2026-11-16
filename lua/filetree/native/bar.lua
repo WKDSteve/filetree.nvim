@@ -3,7 +3,9 @@
 ---@description
 --- One tab per view (`View:views()`), the one on screen set off, a count next to a view whose sources
 --- carry statuses, a view whose source cannot load dimmed with `[!]`. A click shows the view; so do
---- the tree's keys for the next and the previous one.
+--- the tree's keys for the next and the previous one. With a Nerd Font a view shows its icon (of
+--- `native.views`, else of its source); when the bar is too narrow for the titles, the views that are
+--- not on screen keep the icon alone, where without one they are cut to three letters, then one.
 ---
 --- Key responsibilities:
 --- - `items(view)`: what the bar says, as data (specs and `:checkhealth` read this)
@@ -30,10 +32,15 @@ M.HL = {
 ---@class Filetree.Bar.Item
 ---@field name string  The view.
 ---@field title string
+---@field icon string?  Drawn in front of the title; nil without a Nerd Font, with `native.icons = false`, or when the view has none.
 ---@field current boolean
 ---@field count integer?  Nodes that carry a status, when the view was built and has any.
 ---@field available boolean
 ---@field reason string?  Why not, when not.
+
+--- The icon of the views the tree brings and no source registers: the files.
+---@type table<string, string>
+M.ICONS = { files = "\u{f07b}" }
 
 ---@param name string
 ---@return string
@@ -79,13 +86,21 @@ end
 ---@return Filetree.Bar.Item[]
 function M.items(view)
   local registry = require("filetree.registry")
+  local opts = view._opts or {}
+  -- glyphs only where they can be drawn: the same test the rows of the tree make
+  local glyphs = opts.icons ~= false and require("lib.nvim.ui.nerd_font").available()
   local out = {}
   for _, spec in ipairs(view:views()) do
     local entry = #spec.sources == 1 and registry.get("source", spec.sources[1]) or nil
     local available, reason = M.available(spec)
+    local icon = spec.icon
+      or (entry and type(entry.icon) == "string" and entry.icon ~= "" and entry.icon)
+      or (#spec.sources == 1 and M.ICONS[spec.sources[1]])
+      or nil
     out[#out + 1] = {
       name = spec.name,
-      title = entry and entry.title or capitalized(spec.name),
+      title = spec.title or (entry and entry.title) or capitalized(spec.name),
+      icon = glyphs and icon or nil,
       current = spec.name == view.view_name,
       count = view:count_of(spec.name),
       available = available,
@@ -101,11 +116,16 @@ local function escaped(text)
   return (text:gsub("%%", "%%%%"))
 end
 
----The text of one tab at a level of shortening: 0 the title, 1 three characters, 2 one.
+---The text of one tab at a level of shortening: 0 the title, 1 three characters, 2 one. A view
+---with an icon shows it in front of its title, and the icon alone once the bar has to shorten.
 ---@param item Filetree.Bar.Item
 ---@param level integer
 ---@return string
 local function label_of(item, level)
+  if item.icon then
+    if item.current or level == 0 then return item.icon .. " " .. item.title end
+    return item.icon
+  end
   if item.current or level == 0 then return item.title end
   return vim.fn.strcharpart(item.title, 0, level == 1 and 3 or 1)
 end

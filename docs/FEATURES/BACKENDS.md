@@ -292,6 +292,13 @@ another plugin's source (tests, tasks) is a view the same way.
 
   Without `views`: the files, the tree's own sources, then every source another
   plugin registered.
+- **Icons in the bar.** With a Nerd Font every tab shows an icon in front of its
+  title; when the bar is narrower than the titles, the views that are not on
+  screen keep the icon alone (without a Nerd Font, or with `native.icons =
+  false`, their titles are cut to three letters, then one, as before). The icon
+  is the one the source registers (`icon` of the source, see
+  [the API](../api.md)); a view of `native.views` can set its own, and a title:
+  `{ name = "work", title = "Work", icon = "\u{f0b1}", "buffers", "git" }`.
 - **The files as a section.** A view may list `files` next to other sources
   (`{ name = "work", "buffers", "files" }`: the open editors above the folder
   tree). The directory tree is then one section of that view: folders open and

@@ -247,6 +247,8 @@ function M.source()
     name = "git",
     actions = actions(),
     title = "Git",
+    -- the tab of its view in the bar of the tree (a Nerd Font glyph)
+    icon = "\u{e725}",
     severity = M.SEVERITY,
     available = function()
       if vim.fn.executable("git") == 1 then return true end

@@ -113,6 +113,8 @@ function M.source()
   return {
     name = "buffers",
     title = "Buffers",
+    -- the tab of its view in the bar of the tree (a Nerd Font glyph)
+    icon = "\u{f0c5}",
     severity = { "modified" },
     root = function(ctx)
       local nodes = M.nodes(ctx.root)

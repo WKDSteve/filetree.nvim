@@ -40,6 +40,8 @@ local M = {}
 ---One entry of `native.views`: the sources of the view as list items, and its name.
 ---@class Filetree.Native.ViewSpec
 ---@field name? string  Default: the first source.
+---@field title? string  The tab of the view in the bar. Default: the title of its one source, else its name.
+---@field icon? string  The glyph of the tab (a Nerd Font one). Default: the icon of its one source.
 ---@field [integer] string  A source name.
 
 ---@type Filetree.Native.Opts
@@ -176,10 +178,13 @@ function M.views()
   local out, seen = {}, {}
   ---@param name any
   ---@param sources string[]
-  local function add(name, sources)
+  ---@param spec? table  The entry of `native.views` it comes from: its own title and icon.
+  local function add(name, sources, spec)
     if type(name) ~= "string" or name == "" or seen[name] or #sources == 0 then return end
     seen[name] = true
-    out[#out + 1] = { name = name, sources = sources }
+    local title = spec and type(spec.title) == "string" and spec.title ~= "" and spec.title or nil
+    local icon = spec and type(spec.icon) == "string" and spec.icon ~= "" and spec.icon or nil
+    out[#out + 1] = { name = name, sources = sources, title = title, icon = icon }
   end
   if type(options.views) == "table" and #options.views > 0 then
     for _, spec in ipairs(options.views) do
@@ -187,7 +192,11 @@ function M.views()
       for _, source in ipairs(type(spec) == "table" and spec or { spec }) do
         if type(source) == "string" and source ~= "" then sources[#sources + 1] = source end
       end
-      add(type(spec) == "table" and spec.name or sources[1], sources)
+      add(
+        type(spec) == "table" and spec.name or sources[1],
+        sources,
+        type(spec) == "table" and spec or nil
+      )
     end
   else
     add("files", { "files" })

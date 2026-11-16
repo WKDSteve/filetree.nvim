@@ -178,6 +178,7 @@ local lists = {
 filetree.source({
   name = "todo",
   title = "Todo",
+  icon = "\u{f0ae}", -- optional: the tab of the view in the bar, with a Nerd Font
   root = function()
     return {
       id = "todo:root",

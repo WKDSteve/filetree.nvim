@@ -108,6 +108,32 @@ ok(
 ok("the view on screen has its own highlight", line:find("%#FiletreeBarCurrent# Files", 1, true))
 ok("a percent sign in a title is escaped", line:find(" A%%b", 1, true))
 
+-- ── icons: in front of the title, and alone where the title would be cut ─────────
+do
+  local F, B, G = "\u{f07b}", "\u{f0c5}", "\u{e725}"
+  local icons = {
+    item("files", { current = true, icon = F }),
+    item("buffers", { icon = B }),
+    item("git", { count = 3, icon = G }),
+    item("tests"),
+  }
+  eq(
+    "wide enough: every view with its icon in front of its title",
+    plain(icons, 80),
+    (" %s Files  %s Buffers  %s Git 3  Tests "):format(F, B, G)
+  )
+  eq(
+    "too wide: the views that are not on screen keep the icon alone",
+    plain(icons, 30),
+    (" %s Files  %s  %s 3  Tes "):format(F, B, G)
+  )
+  eq(
+    "... a view without an icon is cut as before, the one on screen keeps both",
+    plain(icons, 21),
+    (" %s Files  %s  %s 3  T "):format(F, B, G)
+  )
+end
+
 -- ── fixture ────────────────────────────────────────────────────────────────────
 local list = require("filetree.native.fs.list")
 local base = list.norm(vim.uv.fs_realpath(vim.fn.tempname():match("^(.*)[/\\]")))
@@ -317,6 +343,54 @@ eq("native.view_bar = false: no bar", vim.wo[view.win].winbar, "")
 vim.api.nvim_set_current_win(view.win)
 feed('"')
 eq("... the keys still switch", view.view_name, "checks")
+
+-- ── the icons of the views in a real tree ───────────────────────────────────────
+do
+  vim.g.have_nerd_font = true
+  native.reset()
+  native.setup({
+    watch = false,
+    views = {
+      { "files" },
+      { "buffers" },
+      { name = "work", title = "Work", icon = "W!", "buffers", "files" },
+      { "checks" },
+    },
+  })
+  adapter.toggle_at("left", { dir = dir })
+  settle(150)
+  view = native.current()
+  local items = bar.items(view)
+  eq("with a Nerd Font the files show the folder icon", items[1].icon, bar.ICONS.files)
+  eq(
+    "... a built-in source its own",
+    items[2].icon,
+    require("lib.nvim.tree.registry").get("source", "buffers").icon
+  )
+  eq(
+    "... a view of native.views its icon and title",
+    { items[3].icon, items[3].title },
+    { "W!", "Work" }
+  )
+  eq("... a source without an icon none", items[4].icon, nil)
+  ok(
+    "the bar draws the icon of the files",
+    vim.wo[view.win].winbar:find(bar.ICONS.files, 1, true) ~= nil
+  )
+  native.reset()
+  native.setup({ watch = false, icons = false, views = { { "files" }, { "buffers" } } })
+  adapter.toggle_at("left", { dir = dir })
+  settle(150)
+  view = native.current()
+  eq("native.icons = false: no icon in the bar", bar.items(view)[1].icon, nil)
+  vim.g.have_nerd_font = false
+  native.reset()
+  native.setup({ watch = false, views = { { "files" }, { "buffers" } } })
+  adapter.toggle_at("left", { dir = dir })
+  settle(150)
+  view = native.current()
+  eq("without a Nerd Font: no icon either", bar.items(view)[1].icon, nil)
+end
 
 -- ── :checkhealth names the views ───────────────────────────────────────────────
 checks.available = false

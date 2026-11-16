@@ -180,6 +180,8 @@ function M.source()
   return {
     name = "symbols",
     title = "Symbols",
+    -- the tab of its view in the bar of the tree (a Nerd Font glyph)
+    icon = "\u{f121}",
     available = function()
       local view = require("filetree.native").current()
       local buf = view and view:alt_buf() or nil
