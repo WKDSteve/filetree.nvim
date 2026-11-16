@@ -12,8 +12,10 @@ package.loaded["lib.nvim.cross.platform.is_wsl"] = function()
 end
 
 local platform = require("filetree.features.fileops.trash.platform")
-local file = assert(vim.env.HOME) .. "/note.txt"
-vim.fn.writefile({ "content" }, file)
+-- A path on a Windows drive: only that one takes the wslpath + recycle bin route (a Linux-side path
+-- goes to the Linux trash, see platform.wsl_windows_side). It need not exist: the missing wslpath is
+-- reported before anything touches it.
+local file = "/mnt/c/ft-wsl-no-wslpath/note.txt"
 
 local result
 local okc, err = pcall(platform.send, file, function(r)
@@ -30,5 +32,4 @@ assert(
   result.ok == false and tostring(result.err):find("wslpath", 1, true),
   "expected a wslpath failure: " .. vim.inspect(result)
 )
-assert(vim.uv.fs_stat(file), "the file must stay in place")
 print("WSL_NO_WSLPATH_OK")

@@ -407,9 +407,23 @@ end
 
 -- ── WSL ───────────────────────────────────────────────────────────────────────
 
+---Whether a path seen from WSL lives on a Windows drive (automounted below /mnt/<letter>). Only
+---there the Windows recycle bin applies: a file of the Linux file system reaches Windows as
+---a `wsl.localhost` UNC path, a network path, which has no recycle bin, so "send to recycle bin" deletes it
+---for good.
+---@param path string
+---@return boolean
+function M.wsl_windows_side(path)
+  return path:match("^/mnt/%a/") ~= nil or path:match("^/mnt/%a$") ~= nil
+end
+
 ---@param path string
 ---@param cb fun(result: TrashResult)
 local function trash_wsl(path, cb)
+  -- The Linux file system's own trash for a Linux-side path: the Windows route deleted it for good
+  -- (see `wsl_windows_side`) while reporting it as trashed.
+  if not M.wsl_windows_side(path) then return trash_linux(path, cb) end
+
   -- Determined from the ORIGINAL (Linux-side) path, before wslpath below
   -- rewrites it to a Windows-style string that `isdirectory` on this side
   -- can no longer resolve (`trash_windows` would otherwise always fall back

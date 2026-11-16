@@ -289,28 +289,37 @@ end
 
 local function restore_linux_mac(original_path)
   local run_argv = require("lib.nvim.cross.run_argv")
-  -- gio restore by original path (Linux only; gio encodes original path in .trashinfo)
-  if vim.fn.executable("gio") == 1 then
-    -- gio restore uses the trash:// URI — we find the .trashinfo file by name
-    local name = vim.fn.fnamemodify(original_path, ":t")
-    local info_dir = (vim.env.XDG_DATA_HOME or (vim.env.HOME .. "/.local/share")) .. "/Trash/info"
-    local info_file = info_dir .. "/" .. name .. ".trashinfo"
-    if vim.fn.filereadable(info_file) == 1 then
-      local ok = run_argv.run_blocking({
-        "gio",
-        "trash",
-        "--restore",
-        "trash:///" .. vim.fn.fnameescape(name),
-      })
-      if ok then return true, nil end
+  local uv = vim.uv or vim.loop
+  local name = vim.fn.fnamemodify(original_path, ":t")
+  local trash = (vim.env.XDG_DATA_HOME or (vim.env.HOME .. "/.local/share")) .. "/Trash"
+  local info_file = trash .. "/info/" .. name .. ".trashinfo"
+  -- Never move a trashed item over something that now stands at its old place.
+  if uv.fs_lstat(original_path) then
+    return false, "Could not restore — something already exists at " .. original_path
+  end
+
+  -- gio restore by the trash:// URI (Linux only; gio wrote the .trashinfo with the original path)
+  if vim.fn.executable("gio") == 1 and vim.fn.filereadable(info_file) == 1 then
+    local encoded = name:gsub("[^%w%-%._~]", function(c)
+      return string.format("%%%02X", c:byte())
+    end)
+    if run_argv.run_blocking({ "gio", "trash", "--restore", "trash:///" .. encoded }) then
+      return true, nil
     end
-    -- Direct restore from files dir
-    local trash_files = (vim.env.XDG_DATA_HOME or (vim.env.HOME .. "/.local/share"))
-      .. "/Trash/files/"
-      .. name
-    if vim.fn.filereadable(trash_files) == 1 or vim.fn.isdirectory(trash_files) == 1 then
-      local ok = run_argv.run_blocking({ "mv", trash_files, original_path })
-      if ok then return true, nil end
+  end
+
+  -- Direct restore from the trash folder. Not tied to gio: trash-put and the XDG `mv` fallback put
+  -- the item in the same folder, and the macOS Finder trash is ~/.Trash.
+  local candidates = { trash .. "/files/" .. name }
+  if vim.fn.has("mac") == 1 then
+    candidates[#candidates + 1] = vim.env.HOME .. "/.Trash/" .. name
+  end
+  for _, trashed in ipairs(candidates) do
+    if uv.fs_lstat(trashed) then
+      if run_argv.run_blocking({ "mv", trashed, original_path }) then
+        pcall(vim.fn.delete, info_file) -- the entry is gone from the trash, so is its record
+        return true, nil
+      end
     end
   end
   return false, "Could not restore — use your file manager's trash to restore manually"
@@ -406,8 +415,19 @@ end
 function M.restore(entry)
   local plat = entry.platform
   local ok, err
-  if plat == "windows" or plat == "wsl" then
+  local wsl_linux_side = plat == "wsl"
+    and not require("filetree.features.fileops.trash.platform").wsl_windows_side(
+      entry.original_path
+    )
+  if plat == "windows" then
     ok, err = restore_windows(entry.name, entry.original_path)
+  elseif plat == "wsl" and not wsl_linux_side then
+    -- The recycle bin records the Windows path: /mnt/c/x -> C:/x (no wslpath: the file is gone, and
+    -- `wslpath -w` wants it to exist).
+    local win = entry.original_path:gsub("^/mnt/(%a)", function(d)
+      return d:upper() .. ":"
+    end)
+    ok, err = restore_windows(entry.name, win)
   else
     ok, err = restore_linux_mac(entry.original_path)
   end

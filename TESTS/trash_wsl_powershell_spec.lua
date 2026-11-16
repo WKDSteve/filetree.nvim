@@ -82,7 +82,7 @@ local function send(path)
   return result
 end
 
-local res = send("/home/x/note.txt")
+local res = send("/mnt/c/Users/x/note.txt")
 eq("wsl: the delete answers", res ~= nil, true)
 eq("wsl: the delete is reported ok", res and res.ok, true)
 eq("wsl: the program started after wslpath is powershell.exe", started[2], "powershell.exe")
@@ -90,7 +90,7 @@ eq("wsl: the program started after wslpath is powershell.exe", started[2], "powe
 -- A program that cannot be started: the callback runs with an error naming it, no hang.
 on_path["powershell.exe"] = nil
 started = {}
-res = send("/home/x/note.txt")
+res = send("/mnt/c/Users/x/note.txt")
 eq("not startable: the delete still answers", res ~= nil, true)
 eq("not startable: reported as failed", res and res.ok, false)
 eq(
@@ -98,6 +98,26 @@ eq(
   res ~= nil and tostring(res.err):find("powershell.exe", 1, true) ~= nil,
   true
 )
+
+-- A file of the Linux file system reaches Windows as a wsl.localhost network path, which has no
+-- recycle bin: "send to recycle bin" deleted it for good. It goes to the Linux trash instead (here
+-- neither gio nor trash-put, so the XDG `mv`), and Windows is not asked at all.
+on_path = { mv = true }
+started = {}
+local real_exec2 = vim.fn.executable
+---@diagnostic disable-next-line: duplicate-set-field
+vim.fn.executable = function(name)
+  if name == "gio" or name == "trash-put" then return 0 end
+  return real_exec2(name)
+end
+res = send("/home/x/note.txt")
+vim.fn.executable = real_exec2
+eq("linux side: the delete answers", res ~= nil, true)
+eq("linux side: no wslpath, no PowerShell", started[1], "mv")
+eq("linux side: one program only", #started, 1)
+eq("windows side: /mnt/c is the Windows drive", platform.wsl_windows_side("/mnt/c/x"), true)
+eq("windows side: /mnt/wsl is not", platform.wsl_windows_side("/mnt/wsl/x"), false)
+eq("windows side: the home is not", platform.wsl_windows_side("/home/x"), false)
 
 vim.system = real_system
 print(("\nfiletree.nvim trash_wsl_powershell_spec: %d passed, %d failed"):format(passed, failed))

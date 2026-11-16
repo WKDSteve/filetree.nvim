@@ -210,7 +210,10 @@ each individually" batch paths.
 `Microsoft.VisualBasic.FileIO.FileSystem`, not the Explorer delete verb,
 which triggers a confirmation dialog no headless PowerShell script can
 answer), macOS Finder/Trash, or `gio trash`/`trash-put` on Linux (XDG-trash
-fallback when neither is installed). Set it to `"permanent"` to skip the OS
+fallback when neither is installed). In WSL a file below `/mnt/<drive>` goes
+to the Windows Recycle Bin, a file of the Linux file system to the Linux trash
+(Windows sees it as a `wsl.localhost` network path, which has no Recycle Bin and
+would be deleted for good); `U` restores from the same place. Set it to `"permanent"` to skip the OS
 trash and delete for good instead — no shell, same libuv/Vim-builtin
 primitive the "Overwrite" paste resolution uses. Opt-in on purpose: a
 permanent delete has no `U`/history entry to fall back on, so the confirm
