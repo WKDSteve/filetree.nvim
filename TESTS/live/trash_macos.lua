@@ -20,13 +20,16 @@
 local this = debug.getinfo(1, "S").source:sub(2)
 local root = vim.fn.fnamemodify(this, ":p:h:h:h")
 vim.opt.rtp:prepend(root)
-for _, candidate in ipairs({
-  vim.env.LIB_NVIM_DIR or "",
-  vim.fn.fnamemodify(root, ":h") .. "/lib.nvim",
-}) do
-  if candidate ~= "" and vim.fn.isdirectory(candidate .. "/lua/lib") == 1 then
-    vim.opt.rtp:prepend(candidate)
-    break
+-- lib.nvim, and ui.nvim for the trash history's restore (it asks through ui.kit).
+for _, dep in ipairs({ { "LIB_NVIM_DIR", "lib.nvim", "lib" }, { "UI_NVIM_DIR", "ui.nvim", "ui" } }) do
+  for _, candidate in ipairs({
+    vim.env[dep[1]] or "",
+    vim.fn.fnamemodify(root, ":h") .. "/" .. dep[2],
+  }) do
+    if candidate ~= "" and vim.fn.isdirectory(candidate .. "/lua/" .. dep[3]) == 1 then
+      vim.opt.rtp:prepend(candidate)
+      break
+    end
   end
 end
 
@@ -62,6 +65,7 @@ local real_system = vim.system
 vim.system = function(argv, opts, on_exit)
   spawns[#spawns + 1] = argv
   print(("spawn: %s (%d args)"):format(argv[1], #argv - 1))
+  if not on_exit then return real_system(argv, opts) end
   return real_system(argv, opts, function(res)
     print(
       ("  exit %d, signal %d, stderr: %s"):format(
@@ -267,6 +271,31 @@ blocked_batch(
     vim.fn.system({ "chmod", "755", closed_dir })
   end
 )
+
+-- 6. Undo (`U`): the trash history's restore puts one item back from ~/.Trash.
+do
+  local path = new_file("restore me.txt")
+  local results = batch({ path })
+  if not (results and results[1].ok and not exists(path)) then
+    fail("restore", "the trash itself failed")
+  else
+    local ok, err = require("filetree.features.fileops.trash.undo").restore({
+      platform = "mac",
+      name = vim.fn.fnamemodify(path, ":t"),
+      original_path = path,
+    })
+    if ok and exists(path) then
+      pass("restore: back at its old place")
+    elseif not ok and tostring(err):find("Could not restore", 1, true) then
+      unknown("restore", "not found in ~/.Trash under its name: " .. tostring(err))
+    else
+      fail(
+        "restore",
+        ("ok=%s err=%s back=%s"):format(tostring(ok), tostring(err), tostring(exists(path)))
+      )
+    end
+  end
+end
 
 vim.fn.delete(work, "rf")
 print(

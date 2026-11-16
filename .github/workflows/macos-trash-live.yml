@@ -30,6 +30,12 @@ jobs:
           path: lib.nvim
           ref: ci-verified
 
+      - name: Checkout ui.nvim
+        uses: actions/checkout@v5
+        with:
+          repository: WKDSteve/ui.nvim
+          path: ui.nvim
+
       - name: Install Neovim (stable)
         uses: rhysd/action-setup-vim@v1
         with:
