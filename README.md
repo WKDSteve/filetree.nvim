@@ -95,11 +95,13 @@ MIT — see [LICENSE](LICENSE).
 
 **Uses**
 
+- [ai.nvim](https://github.com/WKDSteve/ai.nvim): With ai.nvim installed, the AI bar of the own tree of filetree.nvim sends a typed or spoken request about the files to `ai.ask`. ([picture](assets/graphs/pair/filetree.nvim--ai.nvim.png))
 - [gitsuite.nvim](https://github.com/WKDSteve/gitsuite.nvim): In the git view of the own tree of filetree.nvim, `gd` and `gB` open the diff against HEAD and the blame of a changed file through gitsuite.nvim, when it is installed. ([picture](assets/graphs/pair/filetree.nvim--gitsuite.nvim.png))
 - [gopath.nvim](https://github.com/WKDSteve/gopath.nvim): filetree.nvim repairs a broken link with the tail search of gopath.nvim (`gopath.resolvers.common.tailsearch`). ([picture](assets/graphs/pair/filetree.nvim--gopath.nvim.png))
 - [images.nvim](https://github.com/WKDSteve/images.nvim): The preview of filetree.nvim shows a picture through images.nvim when its backend is `images.nvim` or `auto`. ([picture](assets/graphs/pair/filetree.nvim--images.nvim.png))
 - [markdown.nvim](https://github.com/WKDSteve/markdown.nvim): When filetree.nvim renames, moves or deletes a file, it asks markdown.nvim for the markdown links that point at it and rewrites them, when it is installed. ([picture](assets/graphs/pair/filetree.nvim--markdown.nvim.png))
 - [mdview.nvim](https://github.com/WKDSteve/mdview.nvim): filetree.nvim opens a Markdown file in the preview of mdview.nvim (`features.system.mdview_open`). ([picture](assets/graphs/pair/filetree.nvim--mdview.nvim.png))
+- [media.nvim](https://github.com/WKDSteve/media.nvim): A spoken request in the AI bar of filetree.nvim is turned into text by the whisper engine of media.nvim (`media.transcribe`); without media.nvim the bar names it as missing. ([picture](assets/graphs/pair/filetree.nvim--media.nvim.png))
 - [pdfport.nvim](https://github.com/WKDSteve/pdfport.nvim): filetree.nvim creates PDF files through pdfport.nvim; without it it says that it cannot (`filetree.util.pdf`). ([picture](assets/graphs/pair/filetree.nvim--pdfport.nvim.png))
 - [pickers.nvim](https://github.com/WKDSteve/pickers.nvim): The create-from-template picker of filetree.nvim uses pickers.nvim (`pickers.engines`) for a preview; without it the kit picker or `ui_select` is used. ([picture](assets/graphs/pair/filetree.nvim--pickers.nvim.png))
 - [spotlight.nvim](https://github.com/WKDSteve/spotlight.nvim): filetree.nvim adds the name of the node under the cursor to the markings of spotlight.nvim (`spotlight.add`). ([picture](assets/graphs/pair/filetree.nvim--spotlight.nvim.png))
@@ -108,8 +110,12 @@ MIT — see [LICENSE](LICENSE).
 
 **Used by**
 
+- [debugging.nvim](https://github.com/WKDSteve/debugging.nvim): `:Debug filetree watchers|quarantine|handles` of debugging.nvim reports what the own tree of filetree.nvim holds on the disk (`fs_state()`), without loading filetree.nvim itself. ([picture](assets/graphs/pair/debugging.nvim--filetree.nvim.png))
 - [fileops.nvim](https://github.com/WKDSteve/fileops.nvim): When `:File delete` removes a file, fileops.nvim asks the reference engine of filetree.nvim (`filetree.refs`) whether it links to orphaned assets and offers to delete those too, if `refs.outgoing_assets` is on there. ([picture](assets/graphs/pair/fileops.nvim--filetree.nvim.png))
 - [gitsuite.nvim](https://github.com/WKDSteve/gitsuite.nvim): The status relink of gitsuite.nvim uses `filetree.refs` of filetree.nvim when it is installed. ([picture](assets/graphs/pair/gitsuite.nvim--filetree.nvim.png))
 - [gopath.nvim](https://github.com/WKDSteve/gopath.nvim): The create-on-missing dialog of gopath.nvim offers 'Open in filetree', and `open_filetree` reveals a resolved path there, when filetree.nvim is set up. ([picture](assets/graphs/pair/gopath.nvim--filetree.nvim.png))
+- [hover.nvim](https://github.com/WKDSteve/hover.nvim): With filetree.nvim loaded, the directory preview of hover.nvim embeds its tree (`filetree.native.embed`) instead of a plain listing. ([picture](assets/graphs/pair/hover.nvim--filetree.nvim.png))
+- [images.nvim](https://github.com/WKDSteve/images.nvim): With filetree.nvim loaded, images.nvim deletes images through the trash of the tree, which asks in its own dialog and can undo. ([picture](assets/graphs/pair/images.nvim--filetree.nvim.png))
+- [sessions.nvim](https://github.com/WKDSteve/sessions.nvim): sessions.nvim saves the views of the own tree of filetree.nvim with a session and opens them again on restore. ([picture](assets/graphs/pair/sessions.nvim--filetree.nvim.png))
 - [ui.nvim](https://github.com/WKDSteve/ui.nvim): The right-click menu of ui.nvim offers one row from filetree.nvim: open or close the tree, revealing this file (`filetree.integrations.menu`). ([picture](assets/graphs/pair/ui.nvim--filetree.nvim.png))
 <!-- connections:end -->
