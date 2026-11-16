@@ -1,0 +1,60 @@
+name: Linux trash live check
+
+# The Linux trash backends against the real gio, the real trash-put and the XDG `mv` fallback
+# (TESTS/live/trash_linux.lua). Started by hand only: it trashes real files, so it must not decide
+# whether an ordinary push is green.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  trash-live:
+    name: trash live (ubuntu-latest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout filetree.nvim
+        uses: actions/checkout@v5
+        with:
+          path: filetree.nvim
+
+      - name: Checkout lib.nvim
+        uses: actions/checkout@v5
+        with:
+          repository: WKDSteve/lib.nvim
+          path: lib.nvim
+          ref: ci-verified
+
+      - name: Install Neovim (stable)
+        uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: stable
+
+      - name: Install gio and trash-cli
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q libglib2.0-bin trash-cli
+          command -v gio trash-put
+          id
+
+      # Each step fails on its own: which backend broke is the information.
+      - name: gio
+        if: always()
+        working-directory: filetree.nvim
+        run: nvim --clean --headless -u NONE -l TESTS/live/trash_linux.lua gio
+
+      - name: trash-put (gio hidden)
+        if: always()
+        working-directory: filetree.nvim
+        run: nvim --clean --headless -u NONE -l TESTS/live/trash_linux.lua trash-put
+
+      - name: XDG mv fallback (gio and trash-put hidden)
+        if: always()
+        working-directory: filetree.nvim
+        run: nvim --clean --headless -u NONE -l TESTS/live/trash_linux.lua xdg
