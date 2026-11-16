@@ -11,9 +11,9 @@
 --   nvim --clean --headless -u NONE -l TESTS/live/trash_linux.lua trash-put
 --   nvim --clean --headless -u NONE -l TESTS/live/trash_linux.lua xdg
 --
--- In WSL (`wsl` mode) the trash is the Windows recycle bin, path by path through wslpath and
--- PowerShell: a regression check that an ordinary delete still works there, for a file below the
--- Linux home and one below /mnt/c.
+-- In WSL (`wsl` mode) a file below /mnt/<drive> goes to the Windows recycle bin (wslpath and
+-- PowerShell), a file of the Linux file system to the Linux trash (a wsl.localhost path has no
+-- recycle bin, Windows would delete it for good): an ordinary delete and its undo, for both.
 --
 --   wsl.exe -e nvim --clean --headless -u NONE -l TESTS/live/trash_linux.lua wsl
 --
@@ -28,13 +28,16 @@
 local this = debug.getinfo(1, "S").source:sub(2)
 local root = vim.fn.fnamemodify(this, ":p:h:h:h")
 vim.opt.rtp:prepend(root)
-for _, candidate in ipairs({
-  vim.env.LIB_NVIM_DIR or "",
-  vim.fn.fnamemodify(root, ":h") .. "/lib.nvim",
-}) do
-  if candidate ~= "" and vim.fn.isdirectory(candidate .. "/lua/lib") == 1 then
-    vim.opt.rtp:prepend(candidate)
-    break
+-- lib.nvim, and ui.nvim for the trash history's restore (it asks through ui.kit).
+for _, dep in ipairs({ { "LIB_NVIM_DIR", "lib.nvim", "lib" }, { "UI_NVIM_DIR", "ui.nvim", "ui" } }) do
+  for _, candidate in ipairs({
+    vim.env[dep[1]] or "",
+    vim.fn.fnamemodify(root, ":h") .. "/" .. dep[2],
+  }) do
+    if candidate ~= "" and vim.fn.isdirectory(candidate .. "/lua/" .. dep[3]) == 1 then
+      vim.opt.rtp:prepend(candidate)
+      break
+    end
   end
 end
 
@@ -88,7 +91,7 @@ vim.system = function(argv, opts, on_exit)
         vim.trim(res.stderr or "")
       )
     )
-    on_exit(res)
+    if on_exit then on_exit(res) end
   end)
 end
 
@@ -194,9 +197,43 @@ local function plain_batch(name, paths)
   check_in_trash(name, paths)
 end
 
+---Undo of a real trash: the item goes to the trash through `platform.send`, then the trash
+---history's restore (what `U` runs) must put it back at its old place.
+---@param where string  the platform name the history records ("linux" or "wsl")
+---@param dir string  the folder the item lives in
+local function check_restore(where, dir)
+  local name = "restore " .. where
+  local path = ("%s/%s-restore me.txt"):format(dir, stamp)
+  vim.fn.writefile({ "restore" }, path)
+  local sent
+  platform.send(path, function(r)
+    sent = r
+  end)
+  vim.wait(TIMEOUT_MS, function()
+    return sent ~= nil
+  end, 50)
+  if not (sent and sent.ok and not exists(path)) then
+    return fail(name, "the trash itself failed: " .. vim.inspect(sent))
+  end
+  local undo = require("filetree.features.fileops.trash.undo")
+  local ok, err = undo.restore({
+    platform = where,
+    name = vim.fn.fnamemodify(path, ":t"),
+    original_path = path,
+  })
+  if ok and exists(path) and vim.fn.readfile(path)[1] == "restore" then
+    pass(name .. ": back at its old place: " .. path)
+  else
+    fail(
+      name .. ": " .. path,
+      ("ok=%s err=%s back=%s"):format(tostring(ok), tostring(err), tostring(exists(path)))
+    )
+  end
+end
+
 if mode == "wsl" then
-  -- Sequential, one wslpath + PowerShell pair per path: the items must be gone and reported ok.
-  -- Where they land is the Windows recycle bin, which this side cannot list.
+  -- Sequential, path by path: the items must be gone and reported ok. The Linux-side ones must be
+  -- in the Linux trash; the recycle bin, where the /mnt/c one lands, this side cannot list.
   -- The Windows user's %TEMP%, as WSL sees it below /mnt/c.
   local win_tmp = vim.trim(vim.fn.system({
     "wslpath",
@@ -238,6 +275,9 @@ if mode == "wsl" then
       end
     end
   end
+  check_restore("wsl", work)
+  if mnt_dir then check_restore("wsl", mnt_dir) end
+  check_in_trash("wsl delete, linux side", { items[1], items[2], items[3] })
   if mnt_dir then vim.fn.delete(mnt_dir, "rf") end
   vim.fn.delete(work, "rf")
   print(("\nfiletree.nvim trash_linux (wsl): %d failed, %d unverified"):format(failed, unverified))
@@ -299,6 +339,8 @@ else
   end
 end
 vim.fn.system({ "chmod", "755", closed_dir })
+
+check_restore("linux", work)
 
 vim.fn.delete(work, "rf")
 print(
