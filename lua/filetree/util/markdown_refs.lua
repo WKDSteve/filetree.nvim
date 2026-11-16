@@ -51,25 +51,28 @@ end
 ---for delete, where refs must be known before the confirm popup appears.
 ---@param path string
 ---@param opts? { root?: string }  `root` defaults to the nearest project root.
----@return table[]  MarkdownFileRef[] — { file, line, target, display, base_dir, ... }
+---@return table[] refs  MarkdownFileRef[] — { file, line, target, display, base_dir, ... }
+---@return boolean determined  false when markdown.nvim could not read a candidate file, so `refs`
+---  is only a lower bound; true when markdown.nvim is absent (no references is then the honest answer)
 function M.find(path, opts)
   local ok_md, md = pcall(require, "markdown")
-  if not ok_md or type(md.find_references) ~= "function" then return {} end
-  local ok_refs, refs = pcall(md.find_references, path, { root = resolve_root(path, opts) })
-  if not ok_refs or type(refs) ~= "table" then return {} end
-  return refs
+  if not ok_md or type(md.find_references) ~= "function" then return {}, true end
+  local ok_refs, refs, determined =
+    pcall(md.find_references, path, { root = resolve_root(path, opts) })
+  if not ok_refs or type(refs) ~= "table" then return {}, true end
+  return refs, determined ~= false
 end
 
 ---Async variant of `find`. `callback` always fires (with {} on any failure/
 ---absence), scheduled on the main loop.
 ---@param path string
 ---@param opts? { root?: string }
----@param callback fun(refs: table[])
+---@param callback fun(refs: table[], determined: boolean)  `determined` as for `find`
 function M.find_async(path, opts, callback)
   local ok_md, md = pcall(require, "markdown")
   if not ok_md or type(md.find_references_async) ~= "function" then
     vim.schedule(function()
-      callback({})
+      callback({}, true)
     end)
     return
   end
@@ -77,12 +80,13 @@ function M.find_async(path, opts, callback)
     md.find_references_async,
     path,
     { root = resolve_root(path, opts) },
-    function(refs)
-      callback(type(refs) == "table" and refs or {})
+    function(refs, determined)
+      if type(refs) ~= "table" then return callback({}, true) end
+      callback(refs, determined ~= false)
     end
   )
   if not ok then vim.schedule(function()
-    callback({})
+    callback({}, true)
   end) end
 end
 
@@ -97,22 +101,23 @@ end
 ---still present) before anything moves — no torn read.
 ---@param path string
 ---@param opts? { root?: string }
----@return { await: fun(cb: fun(refs: table[])) }
+---@return { await: fun(cb: fun(refs: table[], determined: boolean)) }
 function M.prefetch(path, opts)
-  local state = { done = false, refs = nil, waiters = {} }
-  M.find_async(path, opts, function(refs)
+  local state = { done = false, refs = nil, determined = true, waiters = {} }
+  M.find_async(path, opts, function(refs, determined)
     state.refs = refs
+    state.determined = determined ~= false
     state.done = true
     local waiters = state.waiters
     state.waiters = {}
     for _, w in ipairs(waiters) do
-      w(refs)
+      w(refs, state.determined)
     end
   end)
   return {
     await = function(cb)
       if state.done then
-        cb(state.refs or {})
+        cb(state.refs or {}, state.determined)
       else
         state.waiters[#state.waiters + 1] = cb
       end
@@ -122,22 +127,23 @@ end
 
 ---Await a whole set of prefetch handles keyed by path, then call `cb` with a
 ---`{ [path] = refs }` map once every one has resolved.
----@param handles table<string, { await: fun(cb: fun(refs: table[])) }>
----@param cb fun(refs_by_path: table<string, table[]>)
+---@param handles table<string, { await: fun(cb: fun(refs: table[], determined: boolean)) }>
+---@param cb fun(refs_by_path: table<string, table[]>, determined: boolean)  `determined` is false when any one search was only a lower bound
 function M.await_all(handles, cb)
-  local pending, results = 0, {}
+  local pending, results, determined = 0, {}, true
   for _ in pairs(handles) do
     pending = pending + 1
   end
   if pending == 0 then
-    cb(results)
+    cb(results, true)
     return
   end
   for path, handle in pairs(handles) do
-    handle.await(function(refs)
+    handle.await(function(refs, one_determined)
       results[path] = refs
+      if one_determined == false then determined = false end
       pending = pending - 1
-      if pending == 0 then cb(results) end
+      if pending == 0 then cb(results, determined) end
     end)
   end
 end

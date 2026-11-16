@@ -104,6 +104,7 @@
 ---@field refs  FiletreeRef[]
 ---@field plans table<string, table<string, FiletreeRefPlan>>  source path → provider → plan
 ---@field incomplete? boolean  The candidate search was cut short (fallback walk capped or cancelled, already warned about); refs may be missing. `refs.handle_result` and `refs.for_delete` warn when it is set.
+---@field unreadable? string[]  Candidate files the search named but that could not be read (locked, no permission); their refs are missing, so the count is a lower bound. Warned about like `incomplete`.
 
 ---@class FiletreeRefsScanConfig
 ---@field root              "project"|"cwd"  Search root (default "project").

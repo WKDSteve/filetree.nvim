@@ -268,8 +268,12 @@ function M.prefetch(paths, opts)
     -- fallback lists the tree once and warns once, not once per job.
     local session = scan.new_session()
     for _, job in ipairs(jobs) do
-      scan.run_plan(job.plan, job.ctx, function(refs, incomplete)
+      scan.run_plan(job.plan, job.ctx, function(refs, incomplete, unreadable)
         if incomplete then result.incomplete = true end
+        for _, file in ipairs(unreadable or {}) do
+          result.unreadable = result.unreadable or {}
+          result.unreadable[#result.unreadable + 1] = file
+        end
         for _, r in ipairs(refs) do
           result.refs[#result.refs + 1] = r
         end
@@ -298,6 +302,40 @@ local function warn_if_incomplete(result)
   if result and result.incomplete then
     notify.warn("The reference search was cut short: some references may be missing")
   end
+  local unreadable = M.unreadable_files(result)
+  if #unreadable > 0 then
+    notify.warn(
+      string.format(
+        "%d file(s) could not be read, references in them may be missing: %s",
+        #unreadable,
+        table.concat(vim.tbl_map(ftpath.relative, unreadable), ", ")
+      )
+    )
+  end
+end
+
+---The candidate files a scan could not read, each named once (two plans of one scan may both
+---have met the same locked file).
+---@param result? FiletreeRefScanResult
+---@return string[]
+function M.unreadable_files(result)
+  local seen, out = {}, {}
+  for _, file in ipairs(result and result.unreadable or {}) do
+    local key = ftpath.slashify(file)
+    if not seen[key] then
+      seen[key] = true
+      out[#out + 1] = file
+    end
+  end
+  return out
+end
+
+---Whether the refs a scan found are only a lower bound: the search was cut short, or a candidate
+---could not be read.
+---@param result? FiletreeRefScanResult
+---@return boolean
+function M.is_lower_bound(result)
+  return result ~= nil and (result.incomplete == true or #M.unreadable_files(result) > 0)
 end
 
 ---Scan without the prefetch/await split, for callers that have nothing to
@@ -492,7 +530,7 @@ end
 ---sit this one out.
 ---@param paths string[]
 ---@param opts? table
----@param cb fun(refs: FiletreeRef[])
+---@param cb fun(refs: FiletreeRef[], lower_bound: boolean)  `lower_bound`: references may be missing (see `is_lower_bound`), so a count of `refs` is "at least"
 function M.for_delete(paths, opts, cb)
   opts = vim.tbl_extend("force", { op = "delete" }, opts or {})
   M.scan(paths, opts, function(result)
@@ -506,7 +544,7 @@ function M.for_delete(paths, opts, cb)
         out[#out + 1] = ref
       end
     end
-    cb(out)
+    cb(out, M.is_lower_bound(result))
   end)
 end
 

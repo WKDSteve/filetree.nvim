@@ -397,6 +397,57 @@ do
         refs_util.retarget(stub_ref, "/p/moved/nope.md"),
         "moved/nope.md"
       )
+      local _, determined = refs_util.find("/nope.md")
+      eq("markdown_refs.find(): determined when markdown.nvim says nothing else", determined, true)
+    end)
+    package.loaded["markdown"] = saved
+    if not ok_run then error(err) end
+  end
+
+  -- markdown.nvim answers determined = false when a candidate could not be read: every layer hands
+  -- that on, so a count is shown as a lower bound and not as final.
+  do
+    local stub_ref = { file = "/p/linker.md", line = 1, target = "nope.md" }
+    local saved = package.loaded["markdown"]
+    package.loaded["markdown"] = {
+      find_references = function()
+        return { stub_ref }, false
+      end,
+      find_references_async = function(_, _, cb)
+        vim.schedule(function()
+          cb({ stub_ref }, false)
+        end)
+      end,
+    }
+    local ok_run, err = pcall(function()
+      local found, determined = refs_util.find("/nope.md")
+      eq("markdown_refs.find(): a lower bound keeps its refs", #found, 1)
+      eq("markdown_refs.find(): determined = false is handed on", determined, false)
+
+      local async_det
+      refs_util.find_async("/nope.md", nil, function(_, d)
+        async_det = d
+      end)
+      vim.wait(1000, function()
+        return async_det ~= nil
+      end, 10)
+      eq("markdown_refs.find_async(): determined = false is handed on", async_det, false)
+
+      local h = refs_util.prefetch("/nope.md")
+      local pre_det
+      h.await(function(_, d)
+        pre_det = d
+      end)
+      vim.wait(1000, function()
+        return pre_det ~= nil
+      end, 10)
+      eq("markdown_refs.prefetch(): determined = false is handed on", pre_det, false)
+
+      local all_det
+      refs_util.await_all({ ["/nope.md"] = h }, function(_, d)
+        all_det = d
+      end)
+      eq("markdown_refs.await_all(): one lower bound makes the whole set one", all_det, false)
     end)
     package.loaded["markdown"] = saved
     if not ok_run then error(err) end

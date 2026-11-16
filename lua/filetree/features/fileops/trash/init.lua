@@ -394,6 +394,14 @@ local function confirm_popup(path, cb, require_symlink)
   local pending = 2
   ---@type FiletreeRef[]?
   local incoming_refs
+  -- The reference search could not see everything (cut short, or a file it could not read): the
+  -- counts below are then a lower bound and say so.
+  local refs_lower_bound = false
+  ---@param n integer
+  ---@return string
+  local function ref_count(n)
+    return refs_lower_bound and ("at least " .. n) or tostring(n)
+  end
   ---@type FiletreeAssetCandidate[]?, FiletreeAssetCandidate[]?
   local deletable_assets, kept_assets
 
@@ -530,7 +538,8 @@ local function confirm_popup(path, cb, require_symlink)
     if not ref_wants_ask and not asset_wants_ask then
       local parts = {}
       if has_refs then
-        parts[#parts + 1] = string.format("%d ref(s) will be marked REF!", #incoming_refs)
+        parts[#parts + 1] =
+          string.format("%s ref(s) will be marked REF!", ref_count(#incoming_refs))
       end
       if has_assets then
         parts[#parts + 1] = string.format("%d asset(s) will be deleted", #deletable_assets)
@@ -551,7 +560,9 @@ local function confirm_popup(path, cb, require_symlink)
     end
 
     local title_parts = {}
-    if has_refs then title_parts[#title_parts + 1] = string.format("%d ref(s)", #incoming_refs) end
+    if has_refs then
+      title_parts[#title_parts + 1] = string.format("%s ref(s)", ref_count(#incoming_refs))
+    end
     if has_assets then
       title_parts[#title_parts + 1] = string.format("%d asset(s)", #deletable_assets)
     end
@@ -614,8 +625,9 @@ local function confirm_popup(path, cb, require_symlink)
     end)
   end
 
-  refs.for_delete({ path }, nil, function(found)
+  refs.for_delete({ path }, nil, function(found, lower_bound)
     incoming_refs = found
+    refs_lower_bound = lower_bound == true
     pending = pending - 1
     proceed()
   end)

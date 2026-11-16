@@ -2438,6 +2438,89 @@ local function run_trash_dry_run_check()
   apply.reset()
 end
 
+-- ── A candidate the scan cannot read makes the delete count a lower bound ───
+-- ripgrep names a file, but reading it fails (locked, no permission): its references are missing,
+-- so the confirm must not present the count it has as the final one, and the user is told which
+-- file could not be read. Reading is stubbed for one file, since a real lock is per platform.
+local function run_trash_lower_bound_check()
+  print("\n== trash: an unreadable candidate makes the count a lower bound ==")
+
+  local work = scratch_root .. "/trash_lower_bound"
+  vim.fn.delete(work, "rf")
+  vim.fn.mkdir(work, "p")
+  vim.fn.writefile({ "[tool.x]" }, work .. "/pyproject.toml") -- project marker
+  vim.fn.writefile({ "# Notes" }, work .. "/notes.md")
+  vim.fn.writefile({ "See [notes](./notes.md)." }, work .. "/index.md")
+  vim.fn.writefile({ "Also [notes](./notes.md)." }, work .. "/locked.md")
+  apply.reset()
+  local victim = work .. "/notes.md"
+
+  local scan = require("filetree.refs.scan")
+  local real_lines_of = scan.lines_of
+  ---@diagnostic disable-next-line: duplicate-set-field
+  scan.lines_of = function(file)
+    if file:gsub("\\", "/"):match("/locked%.md$") then return nil end
+    return real_lines_of(file)
+  end
+
+  local trash = require("filetree.features.fileops.trash")
+  local refreshed = false
+  trash.setup({
+    enabled = true,
+    dry_run = true,
+    confirm = true,
+    mode = "trash",
+    use_safety = false,
+  }, {
+    get_current_node = function()
+      return { path = victim, type = "file" }
+    end,
+    refresh = function()
+      refreshed = true
+      return true
+    end,
+  })
+
+  ---@type string[]
+  local said, asked = {}, {}
+  local real_notify, real_confirm = vim.notify, kit.confirm
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.notify = function(msg)
+    said[#said + 1] = tostring(msg)
+  end
+  ---@diagnostic disable-next-line: duplicate-set-field
+  kit.confirm = function(opts)
+    asked[#asked + 1] = tostring(opts.question)
+    return real_confirm(opts)
+  end
+
+  next_choice = true -- "yes" to the trash confirmation
+  local ok_run, err = pcall(function()
+    trash.delete_current()
+    await("refreshed", function()
+      return refreshed
+    end)
+  end)
+  vim.notify, kit.confirm, scan.lines_of = real_notify, real_confirm, real_lines_of
+  trash.teardown()
+  apply.reset()
+  if not ok_run then error(err) end
+
+  local question = table.concat(asked, " | ")
+  check(
+    "trash lower bound: the confirm says at least 1 reference",
+    question:find("at least 1 ref(s) will be marked REF!", 1, true) ~= nil,
+    question
+  )
+  local warned = false
+  for _, msg in ipairs(said) do
+    if msg:find("could not be read", 1, true) and msg:find("locked.md", 1, true) then
+      warned = true
+    end
+  end
+  check("trash lower bound: the unreadable file is named", warned, table.concat(said, " | "))
+end
+
 -- ── One spelling per path, whichever scan backend found it ─────────────────
 -- `ref.file` is what `apply` groups by, what the undo stack keys on, and what
 -- the chooser shows. The two candidate backends used to disagree about it:
@@ -2665,6 +2748,7 @@ run_cut_paste_undo_check()
 run_move_undo_check()
 run_undo_content_verification_check()
 run_trash_dry_run_check()
+run_trash_lower_bound_check()
 run_scan_path_canonical_check()
 run_display_path_check()
 

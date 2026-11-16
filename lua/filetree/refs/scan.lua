@@ -570,13 +570,16 @@ end
 ---Run one provider plan for one moved path and deliver the refs it found.
 ---@param plan FiletreeRefPlan
 ---@param ctx FiletreeRefCtx
----@param cb fun(refs: FiletreeRef[], incomplete?: boolean)  `incomplete`: the candidate search was cut short, refs may be missing
+---@param cb fun(refs: FiletreeRef[], incomplete?: boolean, unreadable?: string[])  `incomplete`: the candidate search was cut short, refs may be missing; `unreadable`: candidates that could not be read (locked, no permission), whose refs are missing
 ---@param session? FiletreeRefScanSession  shared by every job of one scan (see `new_session`)
 function M.run_plan(plan, ctx, cb, session)
   M.candidates(ctx.root, plan.needles, plan.extensions, ctx.cfg, function(files, incomplete)
-    local refs = {}
+    local refs, unreadable = {}, {}
     for _, file in ipairs(files) do
       local lines = M.lines_of(file)
+      -- A candidate the search named but nobody can read may hold references: the count is then
+      -- only a lower bound, and the caller must be able to say so.
+      if not lines then unreadable[#unreadable + 1] = file end
       if lines then
         for i, text in ipairs(lines) do
           local found = plan.extract(file, i, text)
@@ -586,7 +589,7 @@ function M.run_plan(plan, ctx, cb, session)
         end
       end
     end
-    cb(refs, incomplete)
+    cb(refs, incomplete, unreadable)
   end, session)
 end
 
