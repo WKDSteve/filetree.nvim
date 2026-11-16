@@ -1,0 +1,26 @@
+testing.nvim screen v1
+size: 90x10
+cursor: 2,1
+mode: n
+--- text
+01|  Files         │
+02|▾ proj/             │# Readme
+03|  ▸ lua/            │~
+04|    󰂺 README.md     │~
+05|~                   │~
+06|~                   │~
+07|~                   │~
+08|~                   │~
+09|~                   │~
+10|
+--- attrs
+01|aaaaaaaaaaaaaaaaaaaabccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+02|defffffeeeeeeeeeeeeebgggggggg
+03|  h iiii            bhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+04|  h j kkkkkkkkk     bhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+05|hhhhhhhhhhhhhhhhhhhhbhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+06|hhhhhhhhhhhhhhhhhhhhbhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+07|hhhhhhhhhhhhhhhhhhhhbhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+08|hhhhhhhhhhhhhhhhhhhhbhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+09|hhhhhhhhhhhhhhhhhhhhbhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+10|llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll
