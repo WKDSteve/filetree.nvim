@@ -1,5 +1,5 @@
 -- Test code: when something here comes back nil this file must crash and name it.
----@diagnostic disable: need-check-nil, missing-fields
+---@diagnostic disable: need-check-nil, missing-fields, duplicate-set-field
 -- TESTS/refs_incomplete_spec.lua -- an incomplete reference scan is announced by the
 -- flows that act on it (rename/move/copy via handle_result, delete via for_delete),
 -- and a complete scan stays silent.

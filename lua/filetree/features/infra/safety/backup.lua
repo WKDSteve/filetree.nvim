@@ -32,31 +32,14 @@ local function backup_path(src)
   return _dir .. "/" .. ts .. "_" .. base
 end
 
---- CDX: shells out to xcopy/cp -r here, while copy_move's own copy_dir()
---- copies recursively via lib.nvim.cross.fs.mutate.copy_file (libuv, no
---- shell). Possible consolidation onto the same primitive; out of scope
---- for this pass.
----Recursively copy a file or directory.
----A file is copied in-process; a directory with `xcopy` on Windows, `cp -r` elsewhere.
+---Copy a file or a whole directory in-process (filetree.util.copy_tree, the same copy a paste
+---uses): a backup starts no program. `xcopy` once asked whether a target that does not exist yet
+---names a file or a directory, and with nobody to answer every backup failed.
 ---@param src string
 ---@param dst string
 ---@return boolean
 local function copy(src, dst)
-  if vim.fn.isdirectory(src) == 0 then
-    -- One file needs no program. On Windows it must not get one: `xcopy` asks whether a target that
-    -- does not exist yet names a file or a directory (`/I` answers that for a directory source
-    -- only), and with nobody to answer the backup of every single file failed.
-    return (vim.uv.fs_copyfile(src, dst)) == true
-  end
-  local platform = require("filetree.util.platform")
-  local run_argv = require("lib.nvim.cross.run_argv")
-  local ok
-  if platform.is_windows() and not platform.is_wsl() then
-    ok = run_argv.run_blocking({ "xcopy", "/E", "/I", "/H", "/Y", src, dst })
-  else
-    ok = run_argv.run_blocking({ "cp", "-r", src, dst })
-  end
-  return ok or false
+  return (require("filetree.util.copy_tree").copy(src, dst))
 end
 
 ---Create a backup of `src`.

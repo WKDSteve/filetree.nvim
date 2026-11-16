@@ -27,7 +27,7 @@ local notify = require("filetree.util.notify").create("[filetree.copy_move]")
 -- show a path in a message (see move/init.lua's identical use for the same
 -- "Failed: src -> dst (reason)" shape). Named `ftpath`, not `path`: this file
 -- already uses `path` as a parameter name for "the path under test" in
--- several local helpers below (is_symlink, etc.).
+-- several local helpers below.
 local ftpath = require("filetree.util.path")
 local bufevents = require("filetree.util.bufevents")
 local tree_attach = require("filetree.util.tree_attach")
@@ -49,10 +49,9 @@ local refs = require("filetree.refs")
 -- when lib.nvim isn't installed.
 local progress = require("filetree.util.progress")
 
--- Central FS-mutation chokepoint (libuv-based, no shell). Retries transient
--- Windows sharing errors (EPERM/EACCES/EBUSY) that a raw uv.fs_copyfile would
--- surface as a hard failure — see the handle_guard plan.
-local fsops = require("lib.nvim.cross.fs.mutate")
+-- In-process copy of a file, symlink or tree on lib.nvim's FS-mutation
+-- chokepoint (libuv, no shell; retries transient Windows sharing errors).
+local copy_tree = require("filetree.util.copy_tree")
 local bind = require("filetree.util.bind")
 local hooks = require("filetree.util.hooks")
 
@@ -263,65 +262,10 @@ local function find_conflicts(dst_dir)
 end
 
 ---@internal
----Whether `path` is itself a symlink (not whatever it points to).
----`vim.fn.isdirectory()`/`filereadable()` both follow a link transparently,
----so this is the one place below that needs `fs_lstat` instead.
----@param path string
----@return boolean
-local function is_symlink(path)
-  local lst = (vim.uv or vim.loop).fs_lstat(path)
-  return lst ~= nil and lst.type == "link"
-end
-
----@internal
----Recreate the symlink at `src` as a new symlink at `dst`, pointing at the
----same (possibly relative) target, instead of letting a plain file/directory
----copy dereference it. Two reasons this matters, not just fidelity: a
----dereferenced *directory* symlink would deep-copy whatever it points at
----(potentially huge, and unboundedly recursive through a symlink cycle —
----`copy_dir` below has no cycle guard because a real directory tree cannot
----contain one), and a dereferenced *file* symlink silently turns a link into
----an independent full copy of its target's content.
----@param src string
----@param dst string
----@return boolean ok
----@return string? err  libuv-style failure reason, when not ok
-local function copy_symlink(src, dst)
-  local target = (vim.uv or vim.loop).fs_readlink(src)
-  if not target then return false, "could not read the symlink's own target" end
-  return fsops.symlink(target, dst, vim.fn.isdirectory(src) == 1)
-end
-
----@internal
----Recursively copy a directory tree without shelling out (shell-agnostic:
----works identically whether &shell is cmd.exe, PowerShell, or a POSIX shell).
----@param src string
----@param dst string
----@return integer rc   0 on success, 1 on any failure
----@return string? err  libuv-style failure reason of whichever entry failed first
-local function copy_dir(src, dst)
-  if vim.fn.mkdir(dst, "p") == 0 then return 1, "could not create directory: " .. dst end
-  for _, name in ipairs(vim.fn.readdir(src)) do
-    local s = src .. "/" .. name
-    local d = dst .. "/" .. name
-    if is_symlink(s) then
-      local ok, err = copy_symlink(s, d)
-      if not ok then return 1, err end
-    elseif vim.fn.isdirectory(s) == 1 then
-      local rc, err = copy_dir(s, d)
-      if rc ~= 0 then return rc, err end
-    else
-      local ok, err = fsops.copy_file(s, d)
-      if not ok then return 1, err end
-    end
-  end
-  return 0, nil
-end
-
----@internal
 ---Copy `src` to the already-resolved destination `dst` -- no collision
 ---handling here, the caller has already decided how to deal with an
----existing target before calling this.
+---existing target before calling this. In-process and symlink-preserving,
+---shared with `safety.backup` (see filetree.util.copy_tree).
 ---@param src string
 ---@param dst string
 ---@return integer rc   0 on success, 1 on failure
@@ -329,12 +273,7 @@ end
 ---  same kind of Windows sharing lock `do_move` now reports (see that
 ---  function's own doc comment); a copy can hit it exactly the same way.
 local function do_copy_impl(src, dst)
-  if is_symlink(src) then
-    local ok, err = copy_symlink(src, dst)
-    return ok and 0 or 1, err
-  end
-  if vim.fn.isdirectory(src) == 1 then return copy_dir(src, dst) end
-  local ok, err = fsops.copy_file(src, dst)
+  local ok, err = copy_tree.copy(src, dst)
   return ok and 0 or 1, err
 end
 

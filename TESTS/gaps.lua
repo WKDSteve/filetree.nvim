@@ -745,14 +745,26 @@ do
   check("backup: a single file is copied without starting a program", captured_argv == nil)
 
   local src_dir = tmp .. "/folder"
-  vim.fn.mkdir(src_dir, "p")
+  vim.fn.mkdir(src_dir .. "/sub", "p")
   vim.fn.writefile({ "inside" }, src_dir .. "/inner.txt")
+  vim.fn.writefile({ "deeper" }, src_dir .. "/sub/deep.txt")
   local dst_dir = backup.create(src_dir)
   check("backup.create(): a directory is backed up too", dst_dir ~= nil)
-  check(
-    "backup: a directory goes through the platform-appropriate copy command (xcopy/cp -r)",
-    captured_argv ~= nil and (captured_argv[1] == "xcopy" or captured_argv[1] == "cp")
-  )
+  -- A directory is copied in-process as well (filetree.util.copy_tree, the copy a paste uses): a
+  -- backup starts no program at all.
+  check("backup: a directory is copied without starting a program", captured_argv == nil)
+  if dst_dir then
+    eq(
+      "backup: a file of the directory is copied",
+      vim.fn.readfile(dst_dir .. "/inner.txt")[1],
+      "inside"
+    )
+    eq(
+      "backup: a file of a subfolder is copied",
+      vim.fn.readfile(dst_dir .. "/sub/deep.txt")[1],
+      "deeper"
+    )
+  end
 
   -- prune(): more than max_backups collapses back down to max_backups.
   for i = 2, 6 do
