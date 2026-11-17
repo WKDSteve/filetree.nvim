@@ -195,13 +195,23 @@ Shows file/directory sizes inline in the tree listing.
 `du`/`Get-ChildItem` per directory node once it renders, which is not
 something to spring on someone who just wanted a tree.
 
+**Folder sizes without the helper are queued.** With the own tree's helper
+process (`native.fs.helper`, see BACKENDS.md) a folder size is a message on
+an open pipe. Without it each folder is a `du` / PowerShell process, and on
+Windows starting one blocks the editor for about 50 ms. So at most two run
+at a time, one is started per turn of the event loop, none while the cursor
+moves in the tree (200 ms after the last move), a folder that scrolled out
+of view before its turn is skipped (and asked again when it is back), and
+the answers of a burst are drawn once. Measured on `C:\` (33 folders, no
+helper): the editor stood still for 1.6 s before, 50 ms at most now.
+
 **Backend support.** Drawn as extmarks on the node's own line, which needs
 the adapter to say which node a given line holds (`get_node_at_line`). The
 neo-tree and nvim-tree adapters implement it; netrw, oil and mini.files do
 not, so this renders nothing there rather than misplacing anything.
 
 - **Module:** `lua/filetree/features/ui/size_info/`
-- **Config:** `opts.features.size_info` — `enabled` (default **false**, opt-in), `show_files` (true), `show_dirs` (true), `dir_async` (true — async `du -sb`/`Get-ChildItem` for directories; `false` skips directory sizes entirely rather than blocking), `hl_group` (`"Comment"`)
+- **Config:** `opts.features.size_info` — `enabled` (default **false**, opt-in), `show_files` (true), `show_dirs` (true), `dir_async` (true — async `du -sk`/`Get-ChildItem` for directories (or the helper process), queued as above; `false` skips directory sizes entirely rather than blocking), `hl_group` (`"Comment"`)
 
 ## Window Size Cycler
 

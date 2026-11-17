@@ -151,11 +151,83 @@ local function query_dir_size_helper(path, callback)
   return gen ~= nil
 end
 
-local function query_dir_size(path, callback)
-  if _pending[path] then return end
-  _pending[path] = true
-  if query_dir_size_helper(path, callback) then return end
+-- ── The queue for a process per folder ───────────────────────────────────────
+--
+-- Without the helper every folder size is a process of its own, and starting one is not free: on
+-- Windows the start of a PowerShell blocks the main loop for about 50 ms. Measured 2026-11-17
+-- (STEVESPC, helper off, the 33 folders of C:\ asked at once, as a screen of rows does): every start
+-- ran at once, the main loop stood still for 1.6 s, 33 PowerShell walks ran side by side and the last
+-- needed more than 90 s. Scrolling with j/k felt stuck, and the cursor then jumped the keys that
+-- had piled up. So the starts are queued:
+--   - at most `max_running` processes at a time, and one start per turn of the loop, so a key
+--     waits for one start at most;
+--   - no start while the cursor moves in a tree: `quiet_ms` after the last move (or the last ask);
+--   - a folder that left the screen before its turn is dropped (asked again when it comes back);
+--   - the answers of one burst are drawn once (`render_ms`).
+-- The helper process takes none of this: its requests are messages on an open pipe.
 
+---@private tuning, exposed for TESTS/size_info_queue_spec.lua
+M._queue_opts = { max_running = 2, quiet_ms = 200, render_ms = 50 }
+
+---@class FiletreeSizeQueueItem
+---@field path string
+---@field key string  slashified, for the visibility check
+---@field callback fun(bytes: integer|nil)
+---@field droppable boolean  asked by a drawn row: dropped once that row left the screen
+
+local uv = vim.uv or vim.loop
+
+---@type { list: FiletreeSizeQueueItem[], running: integer, last_activity: integer, pump_due: boolean, render_due: boolean }
+local Q = { list = {}, running = 0, last_activity = 0, pump_due = false, render_due = false }
+
+---Draw the column again once for every answer that arrives within `render_ms`.
+local function request_render()
+  if Q.render_due then return end
+  Q.render_due = true
+  vim.defer_fn(function()
+    Q.render_due = false
+    M._render()
+  end, M._queue_opts.render_ms)
+end
+
+---The cursor moved in a tree or a row asked for a size: no process starts for `quiet_ms`.
+function M._activity()
+  Q.last_activity = uv.hrtime()
+end
+
+---The paths of the rows on screen in every tree window of this tab (slashified), or nil when the
+---backend cannot say (then nothing is dropped).
+---@return table<string, true>|nil
+function M._visible_paths()
+  local adapter = _adapter
+  if not adapter or not adapter.get_node_at_line then return nil end
+  local seen = {}
+  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    local buf = vim.api.nvim_win_get_buf(win)
+    if bufutil.is_tree_buffer(buf) then
+      local first = vim.fn.line("w0", win)
+      local last = vim.fn.line("w$", win)
+      for lnum = first, last do
+        local node = adapter.get_node_at_line(buf, lnum - 1)
+        if node and node.path then seen[pathutil.slashify(node.path)] = true end
+      end
+    end
+  end
+  return seen
+end
+
+local pump
+
+---@param delay_ms integer
+local function schedule_pump(delay_ms)
+  if Q.pump_due then return end
+  Q.pump_due = true
+  vim.defer_fn(pump, math.max(0, math.floor(delay_ms)))
+end
+
+---@param item FiletreeSizeQueueItem
+local function start(item)
+  local path = item.path
   local cmd
   if vim.fn.has("win32") == 1 then
     cmd = {
@@ -177,38 +249,105 @@ local function query_dir_size(path, callback)
     cmd = { "du", "-sk", path }
   end
 
-  require("filetree.util.live_procs").spawn(
+  Q.running = Q.running + 1
+  local ok, err = pcall(
+    require("filetree.util.live_procs").spawn,
     cmd,
     { text = true },
     vim.schedule_wrap(function(result)
+      Q.running = Q.running - 1
       _pending[path] = nil
-      if result.code ~= 0 then return end
-      local out = result.stdout or ""
       local bytes
-      if vim.fn.has("win32") == 1 then
-        bytes = tonumber(vim.trim(out))
-      else
-        local kib = tonumber(out:match("^(%d+)"))
-        bytes = kib and (kib * 1024) or nil
+      if result.code == 0 then
+        local out = result.stdout or ""
+        if vim.fn.has("win32") == 1 then
+          bytes = tonumber(vim.trim(out))
+        else
+          local kib = tonumber(out:match("^(%d+)"))
+          bytes = kib and (kib * 1024) or nil
+        end
       end
       if bytes then
         cache_set(path, fmt_bytes(bytes))
-        M._render()
+        request_render()
       end
-      callback(bytes)
+      if #Q.list > 0 then schedule_pump(0) end
+      item.callback(bytes)
     end)
   )
+  if not ok then
+    -- the program is not there (no PowerShell, no du): this folder gets no size, the queue goes on
+    Q.running = Q.running - 1
+    _pending[path] = nil
+    vim.notify_once("[filetree] size_info: " .. tostring(err), vim.log.levels.WARN)
+    item.callback(nil)
+  end
 end
 
----@private exposed for TESTS/powershell_quote_spec.lua
+---Start the next queued process when the cursor has rested and a slot is free; one per call.
+pump = function()
+  Q.pump_due = false
+  if #Q.list == 0 or Q.running >= M._queue_opts.max_running then return end
+  local idle_ms = (uv.hrtime() - Q.last_activity) / 1e6
+  if idle_ms < M._queue_opts.quiet_ms then
+    return schedule_pump(M._queue_opts.quiet_ms - idle_ms + 1)
+  end
+  local visible = M._visible_paths()
+  local item
+  while #Q.list > 0 do
+    local next_item = table.remove(Q.list, 1)
+    if not next_item.droppable or visible == nil or visible[next_item.key] then
+      item = next_item
+      break
+    end
+    -- left the screen before its turn: forgotten, so the row asks again when it comes back
+    _pending[next_item.path] = nil
+  end
+  if not item then return end
+  start(item)
+  -- the next start waits for the next turn of the loop: a key in between is handled first
+  if #Q.list > 0 then schedule_pump(0) end
+end
+
+---@param path string
+---@param callback fun(bytes: integer|nil)
+---@param droppable? boolean  true when a drawn row asks: dropped once the row left the screen
+local function query_dir_size(path, callback, droppable)
+  if _pending[path] then return end
+  _pending[path] = true
+  if query_dir_size_helper(path, callback) then return end
+  if droppable then M._activity() end
+  Q.list[#Q.list + 1] = {
+    path = path,
+    key = pathutil.slashify(path),
+    callback = callback,
+    droppable = droppable == true,
+  }
+  schedule_pump(0)
+end
+
+---Forget everything queued (not what already runs).
+local function queue_clear()
+  for _, item in ipairs(Q.list) do
+    _pending[item.path] = nil
+  end
+  Q.list = {}
+end
+
+---@private exposed for TESTS/powershell_quote_spec.lua and TESTS/size_info_queue_spec.lua
 M._query_dir_size = query_dir_size
+
+---@private for TESTS/size_info_queue_spec.lua
+---@return { queued: integer, running: integer }
+function M._queue_state()
+  return { queued = #Q.list, running = Q.running }
+end
 
 -- ── File size (sync via uv.fs_stat) ──────────────────────────────────────────
 
 local function get_file_size(path)
   local cached = cache_get(path, FILE_CACHE_TTL)
   if cached then return cached end
-  local uv = vim.uv or vim.loop
   local stat = uv.fs_stat(path)
   if stat then
     local s = fmt_bytes(stat.size)
@@ -238,7 +377,7 @@ local function fill_wanted()
     if kind == "file" then
       if get_file_size(path) then known[#known + 1] = path end
     elseif _cfg.dir_async then
-      query_dir_size(path, function() end)
+      query_dir_size(path, function() end, true)
     end
   end
   if _decor and #known > 0 then _decor.changed(known) end
@@ -269,7 +408,7 @@ function M._render()
         size_str = cache_get(node.path, DIR_CACHE_TTL)
         if not size_str and _cfg.dir_async then
           -- Kick off async query; render will be called again when done
-          query_dir_size(node.path, function() end)
+          query_dir_size(node.path, function() end, true)
           size_str = "…"
         end
       end
@@ -288,6 +427,7 @@ end
 ---Clear the size cache and re-render.
 function M.refresh()
   _cache = {}
+  queue_clear()
   _pending = {}
   M._render()
 end
@@ -346,6 +486,16 @@ function M.setup(config, adapter)
     end,
   })
 
+  -- a cursor on the move holds back the next folder process (see "The queue" above)
+  au.acmd({ "CursorMoved", "WinScrolled" }, {
+    group = _augroup,
+    pattern = "*",
+    desc = "[filetree] Hold back the next folder-size process while the cursor moves in the tree",
+    callback = function()
+      if M._queue_state().queued > 0 and bufutil.is_tree_buffer() then M._activity() end
+    end,
+  })
+
   M._render()
 end
 
@@ -354,6 +504,7 @@ function M.teardown()
   if _decor then _decor.remove() end
   _decor = nil
   _wanted = {}
+  queue_clear()
   if _adapter then
     local bufnr = _adapter.get_bufnr and _adapter.get_bufnr() or -1
     if bufnr >= 0 and vim.api.nvim_buf_is_valid(bufnr) then
