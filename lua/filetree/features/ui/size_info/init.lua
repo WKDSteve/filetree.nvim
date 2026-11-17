@@ -202,9 +202,11 @@ function M._visible_paths()
   local adapter = _adapter
   if not adapter or not adapter.get_node_at_line then return nil end
   local seen = {}
+  -- the adapter's own buffer first: that is the tree this feature was set up with
+  local own = adapter.get_bufnr and adapter.get_bufnr() or nil
   for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
     local buf = vim.api.nvim_win_get_buf(win)
-    if bufutil.is_tree_buffer(buf) then
+    if buf == own or bufutil.is_tree_buffer(buf) then
       local first = vim.fn.line("w0", win)
       local last = vim.fn.line("w$", win)
       for lnum = first, last do

@@ -176,6 +176,38 @@ eq("the next one is still tried", answers["/q/fail2"], false)
 eq("no slot stays taken", size_info._queue_state().running, 0)
 vim.notify_once = notify
 
+-- ── the own tree: a drawn folder row is measured, not dropped ─────────────────
+-- The visibility check reads the rows from the adapter and the ask comes from the decorator; a
+-- path spelled differently on the two sides would drop every folder and no size would ever show.
+live.spawn = function(cmd, _, on_exit)
+  started[#started + 1] = { cmd = cmd, on_exit = on_exit }
+  return {}
+end
+size_info._render = orig.render
+started = {}
+local list = require("filetree.native.fs.list")
+local base = list.norm(vim.uv.fs_realpath(vim.fn.tempname():match("^(.*)[/\\]")))
+local dir = ("%s/ft_sizeq_%d"):format(base, vim.uv.hrtime() % 1e9)
+vim.fn.mkdir(dir .. "/sub", "p")
+vim.fn.writefile({ "x" }, dir .. "/sub/a.txt")
+require("filetree.config").setup({})
+local adapter = require("filetree.adapter.native")
+adapter.toggle_at("left", { dir = dir })
+size_info.setup({ enabled = true }, adapter)
+local line = adapter.get_node_line(dir .. "/sub")
+eq("the folder has a row", type(line), "number")
+require("filetree.native.view").decorate_line(adapter.get_bufnr(), line - 1, adapter.get_winid())
+settle(120)
+local measured = false
+for _, s in ipairs(started) do
+  if table.concat(s.cmd, " "):find("ft_sizeq_%d+[/\\]sub") then measured = true end
+end
+eq("the drawn folder row starts its process", measured, true)
+eq("nothing of it stays queued", size_info._queue_state().queued, 0)
+size_info.teardown()
+reset()
+vim.fn.delete(dir, "rf")
+
 -- ── restore ───────────────────────────────────────────────────────────────────
 live.spawn = orig.spawn
 size_info._render = orig.render
