@@ -195,18 +195,23 @@ function M._activity()
   Q.last_activity = uv.hrtime()
 end
 
----The paths of the rows on screen in every tree window of this tab (slashified), or nil when the
----backend cannot say (then nothing is dropped).
+---The paths of the rows on screen in every tree window of this tab (slashified), or nil when that
+---cannot be said: the backend cannot name the node of a line, or no window of this tab shows a
+---tree (then nothing is dropped; the rows were asked for by someone).
 ---@return table<string, true>|nil
 function M._visible_paths()
   local adapter = _adapter
   if not adapter or not adapter.get_node_at_line then return nil end
-  local seen = {}
-  -- the adapter's own buffer first: that is the tree this feature was set up with
+  local seen, windows = {}, 0
+  -- The adapter's own buffer is the tree this feature was set up with: when it names one, only the
+  -- windows that show it count (a leftover buffer with a tree filetype says nothing about these
+  -- rows). Only without one does any tree buffer count.
   local own = adapter.get_bufnr and adapter.get_bufnr() or nil
+  if own and not vim.api.nvim_buf_is_valid(own) then own = nil end
   for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
     local buf = vim.api.nvim_win_get_buf(win)
-    if buf == own or bufutil.is_tree_buffer(buf) then
+    if (own and buf == own) or (not own and bufutil.is_tree_buffer(buf)) then
+      windows = windows + 1
       local first = vim.fn.line("w0", win)
       local last = vim.fn.line("w$", win)
       for lnum = first, last do
@@ -215,6 +220,7 @@ function M._visible_paths()
       end
     end
   end
+  if windows == 0 then return nil end
   return seen
 end
 

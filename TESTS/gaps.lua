@@ -3130,6 +3130,10 @@ end
 
 -- ── ui.size_info ── file sizes (sync) + directory sizes (stubbed vim.system) ─
 do
+  -- The helper process is off for every size_info block: a built helper/bin/filetree-helper
+  -- would answer the folder sizes itself (an empty folder: 0 B) and the vim.system stubs below
+  -- would never be asked. Back on after the last block, before ui.preview.
+  require("filetree.native.fs.helper").configure(false)
   -- The git_status blocks above leave their debounced refresh behind, and with the feature's own
   -- default debounce (300 ms, no longer the 10 ms an earlier block leaked into every later
   -- setup()) it fires inside this block, through the vim.system stub below, and spoils what it
@@ -3420,6 +3424,7 @@ do
   si.teardown()
   pcall(vim.api.nvim_buf_delete, tree_buf, { force = true })
   vim.cmd("silent! only")
+  require("filetree.native.fs.helper").configure(nil)
 end
 
 -- ── ui.preview ── file/dir preview (float + buffer modes), image/pdf dispatch ─

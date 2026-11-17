@@ -208,6 +208,42 @@ size_info.teardown()
 reset()
 vim.fn.delete(dir, "rf")
 
+-- ── which windows count as the tree ───────────────────────────────────────────
+local own_buf = vim.api.nvim_create_buf(false, true)
+vim.api.nvim_buf_set_lines(own_buf, 0, -1, false, { "one", "two" })
+local stub = {
+  name = "spec-sizeq-stub",
+  get_bufnr = function()
+    return own_buf
+  end,
+  get_node_at_line = function(buf, linenr)
+    if buf ~= own_buf then return { path = "/elsewhere/" .. linenr, type = "directory" } end
+    return { path = "/own/" .. linenr, type = "directory" }
+  end,
+}
+size_info.setup({ enabled = true, dir_async = false }, stub)
+eq(
+  "the own buffer in no window: nothing is known, nothing dropped",
+  size_info._visible_paths(),
+  nil
+)
+local leftover = vim.api.nvim_create_buf(false, true)
+vim.bo[leftover].filetype = "neo-tree"
+-- in windows of their own: the window of the own tree from above may refuse another buffer
+local leftover_win = vim.api.nvim_open_win(leftover, false, { split = "below" })
+eq(
+  "a leftover tree buffer in a window says nothing about the own rows",
+  size_info._visible_paths(),
+  nil
+)
+local own_win = vim.api.nvim_open_win(own_buf, false, { split = "below" })
+local vis = size_info._visible_paths() or {}
+eq("the window with the own buffer counts", vis["/own/1"], true)
+eq("and only its rows", vis["/elsewhere/0"], nil)
+vim.api.nvim_win_close(own_win, true)
+vim.api.nvim_win_close(leftover_win, true)
+size_info.teardown()
+
 -- ── restore ───────────────────────────────────────────────────────────────────
 live.spawn = orig.spawn
 size_info._render = orig.render
