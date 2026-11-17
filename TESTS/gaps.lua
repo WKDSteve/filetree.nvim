@@ -3902,6 +3902,36 @@ do
     end)
     check("image.float: a zen that raised falls back to the inline view", show_calls == 1)
 
+    -- A text preview open in float mode goes before the image opens, as for <Tab>. The real
+    -- zen window took it away only by taking the focus (the tree's WinLeave); the stand-in here
+    -- opens no window, so this checks that <CR> closes it itself.
+    zen_calls, show_calls = {}, 0
+    preview.setup({
+      enabled = true,
+      mode = "float",
+      image = { backend = "auto", float = { width = 0.66, height = 0.66 } },
+    }, stub)
+    cur_node = { path = text_file, type = "file" }
+    preview.toggle()
+    check("<CR> on an image [float]: a text preview is open first", open_float_win() ~= nil)
+    cur_node = { path = image_file, type = "file" }
+    local zen_saw_preview
+    package.loaded["images"].zen = function(path, opts)
+      zen_calls[#zen_calls + 1] = { path = path, opts = opts }
+      zen_saw_preview = open_float_win() ~= nil
+      return true
+    end
+    preview.open_or_fallback(fallback)
+    eq("<CR> on an image [float]: the zen float is opened once", #zen_calls, 1)
+    eq(
+      "<CR> on an image [float]: the text preview is closed before zen opens",
+      zen_saw_preview,
+      false
+    )
+    eq("<CR> on an image [float]: ... and not the inline view as well", show_calls, 0)
+    check("<CR> on an image [float]: no preview float is left behind", open_float_win() == nil)
+    preview.teardown()
+
     package.loaded["images"] = orig_images
   end
 

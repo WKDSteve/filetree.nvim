@@ -857,17 +857,25 @@ function M.open_or_fallback(fallback)
   local cfg_img = _cfg.image or {}
   local cfg_pdf = _cfg.pdf or {}
 
+  -- Any open text preview goes first, as for <Tab>. Before, a float preview
+  -- only went because images.nvim's zen window takes the focus (the tree's
+  -- WinLeave closes it): an image that ends up drawn inline instead, or a
+  -- viewer that leaves the focus in the tree, kept the stale preview over it,
+  -- and a float closing over a drawn picture makes the picture draw again.
   if cfg_img.backend ~= false and is_image(node.path) then
+    close_preview()
     if not open_image_float(node.path) then open_image(node.path) end
     return
   end
 
   if cfg_pdf.backend ~= false and is_pdf(node.path) then
+    close_preview()
     open_pdf(node.path)
     return
   end
 
   if is_system_ext(node.path) then
+    close_preview()
     system_open(node.path)
     return
   end
