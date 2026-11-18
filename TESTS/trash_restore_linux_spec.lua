@@ -58,11 +58,15 @@ package.loaded["lib.nvim.cross.run_argv"] = {
     return ok == true, ok and nil or "exit code 1"
   end,
 }
+-- what the undo module says, in order
+local said = {}
 package.loaded["filetree.util.notify"] = {
   create = function()
     return setmetatable({}, {
       __index = function()
-        return function() end
+        return function(msg)
+          said[#said + 1] = tostring(msg)
+        end
       end,
     })
   end,
@@ -117,6 +121,17 @@ eq(
   true
 )
 eq("wsl, windows side: not for the Linux spelling", script:find([[\mnt\c]], 1, true), nil)
+
+-- `U` with an empty history says so instead of nothing.
+said = {}
+eq("empty history: nothing was recorded here", undo.last(), nil)
+local undone = undo.restore_last()
+eq("empty history: nothing restored", undone, false)
+eq(
+  "empty history: the user is told",
+  table.concat(said, " "):find("Nothing to undo", 1, true) ~= nil,
+  true
+)
 
 vim.fn.delete(work, "rf")
 print(("\nfiletree.nvim trash_restore_linux_spec: %d passed, %d failed"):format(passed, failed))

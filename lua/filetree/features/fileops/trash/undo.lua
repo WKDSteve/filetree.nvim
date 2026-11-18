@@ -330,7 +330,11 @@ end
 ---@return string? err
 function M.restore_last()
   local entry = _history[1]
-  if not entry then return false, "Trash history is empty" end
+  if not entry then
+    -- `U` with nothing to undo said nothing at all, so a press looked like it was lost
+    notify.info("Nothing to undo: the trash history is empty")
+    return false, "Trash history is empty"
+  end
   local ok, err = M.restore(entry)
   if ok then table.remove(_history, 1) end
   return ok, err
