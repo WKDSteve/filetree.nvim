@@ -184,6 +184,31 @@ else
   eq("... the same paths", by_helper, by_lua)
   eq("... and says it is done", done, true)
 
+  -- protocol 3: the options of a walk reach the program, a wrong one is an error
+  do
+    local function walk(opts)
+      local found, last = 0, nil
+      helper.request("walk", dir, function(kind, payload)
+        if kind == "files" then
+          found = found + #payload
+          return true
+        end
+        last = { kind = kind, payload = payload }
+      end, opts)
+      vim.wait(10000, function()
+        return last ~= nil
+      end, 5)
+      return found, last
+    end
+    local found, last = walk({ ignore = "names", names = { "closed" }, exclude = { "d1*", "d2*" } })
+    eq("walk options: names and exclude leave out what they name (d01..d09)", found, 900)
+    eq("... and the walk ends with done", last and last.kind, "done")
+    local depth = walk({ max_depth = 2, exclude = { "d*" } })
+    eq("walk options: max_depth 2 stops above closed/deeper", depth, 0)
+    local _, wrong = walk({ ignore = "all" })
+    eq("walk options: a wrong one is answered with error", wrong and wrong.kind, "error")
+  end
+
   -- cancelled before any answer: nothing more reaches the caller
   do
     local batches, finished = 0, false

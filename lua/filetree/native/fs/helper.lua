@@ -27,7 +27,7 @@ local uv = vim.uv
 local M = {}
 
 --- The protocol this module speaks (`filetree-helper --version` names its own).
-M.PROTOCOL = 2
+M.PROTOCOL = 3
 
 ---@alias Filetree.Fs.Helper.Mode "auto"|false|string
 
@@ -188,14 +188,20 @@ end
 ---@param method "walk"|"size"|"watch"
 ---@param arg string  The folder.
 ---@param handler fun(kind: string, payload: any): boolean|nil
+---@param opts? table  For `"walk"` (protocol 3): `hidden`, `ignore` (`"gitignore"`|`"names"`|`"none"`), `names`, `no_ignore`, `follow`, `exclude`, `max_depth`; nil lists as before. A wrong option is answered with `"error"`.
 ---@return integer|nil generation  Nil when there is no helper (the handler is not called then).
-function M.request(method, arg, handler)
+function M.request(method, arg, handler, opts)
   local chan = start()
   if not chan then return nil end
   state.generation = state.generation + 1
   local gen = state.generation
   state.handlers[gen] = handler
-  local ok, err = pcall(vim.rpcnotify, chan, method, gen, arg)
+  local ok, err
+  if opts ~= nil then
+    ok, err = pcall(vim.rpcnotify, chan, method, gen, arg, opts)
+  else
+    ok, err = pcall(vim.rpcnotify, chan, method, gen, arg)
+  end
   if not ok then
     state.handlers[gen] = nil
     lose("could not be reached: " .. tostring(err))

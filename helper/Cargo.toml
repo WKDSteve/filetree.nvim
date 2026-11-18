@@ -1,6 +1,6 @@
 [package]
 name = "filetree-helper"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 publish = false
 description = "Prototype (E3h): read-only helper of filetree.nvim's own tree: deep listing, recursive watch, git status delta over msgpack-RPC on stdio"

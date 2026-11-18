@@ -8,10 +8,15 @@
 //! What it never does: open a socket, start a process, write to the file system, read the content of
 //! a file other than ignore files and what git keeps below `.git`. It ends when its stdin closes.
 //!
-//! Protocol (version 2). The editor sends notifications `[2, method, params]`; every one carries a
+//! Protocol (version 3). The editor sends notifications `[2, method, params]`; every one carries a
 //! generation number as its first parameter, and every answer carries the generation of its request:
 //!
-//! - `walk [gen, root]` -> `files [gen, paths]`*, then `done [gen, {ok, files, ms}]`
+//! - `walk [gen, root, options?]` -> `files [gen, paths]`*, then `done [gen, {ok, files, ms}]`;
+//!   `options` (protocol 3, every key optional): `hidden` (bool, default true), `ignore`
+//!   (`"gitignore"` default, `"names"` with `names` = folder names not entered, `"none"`),
+//!   `no_ignore` (bool: `ignore = "none"` unless `ignore` is given), `follow` (bool), `exclude`
+//!   (globs as `fd --exclude`), `max_depth` (1 = the files of the root). `.git` is never entered.
+//!   An option that does not parse is answered with `error [gen, text]` and no `done`
 //! - `cancel [gen]`: the walk of that generation sends nothing more
 //! - `size [gen, dir]` -> `size [gen, {files, bytes, ms}]`
 //! - `watch [gen, root]` -> `watching [gen, root]`, then `changed [gen, dirs]` after a short quiet,
@@ -22,7 +27,10 @@
 //! - `status [gen, root]` -> `status [gen, {full, set, gone, entries, ms}]` (a delta after the first)
 //! - request `ping` -> `{name, version, protocol, pid}`
 //!
-//! An answer is a notification the editor runs itself: `nvim_exec_lua(SINK, [kind, gen, payload])`.
+//! An answer is a notification the editor runs itself: `nvim_exec_lua(SINK, [kind, gen, payload])`,
+//! where SINK is `return require('<module>').on(...)`. The module is `filetree.native.fs.helper`, or
+//! the one named by `FILETREE_HELPER_SINK` (letters, digits, `_` and `.` only; lib.nvim names its
+//! own client, `lib.nvim.fs.helper`). A name with any other character is not used.
 //!
 //! `filetree-helper walk <root> [--print]`, `size <dir>` and `status <root> [--print]` run one piece
 //! of work without the protocol and print what it cost.
@@ -37,17 +45,104 @@ use std::io::{self, BufReader, BufWriter, Write};
 use std::process::ExitCode;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Sender};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::Instant;
 
 use rmpv::Value;
 
-/// The Lua the editor runs for every answer; its arguments are `kind, generation, payload`.
-const SINK: &str = "return require('filetree.native.fs.helper').on(...)";
+/// The module whose `on` gets every answer when `FILETREE_HELPER_SINK` names none.
+const SINK_MODULE: &str = "filetree.native.fs.helper";
 
 /// Bumped when a method or an answer changes shape.
-const PROTOCOL: u64 = 2;
+const PROTOCOL: u64 = 3;
+
+/// The Lua the editor runs for every answer; its arguments are `kind, generation, payload`.
+fn sink() -> &'static str {
+    static SINK: OnceLock<String> = OnceLock::new();
+    SINK.get_or_init(|| sink_for(std::env::var("FILETREE_HELPER_SINK").ok().as_deref()))
+}
+
+/// The sink for a module name; a name that could be more than a module path is not used.
+fn sink_for(name: Option<&str>) -> String {
+    let module = name
+        .filter(|name| {
+            !name.is_empty()
+                && name.len() <= 128
+                && name
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.')
+        })
+        .unwrap_or(SINK_MODULE);
+    format!("return require('{module}').on(...)")
+}
+
+/// The options of a `walk` (protocol 3); nil or a missing key keeps what the listing did before.
+fn walk_options(value: Option<&Value>) -> Result<walk::Options, String> {
+    let mut options = walk::Options::default();
+    let Some(value) = value else {
+        return Ok(options);
+    };
+    if value.is_nil() {
+        return Ok(options);
+    }
+    let Some(pairs) = value.as_map() else {
+        return Err("walk options must be a map".into());
+    };
+    let mut ignore: Option<String> = None;
+    let mut names: Vec<String> = Vec::new();
+    let mut no_ignore = false;
+    for (key, value) in pairs {
+        let flag = || {
+            value
+                .as_bool()
+                .ok_or_else(|| format!("walk option {key} must be a boolean"))
+        };
+        let strings = || -> Result<Vec<String>, String> {
+            value
+                .as_array()
+                .ok_or_else(|| format!("walk option {key} must be a list of strings"))?
+                .iter()
+                .map(|item| {
+                    item.as_str()
+                        .map(str::to_owned)
+                        .ok_or_else(|| format!("walk option {key} must be a list of strings"))
+                })
+                .collect()
+        };
+        match key.as_str().unwrap_or("") {
+            "hidden" => options.hidden = flag()?,
+            "follow" => options.follow = flag()?,
+            "no_ignore" => no_ignore = flag()?,
+            "exclude" => options.exclude = strings()?,
+            "names" => names = strings()?,
+            "ignore" => {
+                ignore = Some(
+                    value
+                        .as_str()
+                        .ok_or("walk option ignore must be a string")?
+                        .to_owned(),
+                )
+            }
+            "max_depth" => {
+                options.max_depth = match value.as_u64() {
+                    Some(depth) => Some(depth as usize),
+                    None if value.is_nil() => None,
+                    None => return Err("walk option max_depth must be a whole number".into()),
+                }
+            }
+            other => return Err(format!("unknown walk option {other:?}")),
+        }
+    }
+    options.ignore = match ignore.as_deref() {
+        None if no_ignore => walk::Ignore::Nothing,
+        None | Some("gitignore") => walk::Ignore::Gitignore,
+        Some("names") => walk::Ignore::Names(names),
+        Some("none") => walk::Ignore::Nothing,
+        Some(other) => return Err(format!("walk option ignore: unknown {other:?}")),
+    };
+    Ok(options)
+}
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -137,7 +232,7 @@ fn event(kind: &str, generation: u64, payload: Value) -> Value {
         Value::from(2),
         Value::from("nvim_exec_lua"),
         Value::Array(vec![
-            Value::from(SINK),
+            Value::from(sink()),
             Value::Array(vec![Value::from(kind), Value::from(generation), payload]),
         ]),
     ])
@@ -249,13 +344,20 @@ impl Server {
                 });
             }
             ("walk", Some(root)) => {
+                let options = match walk_options(params.get(1)) {
+                    Ok(options) => options,
+                    Err(err) => {
+                        let _ = self.out.send(event("error", generation, Value::from(err)));
+                        return;
+                    }
+                };
                 let cancel = Arc::new(AtomicBool::new(false));
                 self.walks.retain(|_, flag| Arc::strong_count(flag) > 1);
                 self.walks.insert(generation, Arc::clone(&cancel));
                 let out = self.out.clone();
                 thread::spawn(move || {
                     let started = Instant::now();
-                    let summary = walk::run(&root, &cancel, &|batch| {
+                    let listed = walk::run_with(&root, &options, &cancel, &|batch| {
                         if cancel.load(Ordering::Relaxed) {
                             return;
                         }
@@ -265,6 +367,13 @@ impl Server {
                     if cancel.load(Ordering::Relaxed) {
                         return;
                     }
+                    let summary = match listed {
+                        Ok(summary) => summary,
+                        Err(err) => {
+                            let _ = out.send(event("error", generation, Value::from(err)));
+                            return;
+                        }
+                    };
                     let done = map(vec![
                         ("ok", Value::from(summary.ok)),
                         ("files", Value::from(summary.files)),
@@ -345,5 +454,75 @@ impl Server {
             }
             _ => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn opts(pairs: Vec<(&str, Value)>) -> Result<walk::Options, String> {
+        walk_options(Some(&map(pairs)))
+    }
+
+    #[test]
+    fn no_options_keep_the_listing_of_protocol_2() {
+        assert_eq!(walk_options(None).unwrap(), walk::Options::default());
+        assert_eq!(
+            walk_options(Some(&Value::Nil)).unwrap(),
+            walk::Options::default()
+        );
+        assert_eq!(opts(vec![]).unwrap(), walk::Options::default());
+    }
+
+    #[test]
+    fn every_option_is_read() {
+        let got = opts(vec![
+            ("hidden", Value::from(false)),
+            ("follow", Value::from(true)),
+            ("exclude", Value::Array(vec![Value::from("*.log")])),
+            ("max_depth", Value::from(3)),
+            ("ignore", Value::from("names")),
+            ("names", Value::Array(vec![Value::from("node_modules")])),
+        ])
+        .unwrap();
+        assert!(!got.hidden && got.follow);
+        assert_eq!(got.exclude, vec!["*.log".to_string()]);
+        assert_eq!(got.max_depth, Some(3));
+        assert_eq!(got.ignore, walk::Ignore::Names(vec!["node_modules".into()]));
+    }
+
+    #[test]
+    fn no_ignore_means_none_unless_ignore_is_given() {
+        let only = opts(vec![("no_ignore", Value::from(true))]).unwrap();
+        assert_eq!(only.ignore, walk::Ignore::Nothing);
+        let both = opts(vec![
+            ("no_ignore", Value::from(true)),
+            ("ignore", Value::from("gitignore")),
+        ])
+        .unwrap();
+        assert_eq!(both.ignore, walk::Ignore::Gitignore);
+    }
+
+    #[test]
+    fn a_wrong_option_is_an_error() {
+        assert!(opts(vec![("hidden", Value::from("yes"))]).is_err());
+        assert!(opts(vec![("ignore", Value::from("all"))]).is_err());
+        assert!(opts(vec![("depth", Value::from(1))]).is_err());
+        assert!(walk_options(Some(&Value::from(1))).is_err());
+    }
+
+    #[test]
+    fn the_sink_names_a_module_only() {
+        assert_eq!(
+            sink_for(None),
+            "return require('filetree.native.fs.helper').on(...)"
+        );
+        assert_eq!(
+            sink_for(Some("lib.nvim.fs.helper")),
+            "return require('lib.nvim.fs.helper').on(...)"
+        );
+        assert_eq!(sink_for(Some("x');os.exit()--")), sink_for(None));
+        assert_eq!(sink_for(Some("")), sink_for(None));
     }
 }

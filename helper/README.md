@@ -19,8 +19,15 @@ One child process per Neovim, msgpack-RPC over stdin/stdout:
 | git status | gitoxide in the process; after the first answer only the delta | nothing: measured, `git` is as fast |
 
 Every request carries a generation number, every answer carries the generation of its request. The
-protocol (version 2) is described at the top of `src/main.rs`; the Lua side is
+protocol (version 3) is described at the top of `src/main.rs`; the Lua side is
 `lua/filetree/native/fs/helper.lua`.
+
+Protocol 3 added options to `walk`, the switches of `fd`: `hidden`, `follow`, `exclude` (globs),
+`max_depth`, and which ignore rules count (`ignore = "gitignore"` by default, `"names"` with a list of
+folder names, `"none"`; `no_ignore = true` is `"none"`). Without options a listing is what it was in
+protocol 2 (measured on `E:\repos`, 60 746 files: 147 ms with both programs). `.git` is never entered.
+It also lets the editor say which Lua module gets the answers (`FILETREE_HELPER_SINK`, a module path
+only), so that a client outside this plugin can use the same program.
 
 What it never does: open a socket, start a process, write to the file system, read file contents other
 than ignore files and what git keeps below `.git`. It ends when its stdin closes (that is, with Neovim).
