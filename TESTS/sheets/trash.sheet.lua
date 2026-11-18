@@ -47,6 +47,16 @@ return {
       end
       ---The stand-in the trash of this system goes to.
       _G.program = vim.fn.has("win32") == 1 and "powershell" or vim.fn.has("mac") == 1 and "trash" or "gio"
+      ---WSL does not batch: each path goes on its own (wslpath first for a Windows-side one).
+      _G.batches = not require("filetree.util.platform").is_wsl()
+      ---The calls that named `text`.
+      _G.naming = function(text)
+        local n = 0
+        for _, call in ipairs(_G.calls()) do
+          if call.program == _G.program and call.args:find(text, 1, true) then n = n + 1 end
+        end
+        return n
+      end
       ---Put the cursor on a row of the tree.
       _G.cursor_on = function(rel)
         vim.api.nvim_win_set_cursor(_G.win, { _G.adapter.get_node_line(_G.work .. "/" .. rel), 0 })
@@ -92,19 +102,19 @@ return {
       note = "the outcome of the batch is said (moved n/2)",
     },
     {
-      expect = "#_G.calls() == 1 and _G.calls()[1].program == _G.program",
-      note = "once, for both files: the system's trash program",
+      expect = "_G.naming('first.log') == 1 and _G.naming('second.log') == 1",
+      note = "the system's trash program got each file once",
     },
     {
-      expect = "_G.calls()[1].args:find('first.log', 1, true) ~= nil and _G.calls()[1].args:find('second.log', 1, true) ~= nil",
-      note = "with both files",
+      expect = "not _G.batches or (#_G.calls() == 1 and _G.calls()[1].program == _G.program)",
+      note = "in ONE call for both (not on WSL, which goes path by path)",
     },
     { lua = "require('filetree.features.org.marks').clear_all(); _G.cursor_on('old/third.log')" },
     { keys = "d", note = "trash third.log alone" },
-    { wait = "#_G.calls() >= 2", timeout = 10000, note = "the trash program is started again" },
     {
-      expect = "_G.calls()[2].program == _G.program and _G.calls()[2].args:find('third.log', 1, true) ~= nil",
-      note = "with third.log",
+      wait = "_G.naming('third.log') == 1",
+      timeout = 10000,
+      note = "the trash program is started again, with third.log",
     },
     {
       wait = "table.concat(_G.notes, ' '):find('/1 to trash', 1, true) ~= nil",
