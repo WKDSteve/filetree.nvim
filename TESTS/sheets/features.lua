@@ -28,6 +28,12 @@ return {
     docs = "docs/FEATURES/BACKENDS.md",
   },
   {
+    id = "filetree.native-current-marker",
+    title = "The active buffer's row carries a marker one level in from its folder's arrow, or none",
+    surface = { "config:features.current_hl.icon", "config:features.current_hl.icon_hl" },
+    docs = "docs/FEATURES/UI.md",
+  },
+  {
     id = "filetree.native-ai",
     title = ":Filetree ask turns a sentence into actions of the tree, and asks before one that changes files",
     surface = { "command:Filetree ask", "config:native.ai" },
