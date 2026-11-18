@@ -39,8 +39,11 @@ local function eq(name, got, want)
   end
 end
 
-local work = vim.fs.normalize(vim.fn.tempname())
+local work = vim.fn.tempname()
 vim.fn.mkdir(work .. "/src/sub", "p")
+-- the real path: on macOS the temp folder lies below /var, a link to /private/var, and the
+-- quickfix buffers carry the resolved name
+work = vim.fs.normalize(assert(vim.uv.fs_realpath(work)))
 vim.fn.writefile({ "local needle = 1", "x" }, work .. "/src/a.lua")
 vim.fn.writefile({ "-- none", "-- at 3:12: a needle" }, work .. "/src/sub/b.lua")
 
