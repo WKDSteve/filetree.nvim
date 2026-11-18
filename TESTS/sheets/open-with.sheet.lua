@@ -7,6 +7,7 @@
 return {
   id = "filetree.open-with",
   title = "filetree.nvim: open the node under the cursor with a configured application",
+  task = "filetree.nvim/abnahme-von-hand-prozess-features-papierkorb-dateimanager-sy",
   feature = "filetree.open-with",
   engine = "rpc",
   sizes = { { rows = 16, cols = 80 } },

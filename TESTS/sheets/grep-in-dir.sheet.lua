@@ -9,6 +9,7 @@
 return {
   id = "filetree.grep-in-dir",
   title = "filetree.nvim: search the text of the files below the folder under the cursor",
+  task = "filetree.nvim/abnahme-von-hand-prozess-features-papierkorb-dateimanager-sy",
   feature = "filetree.grep-in-dir",
   engine = "rpc",
   sizes = { { rows = 20, cols = 80 } },

@@ -8,6 +8,7 @@
 return {
   id = "filetree.size-info",
   title = "filetree.nvim: the size of each file and folder in a column of the tree",
+  task = "filetree.nvim/abnahme-von-hand-prozess-features-papierkorb-dateimanager-sy",
   feature = "filetree.size-info",
   engine = "rpc",
   sizes = { { rows = 16, cols = 80 } },

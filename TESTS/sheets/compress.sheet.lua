@@ -7,6 +7,7 @@
 return {
   id = "filetree.compress",
   title = "filetree.nvim: compress the node under the cursor to a zip",
+  task = "filetree.nvim/abnahme-von-hand-prozess-features-papierkorb-dateimanager-sy",
   feature = "filetree.compress",
   engine = "rpc",
   sizes = { { rows = 16, cols = 80 } },

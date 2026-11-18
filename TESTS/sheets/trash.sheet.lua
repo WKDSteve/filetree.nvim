@@ -12,6 +12,7 @@
 return {
   id = "filetree.trash",
   title = "filetree.nvim: move nodes to the system trash (one process for a marked batch) and undo",
+  task = "filetree.nvim/abnahme-von-hand-prozess-features-papierkorb-dateimanager-sy",
   feature = "filetree.trash",
   engine = "rpc",
   sizes = { { rows = 16, cols = 80 } },

@@ -7,6 +7,7 @@
 return {
   id = "filetree.native-git-view",
   title = "filetree.nvim: the view git of the own tree, staging and unstaging a file from it",
+  task = "filetree.nvim/abnahme-von-hand-prozess-features-papierkorb-dateimanager-sy",
   feature = "filetree.native-git-view",
   engine = "rpc",
   sizes = { { rows = 20, cols = 80 } },

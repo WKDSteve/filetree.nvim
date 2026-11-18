@@ -8,6 +8,7 @@
 return {
   id = "filetree.open-in-fm",
   title = "filetree.nvim: show the node under the cursor in the file manager",
+  task = "filetree.nvim/abnahme-von-hand-prozess-features-papierkorb-dateimanager-sy",
   feature = "filetree.open-in-fm",
   engine = "rpc",
   sizes = { { rows = 16, cols = 80 } },

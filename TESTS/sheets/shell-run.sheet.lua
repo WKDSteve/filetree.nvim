@@ -7,6 +7,7 @@
 return {
   id = "filetree.shell-run",
   title = "filetree.nvim: run a shell command in the folder of the node under the cursor",
+  task = "filetree.nvim/abnahme-von-hand-prozess-features-papierkorb-dateimanager-sy",
   feature = "filetree.shell-run",
   engine = "rpc",
   sizes = { { rows = 20, cols = 80 } },

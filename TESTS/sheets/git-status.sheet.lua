@@ -8,6 +8,7 @@
 return {
   id = "filetree.git-status",
   title = "filetree.nvim: the git state of each file as a sign on its row of the tree",
+  task = "filetree.nvim/abnahme-von-hand-prozess-features-papierkorb-dateimanager-sy",
   feature = "filetree.git-status",
   engine = "rpc",
   sizes = { { rows = 16, cols = 80 } },
