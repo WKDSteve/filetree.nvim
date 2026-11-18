@@ -78,6 +78,8 @@ return {
       "ft-definitely-missing-tool-xyz",
       -- TESTS/native_helper_spec.lua starts the helper process of the own tree (helper/; n/a when not built).
       "filetree-helper",
+      -- TESTS/grep_in_dir_fallback_spec.lua runs grep_in_dir's grep fallback for real (rg hidden).
+      "grep",
     },
   },
   -- "c" = child started from a -c command (v:vim_did_enter is 0, <cword> works),

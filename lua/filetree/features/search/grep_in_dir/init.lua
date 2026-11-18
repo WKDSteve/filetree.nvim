@@ -189,8 +189,15 @@ local function builtin_search_done(dir, pattern, output, exit_code, prog)
   -- Populate quickfix
   local qf_items = {}
   for _, line in ipairs(output) do
-    -- rg/grep --vimgrep format: file:line:col:text
-    local file, lnum, col, text = line:match("^(.+):(%d+):(%d+):(.*)")
+    -- rg --vimgrep: file:line:col:text. grep has no column: with --null it writes
+    -- file NUL line:text, which also keeps a ":12:" inside the text from being read as one.
+    local file, lnum, col, text
+    local g_file, g_lnum, g_text = line:match("^(.-)%z(%d+):(.*)")
+    if g_file then
+      file, lnum, col, text = g_file, g_lnum, "1", g_text
+    else
+      file, lnum, col, text = line:match("^(.+):(%d+):(%d+):(.*)")
+    end
     if file then
       qf_items[#qf_items + 1] = {
         filename = file,
@@ -242,7 +249,8 @@ local function run_builtin_search(dir, pattern)
     args[#args + 1] = pattern
     args[#args + 1] = dir
   else
-    args = { "grep", "-rn", "--", pattern, dir }
+    -- -H: the file name also when only one file is searched; --null: see builtin_search_done
+    args = { "grep", "-rnH", "--null", "--", pattern, dir }
   end
 
   -- The search used to run through `vim.system():wait()` (rg) or
