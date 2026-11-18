@@ -116,7 +116,7 @@ return {
       for i, line in ipairs(vim.api.nvim_buf_get_lines(buf, 0, -1, false)) do
         if line:find("Untracked", 1, true) then vim.api.nvim_win_set_cursor(_G.win, { i, 0 }) end
       end]],
-      note = "the cursor on Untracked (it comes back closed: filetree.nvim/git-ansicht-wieder-erscheinende-gruppe-zugeklappt)",
+      note = "the cursor on Untracked (it comes back closed: filetree.nvim/git-ansicht-eine-wieder-erscheinende-gruppe-untracked-nach-g)",
     },
     { keys = "<CR>", note = "open the group" },
     {
