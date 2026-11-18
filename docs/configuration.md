@@ -304,6 +304,9 @@ require("filetree").setup({
       file_hl     = { fg = "#7aa2f7", bold = true },
       parent_hl   = { fg = "#565f89" },
       debounce_ms = 100,
+      icon        = nil,      -- marker on the current file's row: nil/"" = none (default),
+                              -- any text or glyph, e.g. "▸", "●" or a Nerd Font icon
+      icon_hl     = nil,      -- its highlight; default: the file_hl group
     },
 
     safety = {

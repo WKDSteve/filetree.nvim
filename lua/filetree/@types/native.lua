@@ -70,6 +70,7 @@
 ---@field spans Filetree.Span[]
 ---@field name_start integer 0-based byte column where the name starts
 ---@field name_end integer exclusive
+---@field sign_col? integer 0-based byte column of the indent's last cell, where a sign is drawn (nil: no indent)
 
 ---Glyphs and widths the line renderer draws with. Every field is optional.
 ---@class Filetree.LineOpts

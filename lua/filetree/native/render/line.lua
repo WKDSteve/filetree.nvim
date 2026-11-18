@@ -47,9 +47,15 @@ function M.render(row, opts)
     col = col + #text
   end
 
+  ---@type integer|nil
+  local sign_col = nil
   if row.depth > 0 and indent > 0 then
     local level = opts.guide and (opts.guide .. (" "):rep(indent - 1)) or (" "):rep(indent)
     put(level:rep(row.depth), opts.guide and (hl.guide or HL.guide) or nil)
+    -- a sign takes the last cell of the indent: right before the row's own expander, so it stands
+    -- one level in from the parent's expander instead of under it
+    local last_cell = (indent == 1 and opts.guide) and #opts.guide or 1
+    sign_col = col - last_cell
   end
 
   local glyph = expander.none
@@ -98,7 +104,13 @@ function M.render(row, opts)
   local is_folder = row.node.kind == "dir" or (row.node.path ~= nil and row.node.kind == nil)
   if opts.trailing_slash and is_dir and is_folder then put("/", name_hl) end
 
-  return { text = table.concat(parts), spans = spans, name_start = name_start, name_end = col }
+  return {
+    text = table.concat(parts),
+    spans = spans,
+    name_start = name_start,
+    name_end = col,
+    sign_col = sign_col,
+  }
 end
 
 return M

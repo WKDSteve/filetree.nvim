@@ -155,6 +155,9 @@ make the default state explicit — you can drop it): >lua
         file_hl     = { fg = "#7aa2f7", bold = true },
         parent_hl   = { fg = "#565f89" },
         debounce_ms = 100,
+        icon        = nil,    -- marker on the current file's row: nil/"" = none,
+                              -- or any text/glyph, e.g. "▸", "●"
+        icon_hl     = nil,    -- its highlight; default: the file_hl group
       },
 
       -- Backup files before delete/move  (opt-in, API only)

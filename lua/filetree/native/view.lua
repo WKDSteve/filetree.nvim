@@ -2087,8 +2087,9 @@ end
 ---order.
 ---@param row Lib.Tree.Row
 ---@param badges Filetree.Decor.Badge[]
+---@param line Filetree.Line
 ---@return Filetree.RightItem[]
-local function right_of(row, badges)
+local function right_of(row, badges, line)
   local node = row.node
   local right = {}
   -- what the source itself says about the node (a count, a line number), at the far right
@@ -2111,7 +2112,7 @@ local function right_of(row, badges)
     -- sign column: there it stands with the badges
     local own_place = badge.slot == "name"
       or badge.slot == "line"
-      or (badge.slot == "sign" and row.depth > 0)
+      or (badge.slot == "sign" and line.sign_col ~= nil)
     if not own_place and badge.text and badge.text ~= "" then
       right[#right + 1] = {
         text = badge.text,
@@ -2184,7 +2185,7 @@ local function measure(view, row, win)
   local line = line_of_row(view, row)
   local node = row.node
   local badges = QUIET[node.kind] and {} or decor.badges(node, row.expandable or node.kind == "dir")
-  local right = QUIET[node.kind] and {} or right_of(row, badges)
+  local right = QUIET[node.kind] and {} or right_of(row, badges, line)
   local layout = columns.layout(width_of(win), vim.fn.strdisplaywidth(line.text), right)
   return line, badges, layout, cut_of(line, layout.name_width)
 end
@@ -2237,11 +2238,12 @@ function M.decorate_line(buf, lnum, win, into_buf, into_lnum)
       end
     elseif badge.slot == "line" then
       if badge.hl then mark(0, { line_hl_group = badge.hl, priority = 80 }) end
-    elseif badge.slot == "sign" and row.depth > 0 and badge.text and badge.text ~= "" then
-      -- over the first cell of the indent: the tree has no sign column, and a row below the root
-      -- starts with blanks
+    elseif badge.slot == "sign" and line.sign_col and badge.text and badge.text ~= "" then
+      -- over the last cell of the indent: the tree has no sign column, and a row below the root
+      -- starts with blanks. The last one, not the first: there the sign stood under the parent's
+      -- expander and looked like a row of the parent's level
       mark(
-        0,
+        line.sign_col,
         { virt_text = { { badge.text, badge.hl } }, virt_text_pos = "overlay", priority = 100 }
       )
     end

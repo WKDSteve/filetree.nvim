@@ -90,8 +90,11 @@ local function drawn(path)
   local out = { right = {}, name_hl = nil, line_hl = nil }
   local real = vim.api.nvim_buf_set_extmark
   ---@diagnostic disable-next-line: duplicate-set-field
-  vim.api.nvim_buf_set_extmark = function(_, _, _, _, opts)
-    if opts.virt_text and opts.virt_text[1][1]:find("^…") then
+  vim.api.nvim_buf_set_extmark = function(_, _, _, col, opts)
+    if opts.virt_text_pos == "overlay" and opts.priority == 100 then
+      -- a sign drawn over the indent: its text and the byte column it stands on
+      out.sign = { text = opts.virt_text[1][1], col = col }
+    elseif opts.virt_text and opts.virt_text[1][1]:find("^…") then
       -- the overlay that cuts a name too long for the window (`native_truncate_spec.lua`)
       out.cut = true
     elseif opts.virt_text then
@@ -260,6 +263,40 @@ eq("... and draws nothing right of it", drawn(dir .. "/README.md").right, {})
 eq("slot line highlights the whole line", drawn(dir .. "/docs/guide.md").line_hl, "CursorLine")
 remove_name()
 remove_line()
+
+-- ── slot sign: over the last cell of the indent ────────────────────────────────
+-- Not the first: there it stood under the parent's expander, and the marked row looked like one of
+-- the parent's level.
+local remove_sign = filetree.decorator({
+  name = "spec_sign",
+  slot = "sign",
+  get = function(path)
+    return (path:match("guide") or path == dir) and { text = ">", hl = "Special" } or nil
+  end,
+  subscribe = function()
+    return function() end
+  end,
+})
+local guide_line = vim.api.nvim_buf_get_lines(
+  adapter.get_bufnr(),
+  adapter.get_node_line(dir .. "/docs/guide.md") - 1,
+  adapter.get_node_line(dir .. "/docs/guide.md"),
+  false
+)[1]
+local guide_sign = drawn(dir .. "/docs/guide.md").sign
+ok("slot sign draws over the indent", guide_sign ~= nil and guide_sign.text == ">")
+-- a file row is indent, a blank expander and a blank: the indent ends three cells before the icon
+local guide_indent = #guide_line:match("^%s*") - 2
+eq("... in its last cell, right before the row's own expander", guide_sign.col, guide_indent - 1)
+ok("... not in the first cell, under the parent's expander", guide_sign.col > 0)
+ok(
+  "... and not right of the name",
+  not vim.tbl_contains(drawn(dir .. "/docs/guide.md").right, ">:Special")
+)
+local root_drawn = drawn(dir)
+ok("a row without indent has no room for it", root_drawn.sign == nil)
+ok("... it stands with the badges", vim.tbl_contains(root_drawn.right, ">:Special"))
+remove_sign()
 
 -- ── a decorator keyed by node id ───────────────────────────────────────────────
 local remove_id = filetree.decorator({

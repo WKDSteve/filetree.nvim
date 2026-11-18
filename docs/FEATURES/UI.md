@@ -276,8 +276,16 @@ stand out from the rest of the listing. Off by default: the shipped
 colours are hardcoded and only suit some colorschemes; enable and
 override the highlight groups yourself once you know they fit.
 
+An optional marker shows which row is the active buffer:
+`features.current_hl.icon` takes any text or glyph (`"▸"`, `"●"`, a Nerd Font
+icon); leave it `nil` or `""` and no marker is drawn. `icon_hl` colours it
+(default: the `file_hl` group). In the own tree (`native` engine) the marker
+stands in the last cell of the row's indent, right before the row's own
+expander, so it sits one level in from the parent folder's arrow and never
+under it; the root row has no indent, so there it goes right of the name.
+
 - **Module:** `lua/filetree/features/ui/current_hl/`
-- **Config:** `features.current_hl.enabled = true`
+- **Config:** `features.current_hl.enabled = true`, `.icon`, `.icon_hl`
 
 ## Cheatsheet
 
