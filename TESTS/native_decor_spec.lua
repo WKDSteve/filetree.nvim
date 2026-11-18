@@ -267,11 +267,12 @@ remove_line()
 -- ── slot sign: over the last cell of the indent ────────────────────────────────
 -- Not the first: there it stood under the parent's expander, and the marked row looked like one of
 -- the parent's level.
+local sign_text = ">"
 local remove_sign = filetree.decorator({
   name = "spec_sign",
   slot = "sign",
   get = function(path)
-    return (path:match("guide") or path == dir) and { text = ">", hl = "Special" } or nil
+    return (path:match("guide") or path == dir) and { text = sign_text, hl = "Special" } or nil
   end,
   subscribe = function()
     return function() end
@@ -293,6 +294,10 @@ ok(
   "... and not right of the name",
   not vim.tbl_contains(drawn(dir .. "/docs/guide.md").right, ">:Special")
 )
+sign_text = "AB"
+local wide = drawn(dir .. "/docs/guide.md").sign
+eq("a wide sign ends in that cell instead of starting there", wide.col, guide_indent - 2)
+sign_text = ">"
 local root_drawn = drawn(dir)
 ok("a row without indent has no room for it", root_drawn.sign == nil)
 ok("... it stands with the badges", vim.tbl_contains(root_drawn.right, ">:Special"))

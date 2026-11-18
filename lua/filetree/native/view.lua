@@ -2241,9 +2241,18 @@ function M.decorate_line(buf, lnum, win, into_buf, into_lnum)
     elseif badge.slot == "sign" and line.sign_col and badge.text and badge.text ~= "" then
       -- over the last cell of the indent: the tree has no sign column, and a row below the root
       -- starts with blanks. The last one, not the first: there the sign stood under the parent's
-      -- expander and looked like a row of the parent's level
+      -- expander and looked like a row of the parent's level. A wide sign (an emoji) ends in that
+      -- cell rather than starting there, so it does not cover the row's own expander; that needs
+      -- room of plain blanks before it (guides are several bytes per cell)
+      local col = line.sign_col
+      local extra = vim.fn.strdisplaywidth(badge.text) - 1
+      if extra > 0 then
+        local before = line.text:sub(1, col)
+        local blanks = #before:match(" *$")
+        col = col - math.min(extra, blanks)
+      end
       mark(
-        line.sign_col,
+        col,
         { virt_text = { { badge.text, badge.hl } }, virt_text_pos = "overlay", priority = 100 }
       )
     end
