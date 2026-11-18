@@ -44,5 +44,62 @@ return {
     title = "The helper process lists, sizes and watches for the tree, and the Lua tiers take over when it ends",
     surface = { "config:native.fs.helper" },
     docs = "docs/FEATURES/BACKENDS.md",
+    -- the program is built by cargo or downloaded from a release (helper.yml); neither a sheet's
+    -- sandbox nor ci.yml has it, and a feature sheet that skips without it is red on CI
+    perf = "manual:needs the built filetree-helper program, which the sheets' sandbox and ci.yml do not have",
+  },
+  {
+    id = "filetree.system-open",
+    title = "A node opens in the system's default application (<leader>sm, preview of system_exts, a PDF without pdfport)",
+    surface = { "config:features.open_with.keymap", "config:features.preview.system_exts" },
+    -- lib.nvim.cross.open_default starts explorer.exe / rundll32.exe on Windows by their .exe names,
+    -- which a sheet's stand-in (a .cmd file there) cannot catch: a sheet would open real windows
+    perf = "manual:on Windows the opener is explorer.exe/rundll32.exe, which no stand-in catches; a sheet would open a real window",
+  },
+  {
+    id = "filetree.open-in-fm",
+    title = "<leader>fm shows the node under the cursor in the file manager",
+    surface = { "config:features.open_in_fm.command" },
+  },
+  {
+    id = "filetree.open-with",
+    title = "A key of the user's list of applications opens the node under the cursor with that application",
+    surface = { "config:features.open_with.apps" },
+  },
+  {
+    id = "filetree.shell-run",
+    title = "i runs a shell command in the folder of the node under the cursor, in a terminal split",
+    surface = { "config:features.shell_run.keymap" },
+  },
+  {
+    id = "filetree.compress",
+    title = "gz compresses the node under the cursor (or the marked ones) to a zip beside it",
+    surface = { "command:Filetree compress", "config:features.compress.keymap" },
+  },
+  {
+    id = "filetree.grep-in-dir",
+    title = "gr searches the text below the folder under the cursor into the quickfix list (or a picker)",
+    surface = { "command:FiletreeGrepInDir", "config:features.grep_in_dir.prefer" },
+  },
+  {
+    id = "filetree.git-status",
+    title = "Each row of the tree carries the git state of its file as a sign, a folder the worst below it",
+    surface = { "config:features.git_status.signs" },
+  },
+  {
+    id = "filetree.native-git-view",
+    title = "The view git of the own tree groups the changed files, ga stages and gu unstages the one under the cursor",
+    surface = { "config:native.views" },
+    docs = "docs/FEATURES/BACKENDS.md",
+  },
+  {
+    id = "filetree.trash",
+    title = "d moves the node under the cursor (or the marked ones, in one process) to the system trash, U brings the last one back",
+    surface = { "config:features.trash.keymap", "config:features.trash.keymap_undo" },
+  },
+  {
+    id = "filetree.size-info",
+    title = "A column shows the size of each file, and of each folder once a process has added it up",
+    surface = { "command:FiletreeSizeRefresh", "config:features.size_info.show_dirs" },
   },
 }
