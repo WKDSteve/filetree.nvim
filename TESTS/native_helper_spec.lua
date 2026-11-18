@@ -10,7 +10,7 @@
 --
 --   nvim --clean --headless -u NONE -l TESTS/native_helper_spec.lua
 --
--- The program: $FILETREE_HELPER_TEST, else helper/target/release/ or helper/bin/ of this repository
+-- The program: $FILETREE_HELPER_TEST, else helper/target/release/ of this repository or the installed one
 -- (`cargo build --release --manifest-path helper/Cargo.toml`). Without one the cases that need it say
 -- n/a; the CI builds it on every system.
 
@@ -92,13 +92,13 @@ do
   helper.configure("auto")
   if not uv.fs_stat(helper.default_path()) then
     exe, why = helper.find()
-    eq('"auto" without helper/bin/: no program', exe, nil)
+    eq('"auto" without a program below stdpath("data"): none', exe, nil)
     ok(
       "... and it says where it looked: " .. tostring(why),
-      why and why:find("helper/bin", 1, true) ~= nil
+      why and why:find(helper.default_path(), 1, true) ~= nil
     )
   else
-    na('"auto" without helper/bin/', "helper/bin/ holds a program on this machine")
+    na('"auto" without a program', helper.default_path() .. " holds a program on this machine")
   end
 
   eq(
@@ -128,7 +128,7 @@ local exe = vim.env.FILETREE_HELPER_TEST
 if not exe or exe == "" then
   for _, candidate in ipairs({
     root .. "/helper/target/release/" .. helper.binary_name(),
-    root .. "/helper/bin/" .. helper.binary_name(),
+    helper.default_path(),
   }) do
     if uv.fs_stat(candidate) then
       exe = candidate
@@ -480,7 +480,7 @@ else
     local notify = vim.notify
     ---@diagnostic disable-next-line: duplicate-set-field
     vim.notify = function(msg, level)
-      if tostring(msg):find("helper process", 1, true) then
+      if tostring(msg):find("file helper", 1, true) then
         told[#told + 1] = { msg = msg, level = level }
       end
     end

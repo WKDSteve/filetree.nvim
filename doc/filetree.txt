@@ -3011,15 +3011,17 @@ The helper process of the own tree                    *filetree-native-helper*
   (closed folders and folders made later included; libuv cannot do that
   there). One process per Neovim, started on first need, ended with Neovim,
   talking over stdin/stdout. It only reads: no network, no other process, no
-  writes. Without it the tree does all of this itself, as before.
+  writes. Without it the tree does all of this itself, as before. The client
+  lives in lib.nvim (`lib.nvim.fs.helper`, `lib.nvim.fs.fast`), so other
+  plugins share the same process.
 >lua
   require("filetree").setup({
     adapter = "native",
     native = { fs = { helper = "auto" } },  -- "auto" | false | "/path/to/filetree-helper"
   })
 <
-  "auto" (the default) uses `helper/bin/filetree-helper` (`.exe` on Windows)
-  when it is there, and nothing on a machine with
+  "auto" (the default) uses `stdpath("data")/filetree-helper/filetree-helper`
+  (`.exe` on Windows) when it is there, and nothing on a machine with
   `NVIM_MACHINE_ROLE=workstation`. `false` never starts it. A path uses
   exactly that program. A helper that ends or cannot start is not started
   again in the session: the Lua tiers take over and it is said once.
@@ -3031,7 +3033,9 @@ The helper process of the own tree                    *filetree-native-helper*
   downloads the release program for Windows (x86_64), Linux (x86_64) or macOS
   (Apple silicon). Other systems build from source:
   `cargo build --release --manifest-path helper/Cargo.toml` and copy the
-  program into `helper/bin/`. `:checkhealth filetree` names its state.
+  program into `stdpath("data")/filetree-helper/`. A program in the old place
+  `helper/bin/` is no longer used: run `build()` again after the update.
+  `:checkhealth filetree` names its state.
 
 ==============================================================================
 7. PUBLIC API                                                  *filetree-api*

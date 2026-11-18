@@ -202,8 +202,9 @@ the helper was not reliably faster there.
 native = { fs = { helper = "auto" } }  -- "auto" | false | "/path/to/filetree-helper"
 ```
 
-- **`"auto"`** (default) uses `helper/bin/filetree-helper` (`.exe` on Windows)
-  when it is there. **On a machine with `NVIM_MACHINE_ROLE=workstation` it uses
+- **`"auto"`** (default) uses `stdpath("data")/filetree-helper/filetree-helper`
+  (`.exe` on Windows) when it is there (`helper/bin/` before 2026-11-18: run
+  `build()` again). **On a machine with `NVIM_MACHINE_ROLE=workstation` it uses
   nothing**: no native program is started there before an EDR check has cleared
   it. `false` never starts one; a path uses exactly that program.
 - **Getting it:** `require("filetree.native.fs.helper").build()`, e.g. as the
@@ -211,6 +212,11 @@ native = { fs = { helper = "auto" } }  -- "auto" | false | "/path/to/filetree-he
   toolchain is there and otherwise downloads the release program (Windows and
   Linux on x86_64, macOS on Apple silicon; other systems build from source).
   It refuses on the workstation.
+- **Shared with every plugin:** the client is `lib.nvim.fs.helper`, and
+  `lib.nvim.fs.fast` lists, sizes and watches through it with fallbacks to `fd`,
+  `rg` and Lua; the deep listing of the tree is `lib.nvim.fs.fast.list` with the
+  tree's ignore list for the Lua walk. The option `native.fs.helper` decides for
+  all of them while filetree is loaded.
 - **One process per Neovim**, started on first need, ended with Neovim, talking
   msgpack-RPC over stdin/stdout. It only reads directories (and ignore files):
   no network, no socket, no other process, no writes.

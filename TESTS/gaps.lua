@@ -3130,7 +3130,7 @@ end
 
 -- ── ui.size_info ── file sizes (sync) + directory sizes (stubbed vim.system) ─
 do
-  -- The helper process is off for every size_info block: a built helper/bin/filetree-helper
+  -- The helper process is off for every size_info block: an installed filetree-helper
   -- would answer the folder sizes itself (an empty folder: 0 B) and the vim.system stubs below
   -- would never be asked. Back on after the last block, before ui.preview.
   require("filetree.native.fs.helper").configure(false)
