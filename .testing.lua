@@ -33,8 +33,8 @@ return {
     "^TESTS/quickpick%.lua$",
     "^TESTS/refs/run%.lua$",
     "^TESTS/refs/usage%.lua$",
-    -- Against a REAL neo-tree: CI checks out neo-tree, nui and plenary at pinned commits as
-    -- siblings (ci.yml); without them each prints an n/a line instead of passing silently.
+    -- Against a REAL neo-tree: CI checks out neo-tree, nui and plenary at pinned commits below
+    -- .deps/ (ci.workflow.checkouts); without them each prints an n/a line instead of passing silently.
     "^TESTS/adapter_lines%.lua$",
     "^TESTS/collapse_all_backends%.lua$",
     "^TESTS/group_empty_dirs_collapse%.lua$",

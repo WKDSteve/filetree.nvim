@@ -9,3 +9,6 @@ doc/tags
 # ~40 MB of downloaded artifacts nobody asked for — in several cases larger
 # than the plugin's own code.
 docs/map/
+
+# Checkouts of the generated CI workflow (ci.workflow.checkouts in .testing.lua).
+.deps/
