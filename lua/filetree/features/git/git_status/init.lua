@@ -27,7 +27,7 @@
 local au = require("filetree.util.autocmd")
 local tree_attach = require("filetree.util.tree_attach")
 local lib_debounce = require("lib.nvim.debounce")
-local lib_git = require("lib.nvim.git")
+local shared = require("filetree.util.git_status")
 local M = {}
 
 ---@type FiletreeGitStatusConfig
@@ -81,12 +81,18 @@ local _debounce = nil
 ---@type table?
 local _render_debounce = nil
 
----In-flight `status_porcelain_async` job, if any. Stopping it on a new
----`run_git()` call means a slow, superseded response can only ever arrive as
----a killed-process failure (map = nil, ignored below), never overwrite a
----newer, already-rendered `_status_map` with stale data.
+---This feature's request to `filetree.util.git_status`, while it waits. A new
+---`run_git()` drops it, so a slow, superseded answer never overwrites a newer,
+---already-rendered `_status_map` with stale data.
 ---@type { stop: fun() }?
 local _pending_query = nil
+
+---When this feature last heard of a change git status would see (a write, focus back, a branch
+---switch, files on disk; `shared.now()` time). An answer from before it is stale; without a
+---change since, an answer up to `shared.FRESH_MS` old (the git view's, or the one of a moment ago
+---when the tree opened and its buffer was entered right after) is reused instead of a new `git`.
+---@type number
+local _changed_at = -math.huge
 
 -- ── Git query ─────────────────────────────────────────────────────────────────
 
@@ -112,29 +118,31 @@ local function classify(xy)
 end
 
 ---@param root string  git repo root directory
-local function run_git(root)
-  if _pending_query then _pending_query.stop() end
+---@param since number  The answer must come from a status started at or after this.
+local function run_git(root, since)
+  local previous = _pending_query
+  local request
+  request = shared.status({ dir = root, ignored = _cfg.show_ignored }, since, function(map)
+    if _pending_query == request then _pending_query = nil end
+    if not map then return end
 
-  _pending_query = lib_git.status_porcelain_async(
-    { dir = root, ignored = _cfg.show_ignored },
-    function(map)
-      _pending_query = nil
-      if not map then return end
-
-      local new_map = {}
-      for path, entry in pairs(map) do
-        -- `map` keys are repo-root relative (lib.nvim.git's -z parser, exact
-        -- for paths with spaces/non-ASCII bytes -- unlike the old `-> "` string
-        -- match this replaced, a literal " -> " inside a path is never
-        -- mistaken for a rename: renames arrive pre-resolved, keyed by the new
-        -- path, with the old one in entry.orig_path.
-        local abs = (root .. "/" .. path):gsub("\\", "/")
-        new_map[abs] = classify(entry.code)
-      end
-      _status_map = new_map
-      M._render()
+    local new_map = {}
+    for path, entry in pairs(map) do
+      -- `map` keys are repo-root relative (lib.nvim.git's -z parser, exact
+      -- for paths with spaces/non-ASCII bytes -- unlike the old `-> "` string
+      -- match this replaced, a literal " -> " inside a path is never
+      -- mistaken for a rename: renames arrive pre-resolved, keyed by the new
+      -- path, with the old one in entry.orig_path.
+      local abs = (root .. "/" .. path):gsub("\\", "/")
+      new_map[abs] = classify(entry.code)
     end
-  )
+    _status_map = new_map
+    M._render()
+  end)
+  _pending_query = request
+  -- after the new request: had it been the only waiter, stopping it first would kill the very
+  -- status the new request can join
+  if previous then previous.stop() end
 end
 
 -- ── Rendering ─────────────────────────────────────────────────────────────────
@@ -211,8 +219,15 @@ local function debounce_refresh()
   if _debounce then _debounce.call() end
 end
 
----Refresh git status for the current adapter root.
-function M.refresh()
+---Something changed that git status would see: the next query must not reuse an older answer.
+local function changed()
+  _changed_at = shared.now()
+  debounce_refresh()
+end
+
+---Query (or reuse) the status for the current adapter root.
+---@param since number|nil  nil: what `_changed_at` and the reuse window allow.
+local function query(since)
   if not _adapter then return end
 
   -- cwd_mode's held root first, then project_root, then the cwd. Resolving
@@ -225,7 +240,12 @@ function M.refresh()
   local git_dir = root_path .. "/.git"
   if vim.fn.isdirectory(git_dir) == 0 and vim.fn.filereadable(git_dir) == 0 then return end
 
-  run_git(root_path)
+  run_git(root_path, since or math.max(_changed_at, shared.now() - shared.FRESH_MS))
+end
+
+---Refresh git status for the current adapter root: always a fresh `git status`.
+function M.refresh()
+  query(shared.now())
 end
 
 ---Clear all git status decorations.
@@ -262,7 +282,9 @@ function M.setup(config, adapter)
   end
 
   if _debounce then _debounce.cancel() end
-  _debounce = lib_debounce.new(M.refresh, _cfg.debounce_ms)
+  _debounce = lib_debounce.new(function()
+    query()
+  end, _cfg.debounce_ms)
 
   if _render_debounce then _render_debounce.cancel() end
   _render_debounce = lib_debounce.new(M._render, 50)
@@ -314,7 +336,7 @@ function M.setup(config, adapter)
     group = _augroup,
     desc = "[filetree] Re-query git status after a write or on regaining focus",
     callback = function()
-      debounce_refresh()
+      changed()
     end,
   })
 
@@ -329,7 +351,7 @@ function M.setup(config, adapter)
     pattern = { "GitsuiteBranchSwitched", "GitsuiteConflictsResolved" },
     desc = "[filetree] Re-query git status after a gitsuite.nvim branch switch or conflict resolution",
     callback = function()
-      debounce_refresh()
+      changed()
     end,
   })
 
@@ -343,14 +365,15 @@ function M.setup(config, adapter)
     callback = function(ev)
       for _, dir in ipairs((ev.data and ev.data.dirs) or {}) do
         if not (dir .. "/"):find("/.git/", 1, true) then
-          debounce_refresh()
+          changed()
           return
         end
       end
     end,
   })
 
-  M.refresh()
+  -- no change known: an answer of a moment ago (the git view's) serves the first badges
+  query()
 end
 
 function M.teardown()

@@ -2,7 +2,8 @@
 ---@brief The source `git`: the changed files of the repository the view's root lies in, grouped by state.
 ---@description
 --- Written against the source contract only (`Filetree.Source`). The root answers lazily: one
---- `git status` (`lib.nvim.git.status_porcelain_async`), never blocking, and its answer as groups
+--- `git status` (`lib.nvim.git.status_porcelain_async`, shared with the badges through
+--- `filetree.util.git_status`), never blocking, and its answer as groups
 --- `Conflicts`, `Staged`, `Changes`, `Untracked`. A file that is staged and changed again stands in
 --- both groups. Every file node carries its absolute `path`.
 ---
@@ -16,10 +17,22 @@
 --- `lib.nvim.git`); with gitsuite.nvim installed, `gd` shows its diff against HEAD and `gB` its blame.
 
 local list = require("filetree.native.fs.list")
+local shared = require("filetree.util.git_status")
 
 local api = vim.api
 
 local M = {}
+
+---When the view last heard of a change git status would see (a git action from the view, a write,
+---focus, files on disk; `filetree.util.git_status` time). The view's next status must be newer;
+---without a change since, it reuses an answer up to `FRESH_MS` old (the badges', or its own when
+---the view is shown again right after).
+local changed_at = -math.huge
+
+---Something changed that git status would see.
+local function mark_changed()
+  changed_at = shared.now()
+end
 
 ---@type { key: string, label: string }[]
 local GROUPS = {
@@ -144,7 +157,11 @@ local function run_on(verb, args, nodes, ctx)
         notify.warn(("git %s %s: %s"):format(verb, node.label, vim.trim(result.stderr or "failed")))
       end
       left = left - 1
-      if left == 0 and ctx.tree and ctx.tree.refresh then ctx.tree:refresh() end
+      if left == 0 then
+        -- the index changed: the status the refresh asks for must be newer than this
+        mark_changed()
+        if ctx.tree and ctx.tree.refresh then ctx.tree:refresh() end
+      end
     end)
   end
 end
@@ -264,7 +281,8 @@ function M.source()
             cb({ note("git:none", "not a git repository") })
             return
           end
-          require("lib.nvim.git").status_porcelain_async({ dir = repo }, function(map, err)
+          local since = math.max(changed_at, shared.now() - shared.FRESH_MS)
+          shared.status({ dir = repo }, since, function(map, err)
             if not map then
               cb({ note("git:failed", "git status failed: " .. tostring(err or "unknown")) })
               return
@@ -285,6 +303,7 @@ function M.source()
         group = group,
         desc = "[filetree] The git view asks for the status again",
         callback = function()
+          mark_changed()
           debounce.call()
         end,
       })
@@ -298,6 +317,7 @@ function M.source()
         },
         desc = "[filetree] The git view asks for the status again",
         callback = function()
+          mark_changed()
           debounce.call()
         end,
       })
@@ -309,6 +329,7 @@ function M.source()
           for _, dir in ipairs((ev.data and ev.data.dirs) or {}) do
             -- `git status` may write the index itself: answering that with another one would never end
             if not (dir .. "/"):find("/.git/", 1, true) then
+              mark_changed()
               debounce.call()
               return
             end
