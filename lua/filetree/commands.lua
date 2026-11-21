@@ -107,6 +107,31 @@ local TREE = {
     end
   end,
 
+  -- ── helper process (native.fs.helper) ───────────────────────────────────────
+  -- `:Filetree helper build [download|source]`: build or download filetree-helper in the background
+  -- (the editor stays usable, a progress indicator shows it); `cancel` stops it.
+  helper = {
+    build = function(args)
+      local opts = {}
+      if args[1] == "download" then
+        opts.download = true
+      elseif args[1] == "source" then
+        opts.download = false
+      elseif args[1] and args[1] ~= "" then
+        notify.info(
+          "helper build: download | source | nothing (cargo when there, else the release)"
+        )
+        return
+      end
+      require("filetree.native.fs.helper").build_async(opts)
+    end,
+    cancel = function(_)
+      if not require("filetree.native.fs.helper").cancel_build() then
+        notify.info("helper cancel: no build is running")
+      end
+    end,
+  },
+
   -- ── trash ───────────────────────────────────────────────────────────────────
   trash = {
     undo = function(_)

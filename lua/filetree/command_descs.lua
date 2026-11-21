@@ -54,6 +54,8 @@ return {
   ["grep"] = "Grep in the node's directory (picker if installed, else rg/grep quickfix)",
   ["handles"] = "List tracked neo-tree watcher handles",
   ["health"] = "Run :checkhealth filetree",
+  ["helper build"] = "Build (cargo) or download filetree-helper in the background; arg download|source",
+  ["helper cancel"] = "Stop the running build of filetree-helper",
   ["hooks clear"] = "Clear hooks",
   ["hooks events"] = "List registered hook events",
   ["info"] = "Show node info float",

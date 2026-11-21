@@ -211,7 +211,12 @@ native = { fs = { helper = "auto" } }  -- "auto" | false | "/path/to/filetree-he
   `build` step of the plugin manager, compiles it with cargo when a Rust
   toolchain is there and otherwise downloads the release program (Windows and
   Linux on x86_64, macOS on Apple silicon; other systems build from source).
-  It refuses on the workstation.
+  `build()` waits until cargo or the download is done (right for a plugin
+  manager); from a running editor use **`:Filetree helper build`**
+  (`build_async()`): it runs in the background with a progress indicator, the
+  tree lists and watches without the helper meanwhile, `:Filetree helper cancel`
+  stops it, a second one is refused and quitting Neovim ends it. A set
+  `CARGO_TARGET_DIR` is honoured. It refuses on the workstation.
 - **Shared with every plugin:** the client is `lib.nvim.fs.helper`, and
   `lib.nvim.fs.fast` lists, sizes and watches through it with fallbacks to `fd`,
   `rg` and Lua; the deep listing of the tree is `lib.nvim.fs.fast.list` with the

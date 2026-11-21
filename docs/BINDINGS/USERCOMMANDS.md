@@ -71,6 +71,8 @@ Default: `Filetree`, with `Ft` registered automatically as an alias.
 | Command | Action |
 |---------|--------|
 | `:Filetree git refresh` | Refresh git status |
+| `:Filetree helper build [download\|source]` | Build (cargo) or download the [helper process](../FEATURES/BACKENDS.md#the-helper-process) in the background, with a progress indicator; the editor stays usable. `download`: never build, `source`: never download |
+| `:Filetree helper cancel` | Stop the running build of the helper |
 
 ### Find / Grep
 | Command | Action |

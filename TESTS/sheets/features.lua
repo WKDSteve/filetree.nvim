@@ -49,6 +49,12 @@ return {
     perf = "manual:needs the built filetree-helper program, which the sheets' sandbox and ci.yml do not have",
   },
   {
+    id = "filetree.helper-build",
+    title = ":Filetree helper build builds or downloads the helper program in the background, cancellable",
+    surface = { "command:Filetree helper build", "command:Filetree helper cancel" },
+    docs = "docs/FEATURES/BACKENDS.md",
+  },
+  {
     id = "filetree.system-open",
     title = "A node opens in the system's default application (<leader>sm, preview of system_exts, a PDF without pdfport)",
     surface = { "config:features.open_with.keymap", "config:features.preview.system_exts" },
