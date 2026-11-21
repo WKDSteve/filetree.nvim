@@ -7081,31 +7081,30 @@ do
   package.loaded["filetree.features.fileops.trash.undo"] = nil
   local undo = require("filetree.features.fileops.trash.undo")
 
-  -- restore_windows() shells out via lib.nvim.cross.run_argv.run_blocking, not
-  -- os.execute -- an earlier version of this test mocked os.execute, which the
-  -- code has never called. That mock silently intercepted nothing: every
-  -- "with_exit_code" run below actually spawned a real PowerShell process
-  -- against the real Recycle Bin looking for a file that was never trashed,
-  -- so every case coincidentally got real exit code 1 ("not found") regardless
-  -- of the exit code the test asked for -- passing only by accident when the
-  -- requested code also happened to be 1, and failing (with a live "Item not
-  -- found" message) for every other code. Mock the actual dependency instead;
-  -- run_argv's module table is cached by require(), so overwriting the field
-  -- here is visible to undo.lua's own require(...).run_blocking(...) call.
-  local run_argv = require("lib.nvim.cross.run_argv")
-  local orig_run_blocking = run_argv.run_blocking
+  -- restore_windows() starts PowerShell in the background through `undo._run` (it wraps
+  -- lib.nvim.cross.run_argv.run_async_captured). An earlier version of this test mocked
+  -- os.execute, which the code has never called: every case then spawned a real PowerShell
+  -- against the real Recycle Bin and got exit code 1 by accident. Replace the seam the code really
+  -- calls; the stand-in answers at once, so each restore below has its outcome on return.
+  local orig_run = undo._run
   local captured_cmd
 
   local function with_exit_code(code, fn)
-    ---@diagnostic disable-next-line: duplicate-set-field
-    run_argv.run_blocking = function(cmd)
+    undo._run = function(cmd, cb)
       captured_cmd = cmd[#cmd] -- the PowerShell script is the last argv element
-      if code == 0 then return true, nil end
-      return false, "exit code " .. code
+      cb(code == 0, "", code)
     end
     local ok, err = fn()
-    run_argv.run_blocking = orig_run_blocking
+    undo._run = orig_run
     return ok, err
+  end
+
+  local function restore_now(e)
+    local got_ok, got_err
+    undo.restore(e, function(o, er)
+      got_ok, got_err = o, er
+    end)
+    return got_ok, got_err
   end
 
   local entry = {
@@ -7116,7 +7115,7 @@ do
   }
 
   local ok1, err1 = with_exit_code(1, function()
-    return undo.restore(entry)
+    return restore_now(entry)
   end)
   check(
     "trash.undo: exit 1 (not found) is reported as failure, not success",
@@ -7125,7 +7124,7 @@ do
   )
 
   local ok2, err2 = with_exit_code(2, function()
-    return undo.restore(entry)
+    return restore_now(entry)
   end)
   check(
     "trash.undo: exit 2 (move and verb fallback both failed) is reported as failure, not success",
@@ -7134,7 +7133,7 @@ do
   )
 
   local ok3, err3 = with_exit_code(3, function()
-    return undo.restore(entry)
+    return restore_now(entry)
   end)
   check(
     "trash.undo: exit 3 (target already exists) is reported as failure, not success",
@@ -7143,7 +7142,7 @@ do
   )
 
   local ok4 = with_exit_code(0, function()
-    return undo.restore(entry)
+    return restore_now(entry)
   end)
   check("trash.undo: exit 0 is reported as success", ok4 == true)
 

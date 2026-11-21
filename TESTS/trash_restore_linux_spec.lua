@@ -50,12 +50,13 @@ vim.fn.executable = function(name)
   return real_executable(name)
 end
 local argvs = {}
+-- The restore runs in the background; this stand-in answers at once, so the spec reads in order.
 package.loaded["lib.nvim.cross.run_argv"] = {
-  run_blocking = function(argv)
+  run_async_captured = function(argv, on_done)
     argvs[#argvs + 1] = argv
-    if argv[1] ~= "mv" then return false, "exit code 1" end
-    local ok = vim.uv.fs_rename(argv[2], argv[3])
-    return ok == true, ok and nil or "exit code 1"
+    if argv[1] ~= "mv" then return on_done(false, "", 1, "") end
+    local ok = vim.uv.fs_rename(argv[2], argv[3]) == true
+    on_done(ok, "", ok and 0 or 1, "")
   end,
 }
 -- what the undo module says, in order
@@ -74,11 +75,22 @@ package.loaded["filetree.util.notify"] = {
 
 local undo = require("filetree.features.fileops.trash.undo")
 
+---`undo.restore` answers through a callback; with the stand-in above it answers before returning.
+---@return boolean|nil ok
+---@return string|nil err
+local function restore(entry)
+  local got_ok, got_err
+  undo.restore(entry, function(o, e)
+    got_ok, got_err = o, e
+  end)
+  return got_ok, got_err
+end
+
 -- trash-put left the item and its record in the trash.
 local original = work .. "/project/note with space.txt"
 vim.fn.writefile({ "x" }, files .. "/note with space.txt")
 vim.fn.writefile({ "[Trash Info]" }, info .. "/note with space.txt.trashinfo")
-local ok, err = undo.restore({
+local ok, err = restore({
   platform = "linux",
   name = "note with space.txt",
   original_path = original,
@@ -98,7 +110,7 @@ vim.fn.writefile({ "old" }, files .. "/taken.txt")
 local taken = work .. "/project/taken.txt"
 vim.fn.writefile({ "new" }, taken)
 argvs = {}
-ok = undo.restore({ platform = "linux", name = "taken.txt", original_path = taken })
+ok = restore({ platform = "linux", name = "taken.txt", original_path = taken })
 eq("occupied: restore refuses", ok, false)
 eq("occupied: the new file stays", vim.fn.readfile(taken)[1], "new")
 eq("occupied: nothing was moved", #argvs, 0)
@@ -107,13 +119,13 @@ eq("occupied: nothing was moved", #argvs, 0)
 local wsl_file = work .. "/project/wsl.txt"
 vim.fn.writefile({ "w" }, files .. "/wsl.txt")
 argvs = {}
-ok = undo.restore({ platform = "wsl", name = "wsl.txt", original_path = wsl_file })
+ok = restore({ platform = "wsl", name = "wsl.txt", original_path = wsl_file })
 eq("wsl, linux side: restored from the Linux trash", ok, true)
 eq("wsl, linux side: by mv", argvs[1] and argvs[1][1], "mv")
 
 -- WSL: a file below /mnt/c is looked up in the recycle bin by its Windows path.
 argvs = {}
-undo.restore({ platform = "wsl", name = "c.txt", original_path = "/mnt/c/Users/x/c.txt" })
+restore({ platform = "wsl", name = "c.txt", original_path = "/mnt/c/Users/x/c.txt" })
 local script = argvs[1] and argvs[1][#argvs[1]] or ""
 eq(
   "wsl, windows side: the recycle bin is asked for the Windows path",
@@ -125,7 +137,10 @@ eq("wsl, windows side: not for the Linux spelling", script:find([[\mnt\c]], 1, t
 -- `U` with an empty history says so instead of nothing.
 said = {}
 eq("empty history: nothing was recorded here", undo.last(), nil)
-local undone = undo.restore_last()
+local undone
+undo.restore_last(function(o)
+  undone = o
+end)
 eq("empty history: nothing restored", undone, false)
 eq(
   "empty history: the user is told",

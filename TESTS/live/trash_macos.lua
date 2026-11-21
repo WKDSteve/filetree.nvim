@@ -279,7 +279,7 @@ do
   if not (results and results[1].ok and not exists(path)) then
     fail("restore", "the trash itself failed")
   else
-    local ok, err = require("filetree.features.fileops.trash.undo").restore({
+    local ok, err = require("filetree.features.fileops.trash.undo").restore_blocking({
       platform = "mac",
       name = vim.fn.fnamemodify(path, ":t"),
       original_path = path,

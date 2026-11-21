@@ -216,7 +216,7 @@ local function check_restore(where, dir)
     return fail(name, "the trash itself failed: " .. vim.inspect(sent))
   end
   local undo = require("filetree.features.fileops.trash.undo")
-  local ok, err = undo.restore({
+  local ok, err = undo.restore_blocking({
     platform = where,
     name = vim.fn.fnamemodify(path, ":t"),
     original_path = path,

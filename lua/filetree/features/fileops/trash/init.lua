@@ -919,10 +919,19 @@ function M.delete_current(opts)
   )
 end
 
----Restore the last trashed item.
----@return boolean ok
-function M.undo_last()
-  return undo.restore_last()
+---Restore the last trashed item, in the background (the system's trash program can take seconds);
+---once it is back, the tree shows it. `cb(ok, err, entry)` follows the outcome.
+---@param cb? fun(ok: boolean, err: string?, entry: TrashEntry?)
+function M.undo_last(cb)
+  undo.restore_last(function(ok, err, entry)
+    if ok and entry then
+      local changed = require("filetree.util.changed")
+      changed.emit("create", nil, entry.original_path)
+      changed.refresh(_adapter)
+    end
+    -- a keymap may hand its rhs an argument of its own: only a function is a callback
+    if type(cb) == "function" then cb(ok, err, entry) end
+  end)
 end
 
 ---Show the in-session trash history.

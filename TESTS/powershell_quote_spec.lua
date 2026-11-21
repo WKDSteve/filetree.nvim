@@ -162,7 +162,7 @@ else
     check("trash " .. vim.inspect(vim.fn.fnamemodify(f, ":t")), res and res.ok, res and res.err)
     check("  the file is gone", vim.fn.filereadable(f) == 0)
     undo.record(f)
-    local ok, err = undo.restore(undo.last())
+    local ok, err = undo.restore_blocking(undo.last(), 20000)
     check("  restored", ok and vim.fn.filereadable(f) == 1, err)
   end
   eq("no side effect from an injected name", vim.fn.filereadable(dir .. "/INJECTED"), 0)
@@ -191,7 +191,7 @@ else
   -- put them back so the Recycle Bin is left as found
   for _, f in ipairs(existing) do
     undo.record(f)
-    undo.restore(undo.last())
+    undo.restore_blocking(undo.last(), 20000)
   end
   vim.fn.delete(dir, "rf")
 end

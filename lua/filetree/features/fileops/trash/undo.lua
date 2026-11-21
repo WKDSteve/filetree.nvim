@@ -220,7 +220,7 @@ end
 local RESTORE_VERB_PATTERN =
   [[^(Restore|Wiederherstellen|Restaurer|Restaurar|Ripristina|Herstellen|Gjenopprett|Återställ|Palauta)$]]
 
-local function restore_windows(name, original_path)
+local function restore_windows(name, original_path, done)
   -- PowerShell single-quoted strings escape an embedded quote by doubling it
   -- ('' not \'), and so are U+2018..U+201B (see lib.nvim.cross.powershell).
   local ps_escape = require("lib.nvim.cross.powershell").escape_single
@@ -261,51 +261,45 @@ local function restore_windows(name, original_path)
     win_path,
     RESTORE_VERB_PATTERN
   )
-  local ok, err = require("lib.nvim.cross.run_argv").run_blocking({
+  M._run({
     -- A trash made in WSL is restored from there too, where only `powershell.exe` is on PATH.
     require("filetree.util.platform").powershell_exe(),
     "-NoProfile",
     "-NonInteractive",
     "-Command",
     script,
-  })
-  if ok then return true, nil end
-  -- The script has no stderr output of its own, so on failure run_argv's
-  -- err is exactly "exit code N" -- recover our script's exit code from it
-  -- to keep the specific, actionable messages below.
-  local code = tonumber((err or ""):match("exit code (%d+)"))
-  if code == 1 then
-    return false, "Item not found in Recycle Bin (may already be restored, or bin was emptied)"
-  end
-  if code == 2 then
-    return false,
-      "Found the item, but could not move it back (and no restore verb matched either) -- restore it manually from the Recycle Bin"
-  end
-  if code == 3 then
-    return false, "A file already exists at the original location -- not overwriting it"
-  end
-  return false, "PowerShell restore failed: " .. (err or "unknown error")
+  }, function(ok, out, code)
+    if ok then return done(true, nil) end
+    -- The script writes nothing of its own, so its exit code is the answer.
+    if code == 1 then
+      return done(
+        false,
+        "Item not found in Recycle Bin (may already be restored, or bin was emptied)"
+      )
+    end
+    if code == 2 then
+      return done(
+        false,
+        "Found the item, but could not move it back (and no restore verb matched either) -- restore it manually from the Recycle Bin"
+      )
+    end
+    if code == 3 then
+      return done(false, "A file already exists at the original location -- not overwriting it")
+    end
+    local why = vim.trim(out or "")
+    if why == "" then why = "exit code " .. tostring(code) end
+    done(false, "PowerShell restore failed: " .. why)
+  end)
 end
 
-local function restore_linux_mac(original_path)
-  local run_argv = require("lib.nvim.cross.run_argv")
+local function restore_linux_mac(original_path, done)
   local uv = vim.uv or vim.loop
   local name = vim.fn.fnamemodify(original_path, ":t")
   local trash = (vim.env.XDG_DATA_HOME or (vim.env.HOME .. "/.local/share")) .. "/Trash"
   local info_file = trash .. "/info/" .. name .. ".trashinfo"
   -- Never move a trashed item over something that now stands at its old place.
   if uv.fs_lstat(original_path) then
-    return false, "Could not restore — something already exists at " .. original_path
-  end
-
-  -- gio restore by the trash:// URI (Linux only; gio wrote the .trashinfo with the original path)
-  if vim.fn.executable("gio") == 1 and vim.fn.filereadable(info_file) == 1 then
-    local encoded = name:gsub("[^%w%-%._~]", function(c)
-      return string.format("%%%02X", c:byte())
-    end)
-    if run_argv.run_blocking({ "gio", "trash", "--restore", "trash:///" .. encoded }) then
-      return true, nil
-    end
+    return done(false, "Could not restore — something already exists at " .. original_path)
   end
 
   -- Direct restore from the trash folder. Not tied to gio: trash-put and the XDG `mv` fallback put
@@ -314,30 +308,119 @@ local function restore_linux_mac(original_path)
   if vim.fn.has("mac") == 1 then
     candidates[#candidates + 1] = vim.env.HOME .. "/.Trash/" .. name
   end
-  for _, trashed in ipairs(candidates) do
-    if uv.fs_lstat(trashed) then
-      if run_argv.run_blocking({ "mv", trashed, original_path }) then
-        pcall(vim.fn.delete, info_file) -- the entry is gone from the trash, so is its record
-        return true, nil
-      end
+  local function by_mv(i)
+    local trashed = candidates[i]
+    if not trashed then
+      return done(false, "Could not restore — use your file manager's trash to restore manually")
     end
+    if not uv.fs_lstat(trashed) then return by_mv(i + 1) end
+    M._run({ "mv", trashed, original_path }, function(ok)
+      if not ok then return by_mv(i + 1) end
+      pcall(vim.fn.delete, info_file) -- the entry is gone from the trash, so is its record
+      done(true, nil)
+    end)
   end
-  return false, "Could not restore — use your file manager's trash to restore manually"
+
+  -- gio restore by the trash:// URI (Linux only; gio wrote the .trashinfo with the original path)
+  if vim.fn.executable("gio") == 1 and vim.fn.filereadable(info_file) == 1 then
+    local encoded = name:gsub("[^%w%-%._~]", function(c)
+      return string.format("%%%02X", c:byte())
+    end)
+    M._run({ "gio", "trash", "--restore", "trash:///" .. encoded }, function(ok)
+      if ok then return done(true, nil) end
+      by_mv(1)
+    end)
+    return
+  end
+  by_mv(1)
 end
 
----Restore the last trashed item.
----@return boolean ok
----@return string? err
-function M.restore_last()
-  local entry = _history[1]
-  if not entry then
-    -- `U` with nothing to undo said nothing at all, so a press looked like it was lost
-    notify.info("Nothing to undo: the trash history is empty")
-    return false, "Trash history is empty"
+---@alias Filetree.TrashUndo.Done fun(ok: boolean, err: string?, entry: TrashEntry?)
+
+---Restores waiting for the one in flight: `U` pressed again while PowerShell still runs. Each is a
+---function that starts its restore; they run one after the other, in the order they were asked for.
+---@type (fun(next: fun()))[]
+local _queue = {}
+---Whether a restore is running right now.
+local _busy = false
+
+---Run the next queued restore, if any and none is running.
+local function pump()
+  if _busy then return end
+  local job = table.remove(_queue, 1)
+  if not job then return end
+  _busy = true
+  local released = false
+  local function release()
+    if released then return end
+    released = true
+    _busy = false
+    pump()
   end
-  local ok, err = M.restore(entry)
-  if ok then table.remove(_history, 1) end
-  return ok, err
+  -- a job that raises before it answers must not stall every `U` after it
+  local ok, err = pcall(job, release)
+  if not ok then
+    notify.error("Restore failed: " .. tostring(err))
+    release()
+  end
+end
+
+---Hand `cb` its answer without letting a raising caller take the queue down with it.
+---@param cb Filetree.TrashUndo.Done?
+local function answer(cb, ok, err, entry)
+  if not cb then return end
+  local fine, raised = pcall(cb, ok, err, entry)
+  if not fine then notify.error("after the restore: " .. tostring(raised)) end
+end
+
+---Restore the last trashed item, in the background: returns at once, `cb(ok, err, entry)` follows
+---once the system's program is done. Called again before that, the next one waits for it, so a row
+---of `U` undoes the history newest first, exactly as one press after the other would.
+---@param cb? Filetree.TrashUndo.Done
+function M.restore_last(cb)
+  _queue[#_queue + 1] = function(release)
+    -- the newest entry when it is this one's turn: the one before may have taken its own off
+    local entry = _history[1]
+    if not entry then
+      -- `U` with nothing to undo said nothing at all, so a press looked like it was lost
+      notify.info("Nothing to undo: the trash history is empty")
+      answer(cb, false, "Trash history is empty", nil)
+      return release()
+    end
+    M.restore(entry, function(ok, err)
+      if ok then
+        -- by identity: a delete while the restore ran put a newer entry in front of it
+        for i, e in ipairs(_history) do
+          if e == entry then
+            table.remove(_history, i)
+            break
+          end
+        end
+      end
+      answer(cb, ok, err, entry)
+      release()
+    end)
+  end
+  pump()
+end
+
+---Whether a restore is running or waiting (specs, `:checkhealth`).
+---@return boolean
+function M.busy()
+  return _busy or #_queue > 0
+end
+
+---@internal
+---Start a program without waiting for it: `cb(ok, output, code)` on the main loop, exactly once,
+---also when it cannot be started at all (code -1). Specs replace it.
+---@param argv string[]
+---@param cb fun(ok: boolean, output: string, code: integer)
+function M._run(argv, cb)
+  require("lib.nvim.cross.run_argv").run_async_captured(argv, function(ok, out, code, stderr)
+    -- on failure the reason is on stderr (PowerShell, mv) or, when it did not start, in `out`
+    local text = ok and out or ((stderr and stderr ~= "") and stderr or out)
+    cb(ok, text or "", code)
+  end)
 end
 
 ---@internal
@@ -412,39 +495,63 @@ function M.revert_refs(id, refs_count)
 end
 
 ---Restore a specific history entry, together with the references that
----delete marked `REF!` (see `M.attach_refs`).
+---delete marked `REF!` (see `M.attach_refs`). In the background: returns at
+---once, `cb(ok, err, entry)` follows when the system's program is done. Does not
+---touch the history (`M.restore_last` does) and does not queue: use
+---`M.restore_last` for `U`.
 ---@param entry TrashEntry
----@return boolean ok
----@return string? err
-function M.restore(entry)
+---@param cb? Filetree.TrashUndo.Done
+function M.restore(entry, cb)
+  local function done(ok, err)
+    if ok then
+      notify.info("Restored: " .. entry.original_path)
+      -- Only once the file is actually back: reference cleanup follows the file,
+      -- never the other way round (a failed restore must not un-break links to
+      -- something that is still deleted).
+      local fine, raised = pcall(restore_refs, entry)
+      if not fine then notify.error("Restoring the references failed: " .. tostring(raised)) end
+    else
+      notify.error("Restore failed: " .. (err or "unknown error"))
+    end
+    answer(cb, ok, err, entry)
+  end
+
   local plat = entry.platform
-  local ok, err
   local wsl_linux_side = plat == "wsl"
     and not require("filetree.features.fileops.trash.platform").wsl_windows_side(
       entry.original_path
     )
   if plat == "windows" then
-    ok, err = restore_windows(entry.name, entry.original_path)
+    restore_windows(entry.name, entry.original_path, done)
   elseif plat == "wsl" and not wsl_linux_side then
     -- The recycle bin records the Windows path: /mnt/c/x -> C:/x (no wslpath: the file is gone, and
     -- `wslpath -w` wants it to exist).
     local win = entry.original_path:gsub("^/mnt/(%a)", function(d)
       return d:upper() .. ":"
     end)
-    ok, err = restore_windows(entry.name, win)
+    restore_windows(entry.name, win, done)
   else
-    ok, err = restore_linux_mac(entry.original_path)
+    restore_linux_mac(entry.original_path, done)
   end
-  if ok then
-    notify.info("Restored: " .. entry.original_path)
-    -- Only once the file is actually back: reference cleanup follows the file,
-    -- never the other way round (a failed restore must not un-break links to
-    -- something that is still deleted).
-    restore_refs(entry)
-  else
-    notify.error("Restore failed: " .. (err or "unknown error"))
+end
+
+---`M.restore`, waited for: for scripts and live checks (`TESTS/live/`) that need the outcome in
+---line. Never from a key: the editor stands still while it waits.
+---@param entry TrashEntry
+---@param timeout_ms? integer  Default 30 s; nil, "timed out" when it is over.
+---@return boolean|nil ok
+---@return string? err
+function M.restore_blocking(entry, timeout_ms)
+  local done, got_ok, got_err = false, nil, nil
+  M.restore(entry, function(ok, err)
+    done, got_ok, got_err = true, ok, err
+  end)
+  if not vim.wait(timeout_ms or 30000, function()
+    return done
+  end, 20) then
+    return nil, "timed out"
   end
-  return ok, err
+  return got_ok, got_err
 end
 
 ---Display history in a floating scratch buffer.

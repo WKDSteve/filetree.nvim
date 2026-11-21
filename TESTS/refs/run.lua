@@ -1935,7 +1935,7 @@ local function run_delete_undo_refs_chunked_race_check()
   local trash_undo = require("filetree.features.fileops.trash.undo")
   apply.reset()
 
-  -- The OS-level restore is faked through `run_argv.run_blocking`, but only
+  -- The OS-level restore is faked through `trash_undo._run`, but only
   -- the Windows restore calls that unconditionally -- the Unix one needs a
   -- real `gio`/XDG trash directory and bails with "Could not restore"
   -- otherwise. Record the entry as a Windows one so every host takes the
@@ -2002,11 +2002,9 @@ local function run_delete_undo_refs_chunked_race_check()
   )
 
   -- `U`, fired right now -- this is the race.
-  local run_argv = require("lib.nvim.cross.run_argv")
-  local orig_run_blocking = run_argv.run_blocking
-  ---@diagnostic disable-next-line: duplicate-set-field
-  run_argv.run_blocking = function()
-    return true, nil -- pretend the OS-level restore succeeded; no real file to move
+  local orig_run = trash_undo._run
+  trash_undo._run = function(_, cb)
+    cb(true, "", 0) -- pretend the OS-level restore succeeded at once; no real file to move
   end
   -- the rewrite settles after the restore: the person is asked whether the references go back too (No here)
   local asked_question
@@ -2014,8 +2012,11 @@ local function run_delete_undo_refs_chunked_race_check()
     asked_question = question
     cb(false)
   end
-  local restore_ok = trash_undo.restore_last()
-  run_argv.run_blocking = orig_run_blocking
+  local restore_ok
+  trash_undo.restore_last(function(o)
+    restore_ok = o
+  end)
+  trash_undo._run = orig_run
 
   check("chunked race: U itself reports success", restore_ok == true)
   check(
@@ -2067,11 +2068,14 @@ local function run_delete_undo_refs_chunked_race_check()
     said2[#said2 + 1] = tostring(msg)
     return real_notify(msg, level, opts)
   end
-  run_argv.run_blocking = function()
-    return true, nil
+  trash_undo._run = function(_, cb)
+    cb(true, "", 0)
   end
-  local ok2 = trash_undo.restore_last()
-  run_argv.run_blocking = orig_run_blocking
+  local ok2
+  trash_undo.restore_last(function(o)
+    ok2 = o
+  end)
+  trash_undo._run = orig_run
   vim.notify = real_notify
   check("chunked race: a later, unrelated restore of the same path succeeds", ok2 == true)
   for _, m in ipairs(said2) do
