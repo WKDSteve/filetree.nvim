@@ -245,6 +245,60 @@ do
   eq("... and answers", #outcomes, 1)
 end
 
+-- ── a program that never ends: the time limit frees the queue ────────────────
+do
+  starts, outcomes, said = {}, {}, {}
+  local limit = undo.TIMEOUT_MS
+  undo.TIMEOUT_MS = 50
+  record_windows("C:/Users/x/project/hangs.txt")
+  record_windows("C:/Users/x/project/hangs2.txt")
+  undo.restore_last(on_done)
+  undo.restore_last(on_done)
+  vim.wait(5000, function()
+    return #outcomes >= 1
+  end, 20)
+  eq("a hanging PowerShell: answered after the time limit", outcomes[1] and outcomes[1].ok, false)
+  ok(
+    "... saying it did not finish",
+    tostring(outcomes[1] and outcomes[1].err):find("did not finish within", 1, true) ~= nil
+  )
+  undo.TIMEOUT_MS = limit
+  local ps = vim.tbl_filter(function(job)
+    return job.argv[#job.argv]:find("hangs", 1, true) ~= nil
+  end, starts)
+  eq("... and the next U starts", #ps, 2)
+  exit(ps[2], 0)
+  eq("... and answers", #outcomes, 2)
+  -- the first entry is still in the history (not restored): clear it for the cases below
+  undo.restore_last(on_done)
+  local last = starts[#starts]
+  exit(last, 0)
+  eq("history empty again", #undo.history(), 0)
+end
+
+-- ── a restore that raises before its program starts: answered, queue free ────
+do
+  starts, outcomes, said = {}, {}, {}
+  local platform = require("filetree.util.platform")
+  local real_exe = platform.powershell_exe
+  platform.powershell_exe = function()
+    error("no PowerShell here")
+  end
+  record_windows("C:/Users/x/project/raises.txt")
+  undo.restore_last(on_done)
+  platform.powershell_exe = real_exe
+  eq("raised before the start: answered", outcomes[1] and outcomes[1].ok, false)
+  ok(
+    "... with the reason",
+    tostring(outcomes[1] and outcomes[1].err):find("no PowerShell here", 1, true) ~= nil
+  )
+  ok("... nothing left waiting", not undo.busy())
+  undo.restore_last(on_done)
+  eq("... the next U starts", #starts, 1)
+  exit(starts[1], 0)
+  eq("history empty again", #undo.history(), 0)
+end
+
 -- ── empty history: said at once, nothing started ─────────────────────────────
 do
   starts, outcomes, said = {}, {}, {}

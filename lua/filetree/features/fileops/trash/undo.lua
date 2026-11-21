@@ -387,7 +387,7 @@ function M.restore_last(cb)
       answer(cb, false, "Trash history is empty", nil)
       return release()
     end
-    M.restore(entry, function(ok, err)
+    local started, raised = pcall(M.restore, entry, function(ok, err)
       if ok then
         -- by identity: a delete while the restore ran put a newer entry in front of it
         for i, e in ipairs(_history) do
@@ -400,27 +400,43 @@ function M.restore_last(cb)
       answer(cb, ok, err, entry)
       release()
     end)
+    if not started then
+      -- raised before its program ran (nothing will answer): say so, and free the queue
+      local why = tostring(raised)
+      notify.error("Restore failed: " .. why)
+      answer(cb, false, why, entry)
+      release()
+    end
   end
   pump()
 end
 
----Whether a restore is running or waiting (specs, `:checkhealth`).
+---Whether a restore is running or waiting (specs).
 ---@return boolean
 function M.busy()
   return _busy or #_queue > 0
 end
 
+---How long one restore program may run (ms). A PowerShell that hangs (a stuck COM call) would
+---otherwise hold every later `U` in the queue for good; when it is over, the restore fails with a
+---message saying so (code 124).
+M.TIMEOUT_MS = 120000
+
 ---@internal
 ---Start a program without waiting for it: `cb(ok, output, code)` on the main loop, exactly once,
----also when it cannot be started at all (code -1). Specs replace it.
+---also when it cannot be started at all (code -1) or ran past `M.TIMEOUT_MS` (code 124). Specs
+---replace it.
 ---@param argv string[]
 ---@param cb fun(ok: boolean, output: string, code: integer)
 function M._run(argv, cb)
   require("lib.nvim.cross.run_argv").run_async_captured(argv, function(ok, out, code, stderr)
+    if code == 124 then
+      return cb(false, ("%s did not finish within %d s"):format(argv[1], M.TIMEOUT_MS / 1000), 124)
+    end
     -- on failure the reason is on stderr (PowerShell, mv) or, when it did not start, in `out`
     local text = ok and out or ((stderr and stderr ~= "") and stderr or out)
     cb(ok, text or "", code)
-  end)
+  end, nil, { timeout_ms = M.TIMEOUT_MS })
 end
 
 ---@internal
