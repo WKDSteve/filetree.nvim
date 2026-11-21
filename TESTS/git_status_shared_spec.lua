@@ -199,6 +199,31 @@ do
   ok("--ignored is asked apart", vim.tbl_contains(statuses()[#statuses()].argv, "--ignored"))
 end
 
+-- ── a status that raises before git runs is not joined later ─────────────────
+do
+  shared._reset()
+  starts = {}
+  local lib_git = require("lib.nvim.git")
+  local real = lib_git.status_porcelain_async
+  lib_git.status_porcelain_async = function()
+    error("cannot start")
+  end
+  local got = "none"
+  shared.status({ dir = repo }, nil, function(map, err)
+    got = { map = map, err = err }
+  end)
+  lib_git.status_porcelain_async = real
+  settle()
+  ok("raised at the start: answered", got ~= "none" and got.map == nil)
+  ok(
+    "... with the reason",
+    type(got) == "table" and tostring(got.err):find("cannot start", 1, true) ~= nil
+  )
+  shared.status({ dir = repo }, nil, function() end)
+  eq("... and the next request starts git instead of joining the dead one", #statuses(), 1)
+  exit(statuses()[1], 0)
+end
+
 -- ── the feature: opening the tree runs git once ──────────────────────────────
 shared._reset()
 starts = {}
@@ -250,6 +275,23 @@ do
   git_status.refresh()
   eq("an explicit refresh always asks", #statuses(), 4)
   exit(statuses()[4], 0, "")
+
+  -- a change only the view git hears (a file operation: FiletreeChanged), then the tree buffer is
+  -- entered: the badges must not take the answer from before it
+  local unsubscribe = require("filetree.native.source.git").source().subscribe({}, {
+    reset = function() end,
+  })
+  clock = clock + 100
+  vim.api.nvim_exec_autocmds("User", { pattern = "FiletreeChanged", data = { op = "create" } })
+  clock = clock + 10
+  local buf3 = vim.api.nvim_create_buf(false, true)
+  vim.bo[buf3].filetype = "filetree_spec_tree"
+  vim.wait(100, function()
+    return #statuses() >= 5
+  end)
+  eq("a change heard by the view only: the badges ask again too", #statuses(), 5)
+  exit(statuses()[5], 0, "")
+  unsubscribe()
   git_status.teardown()
 end
 

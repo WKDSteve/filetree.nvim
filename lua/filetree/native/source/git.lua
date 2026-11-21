@@ -23,15 +23,11 @@ local api = vim.api
 
 local M = {}
 
----When the view last heard of a change git status would see (a git action from the view, a write,
----focus, files on disk; `filetree.util.git_status` time). The view's next status must be newer;
----without a change since, it reuses an answer up to `FRESH_MS` old (the badges', or its own when
----the view is shown again right after).
-local changed_at = -math.huge
-
----Something changed that git status would see.
+---Something changed that git status would see (a git action from the view, a write, focus, files on
+---disk): the next status, the view's or the badges', must be newer. Without a change since, an
+---answer up to `FRESH_MS` old is reused (the badges', or the view's own when shown again).
 local function mark_changed()
-  changed_at = shared.now()
+  shared.changed()
 end
 
 ---@type { key: string, label: string }[]
@@ -281,8 +277,7 @@ function M.source()
             cb({ note("git:none", "not a git repository") })
             return
           end
-          local since = math.max(changed_at, shared.now() - shared.FRESH_MS)
-          shared.status({ dir = repo }, since, function(map, err)
+          shared.status({ dir = repo }, nil, function(map, err)
             if not map then
               cb({ note("git:failed", "git status failed: " .. tostring(err or "unknown")) })
               return

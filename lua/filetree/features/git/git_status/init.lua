@@ -87,13 +87,6 @@ local _render_debounce = nil
 ---@type { stop: fun() }?
 local _pending_query = nil
 
----When this feature last heard of a change git status would see (a write, focus back, a branch
----switch, files on disk; `shared.now()` time). An answer from before it is stale; without a
----change since, an answer up to `shared.FRESH_MS` old (the git view's, or the one of a moment ago
----when the tree opened and its buffer was entered right after) is reused instead of a new `git`.
----@type number
-local _changed_at = -math.huge
-
 -- ── Git query ─────────────────────────────────────────────────────────────────
 
 ---One path's XY status code -> the single-letter code this module renders.
@@ -118,7 +111,8 @@ local function classify(xy)
 end
 
 ---@param root string  git repo root directory
----@param since number  The answer must come from a status started at or after this.
+---@param since number|nil  The answer must come from a status started at or after this; nil: an
+---  answer up to `shared.FRESH_MS` old with no change heard since (see `filetree.util.git_status`).
 local function run_git(root, since)
   local previous = _pending_query
   local request
@@ -219,14 +213,15 @@ local function debounce_refresh()
   if _debounce then _debounce.call() end
 end
 
----Something changed that git status would see: the next query must not reuse an older answer.
+---Something changed that git status would see: the next query (anyone's) must not reuse an older
+---answer.
 local function changed()
-  _changed_at = shared.now()
+  shared.changed()
   debounce_refresh()
 end
 
 ---Query (or reuse) the status for the current adapter root.
----@param since number|nil  nil: what `_changed_at` and the reuse window allow.
+---@param since number|nil  nil: an answer of a moment ago serves when no change was heard since.
 local function query(since)
   if not _adapter then return end
 
@@ -240,7 +235,7 @@ local function query(since)
   local git_dir = root_path .. "/.git"
   if vim.fn.isdirectory(git_dir) == 0 and vim.fn.filereadable(git_dir) == 0 then return end
 
-  run_git(root_path, since or math.max(_changed_at, shared.now() - shared.FRESH_MS))
+  run_git(root_path, since)
 end
 
 ---Refresh git status for the current adapter root: always a fresh `git status`.

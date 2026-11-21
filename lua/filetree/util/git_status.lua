@@ -13,10 +13,11 @@
 ---   gets the new answer instead (newer is never worse for them).
 ---
 --- `since` is a time on this module's clock (`M.now()`, ms): "the answer must come from a
---- `git status` started at or after this". A caller that knows of a change (a write, a git action,
---- focus back from a terminal) passes the time of the change; a caller that only wants to show
---- what is there (the tree opened, its buffer entered) passes nothing and takes an answer up to
---- `M.FRESH_MS` old. A failed status is never kept.
+--- `git status` started at or after this". A caller that hears of a change (a write, a git action,
+--- focus back from a terminal, files on disk) calls `M.changed()`: from then on every caller,
+--- whoever heard of it, needs a status started after it. A caller that only wants to show what is
+--- there (the tree opened, its buffer entered) passes no `since` and takes an answer up to
+--- `M.FRESH_MS` old; `since = M.now()` forces a new status. A failed status is never kept.
 ---
 --- Answers come on the main loop (lib.nvim schedules them), each waiter exactly once, a raising
 --- waiter never costs the others their answer.
@@ -30,6 +31,14 @@ M.FRESH_MS = 2000
 ---@return number
 function M.now()
   return (vim.uv or vim.loop).hrtime() / 1e6
+end
+
+---When anyone last heard of a change git status would see (`M.now()` time).
+local last_change = -math.huge
+
+---Someone heard of a change git status would see: no answer started before now serves anyone.
+function M.changed()
+  last_change = M.now()
 end
 
 ---@class Filetree.GitStatus.Waiter
@@ -75,18 +84,28 @@ local function start(slot, opts, waiters)
   ---@type Filetree.GitStatus.Query
   local query = { started = M.now(), waiters = waiters }
   slot.running = query
-  query.handle = require("lib.nvim.git").status_porcelain_async(
-    { dir = opts.dir, ignored = opts.ignored },
-    function(map, err)
-      -- a superseded query was stopped and its waiters moved on: its answer goes nowhere
-      if slot.running ~= query then return end
-      slot.running = nil
-      if map then slot.last = { started = query.started, map = map } end
-      for _, waiter in ipairs(query.waiters) do
-        deliver(waiter, map, err)
-      end
+  local function finish(map, err)
+    -- a superseded query was stopped and its waiters moved on: its answer goes nowhere
+    if slot.running ~= query then return end
+    slot.running = nil
+    if map then slot.last = { started = query.started, map = map } end
+    for _, waiter in ipairs(query.waiters) do
+      deliver(waiter, map, err)
     end
+  end
+  local ok, handle = pcall(
+    require("lib.nvim.git").status_porcelain_async,
+    { dir = opts.dir, ignored = opts.ignored },
+    finish
   )
+  if ok then
+    query.handle = handle
+  else
+    -- raised before git ran: nothing will answer, so a later request must not join a dead query
+    vim.schedule(function()
+      finish(nil, tostring(handle))
+    end)
+  end
 end
 
 ---Ask for the status of `opts.dir` (`opts.ignored` adds ignored files).
@@ -104,7 +123,7 @@ function M.status(opts, since, cb)
     slot = {}
     slots[key] = slot
   end
-  since = since or (M.now() - M.FRESH_MS)
+  since = math.max(since or (M.now() - M.FRESH_MS), last_change)
 
   ---@type Filetree.GitStatus.Waiter
   local waiter = { cb = cb, cancelled = false }
@@ -156,6 +175,7 @@ function M._reset()
     if slot.running and slot.running.handle then pcall(slot.running.handle.stop) end
   end
   slots = {}
+  last_change = -math.huge
 end
 
 return M
