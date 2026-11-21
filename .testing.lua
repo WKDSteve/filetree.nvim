@@ -127,4 +127,77 @@ return {
       },
     },
   },
+  ci = {
+    -- Written out rather than derived: the container image has to be built before the suite starts, and a step of
+    -- its own would join `full` after the derived ones.
+    profiles = {
+      fast = { "stylua", "luacheck" },
+      full = {
+        "fast",
+        "container-image",
+        "suite",
+        "conformance",
+        "doc-reference",
+        "workflow-in-sync",
+      },
+    },
+    default = "full",
+    steps = {
+      -- TESTS/trash_linux_container_spec.lua runs the Linux trash backend in a container (testing.container); the
+      -- hosted ubuntu leg builds the image here (red there without podman), elsewhere the step only reports.
+      ["container-image"] = {
+        run = { "scripts/ci-container-image.sh", "${deps.testing.nvim}" },
+        when = { os = { "linux" } },
+        timeout = "15m",
+      },
+      -- The FEATURE REFERENCE section of doc/filetree.txt is generated from docs/FEATURES/*.md and the binding
+      -- catalog: a new feature without its `:help filetree-<it>` entry is red. It loads the plugin, hence lib.nvim.
+      ["doc-reference"] = {
+        run = {
+          "nvim",
+          "-n",
+          "--clean",
+          "--headless",
+          "-u",
+          "NONE",
+          "-l",
+          "scripts/gen_vimdoc_reference.lua",
+          "--check",
+        },
+        env = { FILETREE_LIB_NVIM = "${deps.lib.nvim}" },
+      },
+      ["workflow-in-sync"] = { preset = "workflow-in-sync" },
+    },
+    -- The GitHub workflow, generated: `testing init --workflow=public --force` writes .github/workflows/ci.yml from
+    -- this (testing.nvim docs/WORKFLOW-CI.md); the step workflow-in-sync keeps the two together.
+    workflow = {
+      name = "filetree.nvim",
+      layout = "hosted",
+      -- the steps that depend on the platform: the windows and macOS legs run only these
+      platform = { "suite", "conformance" },
+      -- `testing ci land`: a check branch ci/** runs the hosted legs, main moves to a commit only once it is green there
+      land = true,
+      -- more checkouts below .deps/, not on the runtimepath of the specs. TESTS/neotree_pins.lua reads these pins from
+      -- the generated .github/workflows/ci.yml (`repository:` + a 40-hex `ref:` per step): the real-neo-tree suites use
+      -- a checkout they find on their own only at these commits.
+      checkouts = {
+        {
+          repo = "nvim-neo-tree/neo-tree.nvim",
+          ref = "1a14083046d96e88e361d1da00761c40d45012f3",
+          why = "the real-neo-tree suites (adapter_lines.lua, ...) and the test sheet diag-badges-neotree",
+        },
+        {
+          repo = "MunifTanjim/nui.nvim",
+          ref = "10fc361835c856ba4233ef5ea135b919bf3dce97",
+          why = "a hard dependency of neo-tree.nvim in the real-neo-tree suites and sheets",
+        },
+        {
+          repo = "nvim-lua/plenary.nvim",
+          ref = "74b06c6c75e4eeb3108ec01852001636d85a932b",
+          why = "a hard dependency of neo-tree.nvim in the real-neo-tree suites and sheets",
+        },
+      },
+      publish = { why = "hover.nvim checks out filetree.nvim at ci-verified (its test sheets)" },
+    },
+  },
 }
