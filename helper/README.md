@@ -44,7 +44,9 @@ cargo test --release --manifest-path helper/Cargo.toml
 
 `require("filetree.native.fs.helper").build()` does the build and copies the program to
 `stdpath("data")/filetree-helper/`, where `"auto"` finds it (the client is `lib.nvim.fs.helper`, shared
-by every plugin); without cargo it downloads the release program. The CI
+by every plugin); without cargo it downloads the release program. It waits for cargo (a plugin
+manager's build step); from a running editor `:Filetree helper build` does the same in the background
+(`build_async()`, cancellable with `:Filetree helper cancel`). The CI
 (`.github/workflows/helper.yml`) builds and tests it on Windows, Linux and macOS, runs
 `TESTS/native_helper_spec.lua` against it, keeps the programs as artifacts and attaches them to a
 release for every tag `helper-v*`.

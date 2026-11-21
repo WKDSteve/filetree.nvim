@@ -3040,6 +3040,13 @@ The helper process of the own tree                    *filetree-native-helper*
   `helper/bin/` is no longer used: run `build()` again after the update.
   `:checkhealth filetree` names its state.
 
+  `build()` waits until cargo or the download is done, right for a plugin
+  manager. From a running editor use `:Filetree helper build` instead
+  (`build_async()`): it runs in the background with a progress indicator,
+  the tree works without the helper meanwhile, `:Filetree helper cancel`
+  stops it and quitting Neovim ends it. `:Filetree helper build download`
+  never builds, `:Filetree helper build source` never downloads.
+
 ==============================================================================
 7. PUBLIC API                                                  *filetree-api*
 
