@@ -313,19 +313,7 @@ end
 ---@param info fun(msg: string)
 ---@param warn fun(msg: string)
 function M.health(ok, info, warn)
-  local s = M.state()
-  if s.lost then
-    warn("native: the helper process " .. s.lost .. "; the Lua tiers serve this session")
-  elseif s.exe then
-    ok(
-      ("native: helper process %s (%s)"):format(
-        s.running and ("running, pid " .. tostring(s.pid)) or "found, starts on first need",
-        s.exe
-      )
-    )
-  else
-    info("native: helper process " .. (s.off or "off"))
-  end
+  lib.health(ok, info, warn, "native")
 end
 
 return M

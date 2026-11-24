@@ -73,6 +73,19 @@ do
   ok("... and it says so: " .. tostring(why), why and why:find("false", 1, true) ~= nil)
   ok("... and the deep listing does not name the helper", (deep.tier()) ~= "helper")
 
+  -- :checkhealth filetree is lib.nvim's health() with filetree's own label, not a second copy
+  local lines = {}
+  local function sink(kind)
+    return function(msg)
+      lines[#lines + 1] = kind .. " " .. msg
+    end
+  end
+  helper.health(sink("ok"), sink("info"), sink("warn"))
+  ok(
+    "health says it with the native label: " .. tostring(lines[1]),
+    (lines[1] or ""):find("^info native: off") ~= nil
+  )
+
   helper.configure("/no/such/filetree-helper")
   exe, why = helper.find()
   eq("a path that is not there: no program", exe, nil)
