@@ -40,16 +40,7 @@ M.MAX_CANDIDATES = 20
 ---@field check fun(item: Filetree.Ai.Item, path: string|nil): boolean, string|nil  Whether the action applies to the path (nil: the cursor).
 
 ---A path in one spelling: `/`-separated, drive letter upper case, no trailing slash.
----@param path string
----@return string
-local function norm(path)
-  path = path:gsub("\\", "/")
-  path = path:gsub("^(%a):", function(drive)
-    return drive:upper() .. ":"
-  end)
-  if #path > 1 and path:sub(-1) == "/" and not path:match("^%a:/$") then path = path:sub(1, -2) end
-  return path
-end
+local norm = require("lib.nvim.fs.norm")
 
 ---@param root string
 ---@param path string
