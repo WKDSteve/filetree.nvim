@@ -53,16 +53,7 @@ M.stats = { scans = 0 }
 
 ---One spelling for a path: `/`-separated, drive letter upper case, no trailing slash (a bare root keeps
 ---it: `/`, `C:/`).
----@param path string
----@return string
-function M.norm(path)
-  path = path:gsub("\\", "/")
-  path = path:gsub("^(%a):", function(drive)
-    return drive:upper() .. ":"
-  end)
-  if #path > 1 and path:sub(-1) == "/" and not path:match("^%a:/$") then path = path:sub(1, -2) end
-  return path
-end
+M.norm = require("lib.nvim.fs.norm")
 
 ---@param dir string  Normalized.
 ---@param name string
