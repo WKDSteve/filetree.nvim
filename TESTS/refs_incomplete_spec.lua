@@ -107,9 +107,13 @@ refs.scan = real_scan
 
 -- run_plan: a candidate that cannot be read is reported, not dropped in silence.
 local scan = require("filetree.refs.scan")
-local real_candidates, real_lines_of = scan.candidates, scan.lines_of
+local real_candidates, real_lines_of, real_is_gone = scan.candidates, scan.lines_of, scan.is_gone
 scan.candidates = function(_, _, _, _, cb)
   cb({ "/p/a.md", "/p/locked.md" })
+end
+-- the fake files exist; only reading one fails (a dangling link would not count as unreadable)
+scan.is_gone = function()
+  return false
 end
 scan.lines_of = function(file)
   if file == "/p/locked.md" then return nil end
@@ -125,7 +129,7 @@ scan.run_plan({
 }, { root = "/p", cfg = {} }, function(r, _, u)
   got_refs, got_unreadable = r, u
 end)
-scan.candidates, scan.lines_of = real_candidates, real_lines_of
+scan.candidates, scan.lines_of, scan.is_gone = real_candidates, real_lines_of, real_is_gone
 eq("run_plan: the readable file's ref is found", got_refs and #got_refs, 1)
 eq(
   "run_plan: the unreadable file is reported",
