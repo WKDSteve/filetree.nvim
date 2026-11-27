@@ -863,6 +863,12 @@ local function run_review_fixes()
     got ~= nil and #got == 1 and got[1] == locked,
     vim.inspect(got)
   )
+  got = rg_with_stderr("")
+  check(
+    "fix: a ripgrep run that failed without a word still falls back to the walk",
+    got ~= nil and #got > 0,
+    vim.inspect(got)
+  )
   got = rg_with_stderr("rg: " .. work .. ": Access is denied. (os error 5)")
   check(
     "a ripgrep run that could not read a directory still falls back to the walk",

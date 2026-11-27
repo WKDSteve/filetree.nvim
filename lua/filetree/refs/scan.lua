@@ -102,6 +102,8 @@ end
 ---@param stderr string
 ---@return string[]|nil
 function M.rg_open_errors(stderr)
+  -- a failed run that says nothing about why is no finished search
+  if not stderr:find("%S") then return nil end
   local files = {}
   for line in stderr:gmatch("[^\r\n]+") do
     local path = line:match("^rg: (.-): .*%(os error %d+%)%s*$")
