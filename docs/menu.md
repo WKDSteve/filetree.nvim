@@ -100,7 +100,7 @@ WHICH entries appear, for both the built-in trigger and any of your own):
 require("filetree").setup({
   menu = {
     enable    = true,
-    fileops   = true, -- create / rename / batch rename / move / template / repair a broken link
+    fileops   = true, -- create / rename / batch rename / move / template / repair a broken link / create PDF
     clipboard = true, -- copy / cut / paste / copy to the system clipboard
     delete    = true, -- trash
     open      = true, -- vsplit / split / tab / system app / file manager / mdview (Markdown)
@@ -121,7 +121,9 @@ Three rows hand the node to a sister plugin and appear only where they apply:
 [mdview.nvim](https://github.com/WKDSteve/mdview.nvim)) and **Repair broken link**
 (fileops, on a symlink whose target is gone; with
 [gopath.nvim](https://github.com/WKDSteve/gopath.nvim) it searches for the new target,
-without it it offers to delete or keep the link).
+without it it offers to delete or keep the link). **Create PDF** (fileops, with
+[pdfport.nvim](https://github.com/WKDSteve/pdfport.nvim) and the opt-in feature `pdf_create`) turns the node, or the
+marked nodes, into PDFs.
 
 On the own tree (`adapter = "native"`) the menu follows the node: on a line
 without a path (the "N more" line of a long folder) the groups that act on a

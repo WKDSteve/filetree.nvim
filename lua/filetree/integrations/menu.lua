@@ -54,6 +54,7 @@ local ICON = {
   filetree = nerd.glyph("F0641", "T"), -- file-tree
   link = nerd.glyph("F0337", "L"), -- link
   spotlight = nerd.glyph("F0335", "s"), -- lightbulb
+  pdf = nerd.glyph("F0226", "P"), -- file-pdf-box
 }
 
 ---@internal
@@ -237,6 +238,15 @@ local function repair_entry()
   return entry("link_create", "repair", "Repair broken link", nil, ICON.link)
 end
 
+---@internal
+--- "Create PDF": the node (or the marked nodes) turned into PDFs by pdfport.nvim (feature
+--- `pdf_create`, opt-in; it asks before it writes). Only with pdfport.nvim and a node.
+---@return table|nil
+local function pdf_entry()
+  if not current_node() or not installed("pdfport") then return nil end
+  return entry("pdf_create", "create", "Create PDF", "gP", ICON.pdf)
+end
+
 ---Whether a host that asks first (ui.nvim's `ui.menu`) may offer the
 ---"Open/Close filetree" row: `integrations.ui_menu` is not false and the `menu`
 ---group is not switched off. `items()`/`submenu()`/`window_entry()` themselves
@@ -327,7 +337,8 @@ function M.items()
       entry("rename_batch", "open", "Batch rename", "<leader>rb", ICON.batch_rename),
       entry("move", "move", "Move to…", "M", ICON.move),
       entry("create_from_template", "open_current", "New from template", "A", ICON.template),
-      repair_entry()
+      repair_entry(),
+      pdf_entry()
     )
   end
 

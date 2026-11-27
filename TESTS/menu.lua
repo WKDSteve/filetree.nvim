@@ -398,6 +398,8 @@ do
     return type(p) == "string" and p:match("%.md$") ~= nil
   end
   features.link_create, repair_calls = stub_action("link_create", { "repair" })
+  local pdf_calls
+  features.pdf_create, pdf_calls = stub_action("pdf_create", { "create" })
 
   local broken = { ["/x/dead-link"] = true }
   package.loaded["filetree.util.symlink"] = {
@@ -457,6 +459,24 @@ do
   check("cross: Repair row on a broken symlink", repair ~= nil)
   if repair then repair.cmd() end
   eq("cross: Repair row calls link_create.repair", repair_calls[1], "link_create.repair")
+
+  -- Create PDF: only with pdfport.nvim (and a node); the feature does the asking.
+  package.loaded["pdfport"] = nil
+  package.preload["pdfport"] = function()
+    error("pdfport.nvim is not installed")
+  end
+  check(
+    "cross: no Create PDF row without pdfport.nvim",
+    find(list_for("/x/notes.md"), "Create PDF") == nil
+  )
+  package.preload["pdfport"] = nil
+  package.loaded["pdfport"] = {}
+  local pdf = find(list_for("/x/notes.md"), "Create PDF")
+  check("cross: Create PDF row with pdfport.nvim", pdf ~= nil)
+  if pdf then pdf.cmd() end
+  eq("cross: Create PDF row calls pdf_create.create", pdf_calls[1], "pdf_create.create")
+  check("cross: no Create PDF row without a node", find(list_for(nil), "Create PDF") == nil)
+  package.loaded["pdfport"] = nil
 
   -- The rows follow their feature and their group like every other entry.
   local saved_md = features.mdview_open

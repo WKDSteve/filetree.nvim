@@ -60,7 +60,7 @@ return {
   -- entries. Entries whose feature is disabled are omitted automatically.
   menu = {
     enable = true,
-    fileops = true, -- create / rename / batch rename / move / template / repair a broken link
+    fileops = true, -- create / rename / batch rename / move / template / repair a broken link / create PDF
     clipboard = true, -- copy / cut / paste / copy to the system clipboard
     delete = true, -- trash
     open = true, -- vsplit / split / tab / system app / file manager / mdview (Markdown)
