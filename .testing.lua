@@ -14,6 +14,7 @@ return {
     "_spec%.lua$",
     "^TESTS/smoke%.lua$",
     "^TESTS/units%.lua$",
+    "^TESTS/units_%d%.lua$",
     "^TESTS/menu%.lua$",
     "^TESTS/cwd_mode%.lua$",
     "^TESTS/sidebar_guard%.lua$",
