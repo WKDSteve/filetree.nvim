@@ -152,7 +152,9 @@ Cross-platform (Explorer/Finder/xdg-open-based managers).
 
 Opens the node with a configured external application (`<leader>sm`) —
 for file types you want handled by a specific program rather than
-Neovim's own `preview`/`open` path.
+Neovim's own `preview`/`open` path. A script (`.ps1`, `.sh`, …) is run in
+the terminal instead — see [Run in Terminal](#run-in-terminal)
+(`scripts_in_terminal = false` hands it to the OS as before).
 
 - **Module:** `lua/filetree/features/system/open_with/`
 - **Keymaps:** `<leader>sm`
@@ -202,6 +204,40 @@ cursor happens to be in the tree, no manual `cd` first.
 
 - **Module:** `lua/filetree/features/system/shell_run/`
 - **Keymaps:** `i`
+
+## Run in Terminal
+
+`<leader>.` hands the node under the cursor to a terminal. A **script** is
+run: in PowerShell a `.ps1` runs as itself (`& 'C:\my dir\x.ps1'` when the
+path needs quotes), from another shell through `pwsh -NoProfile -File`; a
+`.sh` through `bash`, a `.bat`/`.cmd` as itself in cmd.exe or PowerShell, a
+`.py` through `python`, `.js` through `node`, plus `.zsh`, `.fish`, `.rb`,
+`.pl`, and on Linux/macOS an executable file without an extension. **Anything
+else** — a folder, a text file — has its quoted path typed into the terminal
+without Enter, ready to finish the line by hand.
+
+Where it goes is the `backend` option:
+
+| `backend` | Target |
+| --- | --- |
+| `"auto"` (default) | terminal.nvim when it is installed, else the command line |
+| `"terminal"` | terminal.nvim's run terminal; the argv is quoted for the shell *that* terminal runs |
+| `"cmdline"` | `:!<line>` is put on Neovim's command line, quoted for `'shell'` — **not run**, Enter confirms it |
+
+`:Filetree exec terminal` / `:Filetree exec cmdline` pick one for a single
+call. `runners` changes the table per extension (`{ ts = { "deno", "run" } }`,
+`{}` to run a file as itself, `false` to only type its path); `execute =
+false` types a script's command line without Enter.
+
+`<leader>sm` (Open With) asks the same table first: a script is run here
+instead of being handed to the OS, which would open it in an editor or run it
+in a window that closes before its output can be read
+(`open_with.scripts_in_terminal = false` turns that off).
+
+- **Module:** `lua/filetree/features/system/term_run/`
+- **Keymaps:** `<leader>.`
+- **Commands:** `:Filetree exec`, `:Filetree exec terminal`, `:Filetree exec cmdline`
+- **Config:** `opts.features.term_run.backend`, `.runners`, `.execute`, `.focus`
 
 ## LSP Diagnostics
 

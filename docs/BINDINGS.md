@@ -9,8 +9,8 @@ it is documented, and the handful of facts that are easy to get wrong.
 
 | Surface | Detail page | Count |
 | --- | --- | --- |
-| Keymaps | [`BINDINGS/KEYMAPS.md`](BINDINGS/KEYMAPS.md) | 77 tree-buffer keys across 36 features (plus 4 global keys of the opt-in `tree_toggle` and 2 of the opt-in `quickpick`) |
-| User commands | [`BINDINGS/USERCOMMANDS.md`](BINDINGS/USERCOMMANDS.md) | one `:Filetree` composer, 26 sub-command groups |
+| Keymaps | [`BINDINGS/KEYMAPS.md`](BINDINGS/KEYMAPS.md) | 78 tree-buffer keys across 37 features (plus 4 global keys of the opt-in `tree_toggle` and 2 of the opt-in `quickpick`) |
+| User commands | [`BINDINGS/USERCOMMANDS.md`](BINDINGS/USERCOMMANDS.md) | one `:Filetree` composer, 27 sub-command groups |
 | Autocommands | [`BINDINGS/AUTOCMDS.md`](BINDINGS/AUTOCMDS.md) | one shared attach autocmd + 12 behavioural ones |
 
 **Machine-readable:** [`docs/BINDINGS.lua`](BINDINGS.lua) returns the same data
@@ -112,7 +112,7 @@ Enough to predict where a key lives without opening the full table:
 | Prefix | Meaning | Examples |
 | --- | --- | --- |
 | `[` / `]` | Paired copy/navigation actions — `[` for the "absolute/upper" variant, `]` for the "relative/lower" one | `[a`/`]a` path, `[R`/`]R` project root, `[f`/`]f` file list, `[m`/`]m` mark all/unmark all. Two paths have no counterpart and so stand alone: `]b` (relative to the open buffer) and `[e` (`$REPOS_DIR/…` or `$NVIM_CONFIG_DIR/…`) |
-| `<leader>` | The few actions that open a panel or reach outside the tree | `<leader>ms` marks list, `<leader>th` trash history, `<leader>rb` batch rename, `<leader>fm` file manager, `<leader>sm` system open |
+| `<leader>` | The few actions that open a panel or reach outside the tree | `<leader>ms` marks list, `<leader>th` trash history, `<leader>rb` batch rename, `<leader>fm` file manager, `<leader>sm` system open, `<leader>.` run in terminal |
 | `s` | Open the node somewhere else | `sg` vsplit, `sv` split, `st` tab |
 | `t` | Force pickers.nvim specifically, where a generic key already exists | `tf` find, `tg` grep |
 | bare letters | The everyday node operations | `a` create, `r` rename, `d` trash, `M` move, `c`/`x`/`p` copy/cut/paste, `D` diff, `I` info |

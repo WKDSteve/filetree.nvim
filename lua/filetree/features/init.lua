@@ -93,6 +93,7 @@ M.FEATURES = {
   open_with = { mod = "filetree.features.system.open_with", category = "system" },
   file_clipboard = { mod = "filetree.features.system.file_clipboard", category = "system" },
   shell_run = { mod = "filetree.features.system.shell_run", category = "system" },
+  term_run = { mod = "filetree.features.system.term_run", category = "system" },
   pdf_open = { mod = "filetree.features.system.pdf_open", category = "system" },
   mdview_open = { mod = "filetree.features.system.mdview_open", category = "system" },
   pdf_create = { mod = "filetree.features.system.pdf_create", category = "system" },

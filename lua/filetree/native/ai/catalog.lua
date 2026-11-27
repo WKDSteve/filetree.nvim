@@ -24,9 +24,10 @@ local service = require("filetree.native.fs.service")
 
 local M = {}
 
---- Features a plan never names: a shell command, global keys and modes that take over the keyboard.
+--- Features a plan never names: a shell command (or a script run in a terminal), global keys and modes that take over the keyboard.
 ---@type table<string, true>
-M.NEVER = { shell_run = true, quickpick = true, tree_toggle = true, context_menu = true }
+M.NEVER =
+  { shell_run = true, term_run = true, quickpick = true, tree_toggle = true, context_menu = true }
 
 --- Paths the context lists at most.
 M.MAX_PATHS = 400

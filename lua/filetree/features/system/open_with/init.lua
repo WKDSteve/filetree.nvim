@@ -9,6 +9,8 @@
 ---   enabled  boolean
 ---   keymap   string?  Key for system default open (default "<leader>sm").
 ---   apps     FiletreeOpenWithApp[]  List of custom app entries.
+---   scripts_in_terminal  boolean  `open_system` runs a script (see `term_run.runnable`) in the
+---            terminal instead of handing it to the OS (default true).
 ---
 --- Example config:
 ---   apps = {
@@ -31,6 +33,7 @@ local DEFAULTS = {
   enabled = false,
   keymap = "<leader>sm",
   apps = {},
+  scripts_in_terminal = true,
 }
 
 ---@type FiletreeOpenWithConfig
@@ -42,6 +45,7 @@ local _cfg = vim.deepcopy(DEFAULTS)
 ---@type FiletreeSchema
 M.SCHEMA = {
   keymap = "keymap",
+  scripts_in_terminal = "boolean",
   apps = {
     "table",
     of = {
@@ -95,12 +99,21 @@ end
 
 -- ── Public API ────────────────────────────────────────────────────────────────
 
----Open the current node with the system default application.
+---Open the current node with the system default application. A script goes to the terminal
+---instead (`scripts_in_terminal`): the OS would open it in an editor, or run it in a window that
+---closes before its output can be read.
 function M.open_system()
   local path = current_path()
   if not path then
     notify.warn("No node under cursor")
     return
+  end
+  if _cfg.scripts_in_terminal ~= false then
+    local loaded, term_run = require("filetree.features").load("term_run")
+    if loaded and term_run and term_run.runnable(path) then
+      term_run.run_path(path)
+      return
+    end
   end
   system_open(path)
   notify.info("Opening: " .. vim.fn.fnamemodify(path, ":t"))

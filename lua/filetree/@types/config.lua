@@ -115,6 +115,7 @@
 ---@field window_size_cycler  FiletreeWindowSizeCyclerConfig?
 ---@field open_in_fm          FiletreeOpenInFmConfig?
 ---@field shell_run           FiletreeShellRunConfig?
+---@field term_run            FiletreeTermRunConfig?
 ---@field layout_guard        FiletreeLayoutGuardConfig?
 ---@field no_name_guard       FiletreeNoNameGuardConfig?
 ---@field kit_slot             FiletreeKitSlotConfig?
@@ -713,6 +714,9 @@
 ---@class FiletreeOpenWithConfig
 ---@field enabled  boolean
 ---@field keymap   string?              System-default open key (default "<leader>sm").
+---@field scripts_in_terminal boolean?  A script (`.ps1`, `.sh`, ... see `term_run.runners`) is run in
+---                                     the terminal via `term_run` instead of being handed to the OS
+---                                     default handler (default true).
 ---@field apps     FiletreeOpenWithApp[]  Custom application entries.
 
 -- ── file_clipboard ────────────────────────────────────────────────────────────
@@ -1146,5 +1150,19 @@
 ---@field close_on_ok  boolean   Auto-close terminal when command exits 0 (default true).
 ---@field split        string?   "split" | "vsplit" (default "split").
 ---@field height       integer?  Terminal height in lines for horizontal split (default 12).
+
+-- ── term_run ──────────────────────────────────────────────────────────────────
+
+---@class FiletreeTermRunConfig
+---@field enabled?  boolean
+---@field keymap?   string|false  Key in the tree buffer (default "<leader>.").
+---@field backend?  "auto"|"terminal"|"cmdline"  Where the line goes: terminal.nvim, or `:!` on the
+---                                command line (put there, not run). "auto" (default): terminal.nvim
+---                                when installed, else the command line.
+---@field runners?  table<string, string[]|false>  Per extension (lower case, no dot): the words in
+---                                front of the path (`{ "deno", "run" }`), `{}` to run the file as
+---                                itself, false to never run it (its path is typed instead).
+---@field execute?  boolean  false: a script's command line is typed without Enter (default true).
+---@field focus?    boolean  Move to the terminal (default true).
 
 return {}

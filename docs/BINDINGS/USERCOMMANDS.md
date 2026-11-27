@@ -134,6 +134,13 @@ Default: `Filetree`, with `Ft` registered automatically as an alias.
 | `:Filetree filelist dirs abs` | Copy recursive dir list (absolute) |
 | `:Filetree filelist dirs rel` | Copy recursive dir list (relative) |
 
+### Run in a terminal
+| Command | Action |
+|---------|--------|
+| `:Filetree exec` | Run the script under the cursor in a terminal (else type its path there), with the configured `backend`, like `<leader>.` |
+| `:Filetree exec terminal` | The same in terminal.nvim, whatever `backend` says |
+| `:Filetree exec cmdline` | Put the script's command line (or the path) on the command line as `:!…`; Enter runs it |
+
 ### Files to the system clipboard
 | Command | Action |
 |---------|--------|

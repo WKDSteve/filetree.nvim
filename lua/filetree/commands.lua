@@ -598,6 +598,25 @@ local TREE = {
     end,
   },
 
+  -- ── term_run ─────────────────────────────────────────────────────────────────
+  -- :Filetree exec            → run the script under the cursor (else type its path), configured backend
+  -- :Filetree exec terminal   → ... in terminal.nvim
+  -- :Filetree exec cmdline    → ... as `:!<line>` on the command line (not run)
+  exec = {
+    [""] = function(_)
+      local f = ft("term_run")
+      if f then f.run() end
+    end,
+    terminal = function(_)
+      local f = ft("term_run")
+      if f then f.run("terminal") end
+    end,
+    cmdline = function(_)
+      local f = ft("term_run")
+      if f then f.run("cmdline") end
+    end,
+  },
+
   -- ── file_clipboard ───────────────────────────────────────────────────────────
   -- :Filetree clipfiles  → copy the marked nodes (else the current one) to the OS
   --                        clipboard as files, ready for Ctrl+V in another app

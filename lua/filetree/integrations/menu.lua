@@ -40,6 +40,7 @@ local ICON = {
   paste = nerd.glyph("F0192", "p"), -- content-paste
   trash = nerd.glyph("F01B4", "d"), -- trash-can
   open_external = nerd.glyph("F03CC", "o"), -- open-in-new
+  terminal = nerd.glyph("F018D", ">"), -- console
   copy_path = nerd.glyph("F018F", "c"), -- content-copy
   markdown_link = nerd.glyph("F0354", "M"), -- language-markdown
   search = nerd.glyph("F0349", "f"), -- magnify
@@ -292,6 +293,7 @@ function M.items()
       entry("open_variants", "open_split", "Open in split", "sv", ICON.open_external),
       entry("open_variants", "open_tabnew", "Open in tab", "st", ICON.open_external),
       entry("open_with", "open_system", "Open with system app", "<leader>sm", ICON.open_external),
+      entry("term_run", "run", "Run in terminal / type path", "<leader>.", ICON.terminal),
       entry("open_in_fm", "open", "Reveal in file manager", "<leader>fm", ICON.open_external)
     )
   end

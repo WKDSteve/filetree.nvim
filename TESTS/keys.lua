@@ -110,6 +110,7 @@ local KEY_FEATURES = {
   "pdf_open",
   "mdview_open",
   "shell_run",
+  "term_run",
   "cheatsheet",
   "context_menu",
   "node_info",

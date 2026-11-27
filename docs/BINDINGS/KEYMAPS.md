@@ -87,7 +87,7 @@ at runtime with `:lua vim.print(require("filetree.bindings").live())` —
 | `<PageUp>` | preview | `keymap_scroll_up10` | Scroll float preview up 10 lines (×count); in buffer-mode preview, pages the previewed file instead via native `<PageUp>` |
 | `<PageDown>` | preview | `keymap_scroll_down10` | Same as above, downward |
 | `D` | diff | `keymap` | Diff current node |
-| `<leader>sm` | open_with | `keymap` | Open with system default |
+| `<leader>sm` | open_with | `keymap` | Open with system default; a script (see `term_run`) runs in the terminal instead (`scripts_in_terminal`) |
 | `gy` | file_clipboard | `keymap` | Copy the FILES (all marked, else the current node) to the OS clipboard, so Ctrl+V pastes them into a chat, mail or file manager |
 | `r` | smart_rename | `keymap` | Rename with LSP reference update |
 | `M` | move | `keymap` | Move current node (or all marked) to a prompted destination |
@@ -116,6 +116,7 @@ at runtime with `:lua vim.print(require("filetree.bindings").live())` —
 | `w` | window_size_cycler | `keymap` | Cycle tree width through presets (normal → large → small → …). With a count N (`3w`), jumps directly to preset N instead of stepping. |
 | `<leader>fm` | open_in_fm | `keymap` | Open node directory in system file manager |
 | `i` | shell_run | `keymap` | Prompt for a shell command, run in node directory |
+| `<leader>.` | term_run | `keymap` | Script (`.ps1`, `.sh`, `.bat`, `.py`, …): run it in terminal.nvim; anything else: type its quoted path there (no Enter). Without terminal.nvim: `:!<line>` on the command line, not run |
 | `go` | pdf_open | `keymap_open` | Open the PDF under the cursor with `default_mode` (pdfport / system reader) |
 | `gM` | mdview_open | `keymap_open` | Open the markdown file under the cursor in the mdview.nvim browser preview (opt-in feature) |
 | `gP` | pdf_create | `keymap` | Create PDF(s) from the current node/marked nodes/folder via pdfport.nvim (confirms first) |

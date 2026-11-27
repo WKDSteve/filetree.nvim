@@ -245,6 +245,18 @@ require("filetree").setup({
       height      = 12,
     },
 
+    term_run = {
+      enabled = true,            -- default: on
+      keymap  = "<leader>.",     -- run the script under the cursor, else type its path
+      backend = "auto",          -- "auto" (terminal.nvim, else the command line) | "terminal" | "cmdline"
+      execute = true,            -- false: type a script's command line without Enter
+      focus   = true,            -- move to the terminal
+      runners = {                -- per extension: words in front of the path; {} = run as itself; false = never run
+        -- ts  = { "deno", "run" },
+        -- lua = { "nvim", "-l" },
+      },
+    },
+
     open_replace = {
       enabled = true,             -- default: on
       keymap          = "O",      -- open over the editor window; old buffer stays listed

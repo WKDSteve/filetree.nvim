@@ -362,6 +362,12 @@ return {
     },
     { lhs = "i", desc = "Run shell command in dir", feature = "shell_run", scope = "tree" },
     {
+      lhs = "<leader>.",
+      desc = "Run script in terminal (else type its path); terminal.nvim or :!",
+      feature = "term_run",
+      scope = "tree",
+    },
+    {
       lhs = "go",
       desc = "Open PDF (pdfport; default_mode picks the viewer)",
       feature = "pdf_open",
