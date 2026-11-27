@@ -113,17 +113,9 @@ return {
       note = "Staged is gone and Untracked is back",
     },
     {
-      lua = [[local buf = _G.adapter.get_bufnr()
-      for i, line in ipairs(vim.api.nvim_buf_get_lines(buf, 0, -1, false)) do
-        if line:find("Untracked", 1, true) then vim.api.nvim_win_set_cursor(_G.win, { i, 0 }) end
-      end]],
-      note = "the cursor on Untracked (it comes back closed: filetree.nvim/git-ansicht-eine-wieder-erscheinende-gruppe-untracked-nach-g)",
-    },
-    { keys = "<CR>", note = "open the group" },
-    {
       wait = "_G.group_of('fresh.lua') == 'Untracked'",
       timeout = 5000,
-      note = "the file is untracked again",
+      note = "the file is untracked again, the group came back open",
     },
     {
       expect = "_G.git('diff', '--cached', '--name-only') == ''",

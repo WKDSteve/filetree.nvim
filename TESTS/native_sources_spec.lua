@@ -765,6 +765,7 @@ do
     title = "Steps",
     root = function()
       local step = { id = "steps:lint", label = "lint", kind = "step" }
+      if shape == "gone" then return { id = "steps:root", label = "Steps", children = {} } end
       if shape == "red" then
         step.open = true
         step.children = { { id = "steps:finding", label = "finding", kind = "note" } }
@@ -807,6 +808,20 @@ do
   emit.reset()
   ok(
     "after a round without findings a red step opens again",
+    vim.wait(1000, function()
+      return vim.tbl_contains(lines(), "finding")
+    end, 10)
+  )
+  -- a node that is gone from the tree cannot have been closed by hand: when it comes back saying
+  -- open = true it opens (the group Untracked, after its last file was staged and unstaged again)
+  shape = "gone"
+  emit.reset()
+  settle(60)
+  ok("the node is gone", not vim.tbl_contains(lines(), "lint"))
+  shape = "red"
+  emit.reset()
+  ok(
+    "a node that went away and comes back saying open = true is open",
     vim.wait(1000, function()
       return vim.tbl_contains(lines(), "finding")
     end, 10)

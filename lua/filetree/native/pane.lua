@@ -440,6 +440,18 @@ function Pane:_resync(id, node)
   end
 end
 
+---A node of `source` that left the tree is no longer "opened once": a node cannot be closed by hand
+---while it is gone, so when it comes back saying `open = true` (the group Untracked after the last
+---untracked file was staged and unstaged again) it opens as it did the first time.
+---@private
+---@param source string
+function Pane:_forget_gone(source)
+  local tree = self.tree
+  for id in pairs(self._opened) do
+    if self._source_of[id] == source and not tree:node(id) then self._opened[id] = nil end
+  end
+end
+
 ---Ask sources for their roots again and take over what changed; what is open stays open.
 ---@param source? string  Only this source (default: every source of the view).
 function Pane:reload(source)
@@ -485,6 +497,7 @@ function Pane:_reload_sections(source)
         clear = clear,
       }))
       if fresh.available then self:_resync(root.id, root) end
+      self:_forget_gone(section.source)
     end
   end
   return false
