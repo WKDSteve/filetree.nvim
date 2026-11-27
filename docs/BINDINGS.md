@@ -9,7 +9,7 @@ it is documented, and the handful of facts that are easy to get wrong.
 
 | Surface | Detail page | Count |
 | --- | --- | --- |
-| Keymaps | [`BINDINGS/KEYMAPS.md`](BINDINGS/KEYMAPS.md) | 78 tree-buffer keys across 37 features (plus 4 global keys of the opt-in `tree_toggle` and 2 of the opt-in `quickpick`) |
+| Keymaps | [`BINDINGS/KEYMAPS.md`](BINDINGS/KEYMAPS.md) | 86 tree-buffer keys across 43 features (plus 4 global keys of the opt-in `tree_toggle` and 2 of the opt-in `quickpick`) |
 | User commands | [`BINDINGS/USERCOMMANDS.md`](BINDINGS/USERCOMMANDS.md) | one `:Filetree` composer, 27 sub-command groups |
 | Autocommands | [`BINDINGS/AUTOCMDS.md`](BINDINGS/AUTOCMDS.md) | one shared attach autocmd + 12 behavioural ones |
 

@@ -67,28 +67,30 @@ local _adapter = nil
 
 ---@alias Filetree.TermRun.Kind "posix"|"fish"|"powershell"|"cmd"|"portable"
 
----@internal
----The PowerShell to start a `.ps1` from another shell: pwsh when it is there, else Windows
----PowerShell (looked up only when such a file is run).
----@return string
-local function pwsh()
-  if platform.has_executable("pwsh") then return "pwsh" end
-  return platform.powershell_exe()
-end
+---@class Filetree.TermRun.RunnerOpts
+---@field windows_path? boolean  The program is a Windows one started from WSL: it gets the path
+---                              in Windows form (`wslpath -w`), a `/mnt/c/...` path it cannot find.
 
----Built-in runners: extension → function(kind) returning the words in front of the path.
----@type table<string, fun(kind: Filetree.TermRun.Kind): string[]>
+---@alias Filetree.TermRun.Runner fun(kind: Filetree.TermRun.Kind): string[], Filetree.TermRun.RunnerOpts?
+
+---Built-in runners: extension → function(kind) returning the words in front of the path (and
+---how the path is to be written).
+---@type table<string, Filetree.TermRun.Runner>
 M.DEFAULT_RUNNERS = {
   ps1 = function(kind)
     if kind == "powershell" then return {} end
-    return { pwsh(), "-NoProfile", "-File" }
+    -- pwsh (looked up only when such a file is run) takes the path of its own system; Windows
+    -- PowerShell started from WSL is a Windows program and needs the Windows form of it
+    if platform.has_executable("pwsh") then return { "pwsh", "-NoProfile", "-File" } end
+    return { platform.powershell_exe(), "-NoProfile", "-File" }, { windows_path = platform.is_wsl() }
   end,
-  bat = function(kind)
-    if kind == "cmd" or kind == "powershell" then return {} end
-    -- Git-Bash / MSYS rewrite an argument that starts with `/` into a path (`/c` -> `C:/`), and
-    -- cmd.exe then opens an interactive prompt instead of running the file; `//c` reaches it as
-    -- `/c`. WSL rewrites nothing, so `/c` stays there.
-    return { "cmd.exe", platform.is_windows() and "//c" or "/c" }
+  bat = function()
+    -- WSL starts only .exe files of Windows, and cmd.exe cannot find a /mnt/c/... path.
+    if platform.is_wsl() then return { "cmd.exe", "/c" }, { windows_path = true } end
+    -- Native Windows: cmd.exe, PowerShell and Git-Bash all start a .bat as itself. No `cmd.exe /c`
+    -- from Git-Bash: MSYS rewrites `/c` into `C:/` and cmd.exe opens a prompt instead, and the
+    -- `//c` that MSYS hands on as `/c` does the same to every shell that does not rewrite it.
+    return {}
   end,
   sh = function()
     return { "bash" }
@@ -123,6 +125,10 @@ M.DEFAULT_RUNNERS = {
 }
 M.DEFAULT_RUNNERS.cmd = M.DEFAULT_RUNNERS.bat
 
+---Built-in runners that need Windows (natively or from WSL); elsewhere such a file is only typed.
+---@type table<string, true>
+M.WINDOWS_ONLY = { bat = true, cmd = true }
+
 ---@internal
 ---@param path string
 ---@return string ext lower case, "" without one
@@ -132,11 +138,27 @@ local function ext_of(path)
 end
 
 ---@internal
----The runner of `path`: a user entry (words, or false) wins over the built-in one. A file without
----an extension that has the executable bit (not on Windows, where every file reads executable
----under some mounts) runs as itself.
+---Whether the file starts like a program: a `#!` line, or an ELF / Mach-O header. The executable
+---bit alone says nothing on a Windows drive mounted in WSL (`/mnt/c`), where every file has it.
 ---@param path string
----@return (fun(kind: Filetree.TermRun.Kind): string[])|nil
+---@return boolean
+local function starts_like_program(path)
+  local fd = io.open(path, "rb")
+  if not fd then return false end
+  local head = fd:read(4) or ""
+  fd:close()
+  if head:sub(1, 2) == "#!" or head == "\127ELF" then return true end
+  return head == "\207\250\237\254" -- Mach-O 64-bit (0xfeedfacf, little-endian)
+    or head == "\206\250\237\254" -- Mach-O 32-bit
+    or head == "\202\254\186\190" -- universal binary (0xcafebabe)
+end
+
+---@internal
+---The runner of `path`: a user entry (words, or false) wins over the built-in one. A file without
+---an extension runs as itself when it is executable and starts like a program (not on Windows,
+---which has no executable bit).
+---@param path string
+---@return Filetree.TermRun.Runner|nil
 local function runner_for(path)
   if vim.fn.isdirectory(path) == 1 then return nil end
   local ext = ext_of(path)
@@ -147,8 +169,11 @@ local function runner_for(path)
       return vim.deepcopy(user)
     end
   end
-  if ext ~= "" then return M.DEFAULT_RUNNERS[ext] end
-  if not platform.is_windows() and vim.fn.executable(path) == 1 then
+  if ext ~= "" then
+    if M.WINDOWS_ONLY[ext] and not (platform.is_windows() or platform.is_wsl()) then return nil end
+    return M.DEFAULT_RUNNERS[ext]
+  end
+  if not platform.is_windows() and vim.fn.executable(path) == 1 and starts_like_program(path) then
     return function()
       return {}
     end
@@ -169,7 +194,15 @@ end
 ---@return table|nil terminal.nvim's facade
 local function terminal_mod()
   local ok, mod = pcall(require, "terminal")
-  if ok and type(mod) == "table" and type(mod.run) == "function" then return mod end
+  -- both entries this feature calls: another plugin's `terminal` module is not terminal.nvim
+  if
+    ok
+    and type(mod) == "table"
+    and type(mod.run) == "function"
+    and type(mod.send) == "function"
+  then
+    return mod
+  end
   return nil
 end
 
@@ -232,7 +265,12 @@ function M.plan(path, kind)
   local p = native_path(path, kind)
   local runner = runner_for(path)
   if runner then
-    local argv = runner(kind)
+    local argv, ropts = runner(kind)
+    if ropts and ropts.windows_path then
+      local win = require("lib.nvim.cross.fs.wslpath").to_win(p)
+      if not win then return nil, "wslpath -w could not convert the path" end
+      p = win
+    end
     argv[#argv + 1] = p
     local line, err = sq.argv_to_line(argv, kind)
     if not line then return nil, err end
@@ -245,10 +283,12 @@ end
 
 ---@internal
 ---`:!<line>` on the command line, not run. `%`, `#` and `!` are escaped (`:!` expands them).
+---`escape_ks` is true: the line is literal text, and a byte 0x80 inside a UTF-8 character of a
+---path (`À`, Cyrillic `р`) would otherwise be read as the start of a special key.
 ---@param line string
 local function to_cmdline(line)
   local escaped = line:gsub("([%%#!])", "\\%1")
-  vim.api.nvim_feedkeys(":!" .. escaped, "n", false)
+  vim.api.nvim_feedkeys(":!" .. escaped, "n", true)
 end
 
 ---Hand `path` to the terminal (or the command line).

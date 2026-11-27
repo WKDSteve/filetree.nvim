@@ -109,8 +109,9 @@ function M.open_system()
     return
   end
   if _cfg.scripts_in_terminal ~= false then
-    local loaded, term_run = require("filetree.features").load("term_run")
-    if loaded and term_run and term_run.runnable(path) then
+    -- only the active feature: with term_run switched off, <leader>sm opens through the OS as before
+    local term_run = require("filetree").feature("term_run")
+    if term_run and term_run.runnable(path) then
       term_run.run_path(path)
       return
     end

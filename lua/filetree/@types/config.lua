@@ -716,7 +716,7 @@
 ---@field keymap   string?              System-default open key (default "<leader>sm").
 ---@field scripts_in_terminal boolean?  A script (`.ps1`, `.sh`, ... see `term_run.runners`) is run in
 ---                                     the terminal via `term_run` instead of being handed to the OS
----                                     default handler (default true).
+---                                     default handler, while term_run is enabled (default true).
 ---@field apps     FiletreeOpenWithApp[]  Custom application entries.
 
 -- ── file_clipboard ────────────────────────────────────────────────────────────

@@ -131,13 +131,86 @@ eq("... with -File in front of the path", posix_plan.argv[3], "-File")
 eq("... the path last, forward slashes", posix_plan.argv[4], ps1)
 eq("a .sh runs through bash", term_run.plan(sh, "posix").argv, { "bash", sh })
 local bat = touch("make.bat")
+
+-- The host is a stand-in from here on: Windows, WSL or Linux, whatever this machine is.
+local real_platform = {
+  is_windows = platform.is_windows,
+  is_wsl = platform.is_wsl,
+  has_executable = platform.has_executable,
+}
+local function host(name, o)
+  platform.is_windows = function()
+    return name == "windows"
+  end
+  platform.is_wsl = function()
+    return name == "wsl"
+  end
+  platform.has_executable = function(exe)
+    return (o and o.pwsh or false) and exe == "pwsh"
+  end
+end
+local function real_host()
+  for k, f in pairs(real_platform) do
+    platform[k] = f
+  end
+end
+local converted = {} ---@type string[]
+package.loaded["lib.nvim.cross.fs.wslpath"] = {
+  to_win = function(p)
+    converted[#converted + 1] = p
+    return "C:\\from-wsl\\" .. vim.fs.basename(p)
+  end,
+}
+
+host("windows")
 eq(
-  "a .bat from bash goes through cmd.exe, //c on Windows (Git-Bash rewrites /c into C:/)",
+  "Windows, bash (Git-Bash): a .bat runs as itself -- no `cmd.exe /c`, which MSYS turns into C:/",
   term_run.plan(bat, "posix").argv,
-  { "cmd.exe", win and "//c" or "/c", bat }
+  { bat }
 )
-local bat_line = term_run.plan(bat, "posix").line
-ok("... and //c stays unquoted on the line", win and bat_line:find(" //c ", 1, true) or not win)
+eq("... in cmd.exe as well", #term_run.plan(bat, "cmd").argv, 1)
+host("wsl")
+converted = {}
+eq(
+  "WSL: a .bat goes through cmd.exe /c with the Windows form of its path",
+  term_run.plan(bat, "posix").argv,
+  { "cmd.exe", "/c", "C:\\from-wsl\\make.bat" }
+)
+eq("... converted by wslpath", converted, { bat })
+eq(
+  "WSL without pwsh: a .ps1 goes to powershell.exe with the Windows form of its path",
+  term_run.plan(ps1, "posix").argv,
+  { "powershell.exe", "-NoProfile", "-File", "C:\\from-wsl\\build.ps1" }
+)
+host("wsl", { pwsh = true })
+eq(
+  "WSL with pwsh: a .ps1 keeps its own path (pwsh of the distribution)",
+  term_run.plan(ps1, "posix").argv,
+  { "pwsh", "-NoProfile", "-File", ps1 }
+)
+host("linux")
+ok("Linux: a .bat is not run (no cmd.exe there)", not term_run.runnable(bat))
+eq("... its path is typed", term_run.plan(bat, "posix").run, false)
+
+-- A file without an extension: executable AND starting like a program. In WSL every file on
+-- /mnt/c has the executable bit, so the bit alone would run a LICENSE.
+local real_executable = vim.fn.executable
+vim.fn.executable = function()
+  return 1
+end
+local license = touch("LICENSE")
+local tool = dir .. "/tool"
+vim.fn.writefile({ "#!/bin/sh", "echo hi" }, tool)
+local elf = dir .. "/elfbin"
+local fd = assert(io.open(elf, "wb"))
+fd:write("\127ELF\2\1\1")
+fd:close()
+ok("an executable file without a #! or binary header is not run", not term_run.runnable(license))
+ok("... one with #! is", term_run.runnable(tool))
+ok("... and an ELF binary is", term_run.runnable(elf))
+vim.fn.executable = real_executable
+real_host()
+
 local txt_plan = term_run.plan(txt, "posix")
 eq("a .txt is only typed, not run", txt_plan.run, false)
 local sq = require("lib.nvim.cross.shell_quote")
@@ -200,6 +273,37 @@ fed = nil
 term_run.run_path(pct, { backend = "cmdline" })
 ok("% is escaped for :!", fed and fed:find("100\\%.sh", 1, true) ~= nil)
 
+-- The real command line: a path with a byte 0x80 inside a UTF-8 character ("À" is C3 80) must
+-- arrive as typed, not as the start of a special key.
+local accent = touch("Àrun.sh")
+local seen ---@type string?
+vim.api.nvim_create_autocmd("CmdlineLeave", {
+  once = true,
+  callback = function()
+    seen = vim.fn.getcmdline()
+  end,
+})
+vim.api.nvim_feedkeys = real_feedkeys
+term_run.run_path(accent, { backend = "cmdline" })
+-- <C-c> abandons the line. Not <Esc>: typed from typeahead it RUNS the line (:h c_<Esc>).
+real_feedkeys("\3", "nx", false)
+vim.api.nvim_feedkeys = function() end
+eq(
+  "a path with À reaches the command line unchanged",
+  seen,
+  "!" .. sq.argv_to_line({ "bash", accent }, "posix")
+)
+
+-- Another plugin's `terminal` module (no `send`) is not terminal.nvim.
+package.loaded["terminal"] = {
+  run = function() end,
+}
+eq(
+  "a `terminal` module without send is not taken for terminal.nvim",
+  term_run.resolve_backend(),
+  "cmdline"
+)
+
 remove_terminal()
 eq(
   "auto falls back to the command line without terminal.nvim",
@@ -215,6 +319,13 @@ eq("an unknown backend is refused", (term_run.resolve_backend("tmux")), nil)
 -- ── <leader>sm: open_with sends a script to the terminal ──────────────────────
 install_terminal()
 package.loaded["filetree.features.system.term_run"] = term_run
+-- filetree's registry of active features: term_run is on until the test switches it off
+local term_run_active = true
+package.loaded["filetree"] = {
+  feature = function(name)
+    return (name == "term_run" and term_run_active) and term_run or nil
+  end,
+}
 if not pcall(require, "ui.kit") then package.loaded["ui.kit"] = {} end
 local open_with = require("filetree.features.system.open_with")
 open_with.setup({ enabled = true }, adapter)
@@ -233,6 +344,12 @@ term_calls, opened = {}, nil
 cursor = ps1
 open_with.open_system()
 eq("scripts_in_terminal = false hands a .ps1 to the OS", opened, ps1)
+open_with.setup({ enabled = true }, adapter)
+term_run_active = false
+term_calls, opened = {}, nil
+open_with.open_system()
+eq("with term_run switched off, <leader>sm hands a .ps1 to the OS", opened, ps1)
+eq("... and leaves the terminal alone", #term_calls, 0)
 
 vim.api.nvim_feedkeys = real_feedkeys
 vim.fn.delete(dir, "rf")
