@@ -64,8 +64,12 @@ end
 
 local grep = require("filetree.features.search.grep_in_dir")
 grep.grep(work .. "/src", "needle")
+-- The search ends with "Found N match(es)" or "No matches"; the progress indicator's own
+-- "N line(s) matched" notice comes first (on Windows it goes through vim.notify) and is no
+-- sign that the quickfix list is filled yet.
 vim.wait(10000, function()
-  return #said > 0
+  local all = table.concat(said, " ")
+  return all:find("Found %d+ match") ~= nil or all:find("No matches", 1, true) ~= nil
 end)
 vim.notify = real_notify
 vim.fn.executable = real_executable
