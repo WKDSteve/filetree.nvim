@@ -813,7 +813,97 @@ local function run_review_fixes()
     done and got and #got == 1 and got[1] == rg_hit,
     vim.inspect(got)
   )
+
+  -- rg exits 2 without any hit when its only errors are files it could not open: a dangling
+  -- symlink (Windows: "os error 3") is no reason to distrust the run and walk the whole tree,
+  -- and a file that exists but could not be opened comes back as a candidate
+  local function rg_with_stderr(stderr)
+    vim.system = function(cmd, o, on_exit)
+      if is_rg(cmd) and on_exit then
+        on_exit({ code = 2, signal = 0, stdout = "", stderr = stderr })
+        return {}
+      end
+      return timeout_real_system(cmd, o, on_exit)
+    end
+    local result, finished = nil, false
+    scan.candidates(
+      work,
+      { "twice.png" },
+      { "md" },
+      { scan = { max_files = 5000, timeout_ms = 1000 } },
+      function(files)
+        result, finished = files, true
+      end
+    )
+    vim.wait(5000, function()
+      return finished
+    end, 10)
+    vim.system = timeout_real_system
+    return result
+  end
+  local dangling = work .. "/gone-target.md"
+  got = rg_with_stderr(
+    "rg: "
+      .. dangling
+      .. ": The system cannot find the path specified. (os error 3)\nrg: "
+      .. dangling
+      .. ": No such file or directory (os error 2)\n"
+  )
+  check(
+    "fix: a ripgrep run whose only errors are dangling links is a whole answer, not a walk",
+    got ~= nil and #got == 0,
+    vim.inspect(got)
+  )
+  local locked = work .. "/rg-locked.md"
+  vim.fn.writefile({ "nothing here" }, locked)
+  got = rg_with_stderr("rg: " .. locked .. ": Access is denied. (os error 5)")
+  vim.fn.delete(locked)
+  check(
+    "fix: a file ripgrep could not open comes back as a candidate",
+    got ~= nil and #got == 1 and got[1] == locked,
+    vim.inspect(got)
+  )
+  got = rg_with_stderr("rg: " .. work .. ": Access is denied. (os error 5)")
+  check(
+    "a ripgrep run that could not read a directory still falls back to the walk",
+    got ~= nil and #got > 0,
+    vim.inspect(got)
+  )
+  vim.notify = timeout_real_notify
   vim.fn.executable = walk_real_executable
+
+  -- a dangling symlink among the candidates (git lists one like a file) holds no references:
+  -- it must not be reported as unreadable, which made every delete warn about it
+  local link = work .. "/dangling-link.md"
+  vim.fn.delete(link)
+  local linked = vim.uv.fs_symlink(work .. "/no-such-target.md", link)
+  if not linked then
+    print("n/a  dangling symlink: no symlink privilege on this machine")
+  else
+    local real_candidates = scan.candidates
+    ---@diagnostic disable-next-line: duplicate-set-field
+    scan.candidates = function(_, _, _, _, cb)
+      cb({ (link:gsub("\\", "/")) })
+    end
+    local plan_unreadable
+    done = false
+    scan.run_plan({
+      needles = { "twice.png" },
+      extensions = { "md" },
+      extract = function()
+        return nil
+      end,
+    }, { root = work, cfg = {} }, function(_, _, unreadable)
+      plan_unreadable, done = unreadable, true
+    end)
+    scan.candidates = real_candidates
+    vim.fn.delete(link)
+    check(
+      "fix: a dangling symlink candidate is not reported as unreadable",
+      done and plan_unreadable ~= nil and #plan_unreadable == 0,
+      vim.inspect(plan_unreadable)
+    )
+  end
 
   -- the walk honours scan.respect_gitignore inside a git work tree
   if walk_real_executable("git") == 1 then

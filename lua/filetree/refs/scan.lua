@@ -82,7 +82,37 @@ function M.lines_of(file)
   return lines
 end
 
+---@internal
+---Whether `file` is gone: nothing at that path, or a symlink whose target is missing. Such a
+---file holds no references, so failing to read it says nothing about missing ones.
+---@param file string
+---@return boolean
+function M.is_gone(file)
+  return vim.uv.fs_stat(file) == nil
+end
+
 -- ── Candidate discovery ───────────────────────────────────────────────────────
+
+---@internal
+---The files a finished ripgrep run could not open, read from its stderr, when every line there is
+---such a per-file error (`rg: <path>: <message> (os error <n>)`) about a file or a dangling link.
+---Files that exist come back to be searched again (and reported as unreadable by `run_plan`);
+---dangling links are dropped. nil when stderr holds anything else (an unreadable directory, a bad
+---argument): then the run's answer cannot be trusted to be whole.
+---@param stderr string
+---@return string[]|nil
+function M.rg_open_errors(stderr)
+  local files = {}
+  for line in stderr:gmatch("[^\r\n]+") do
+    local path = line:match("^rg: (.-): .*%(os error %d+%)%s*$")
+    if not path then return nil end
+    local abs = ftpath.to_absolute(path)
+    local stat = vim.uv.fs_stat(abs)
+    if stat and stat.type ~= "file" then return nil end
+    if stat then files[#files + 1] = abs end
+  end
+  return files
+end
 
 ---@internal
 ---@param exts string[]
@@ -237,10 +267,19 @@ local function candidates_rg(root, needles, exts, cfg, cb)
         -- found. Those hits are a usable answer -- the walk could not read
         -- the unreadable files either -- so only a killed run (timeout: code
         -- 124 or a signal) or one without any output counts as dead.
+        --
+        -- A run whose only errors are files it could not open (a dangling symlink, a locked
+        -- file) finished its search too, even without a hit: its answer is whole once those
+        -- files are added back as candidates (`rg_open_errors`). Treating it as dead sent every
+        -- delete in a tree with one dangling link through the slow walk, which then warned
+        -- about the link as an unreadable file.
         local stdout = result.stdout or ""
+        local extra = {}
         if result.code > 1 then
           local killed = result.code == 124 or (result.signal ~= nil and result.signal ~= 0)
-          if killed or not stdout:find("%S") then
+          local open_errors = not killed and M.rg_open_errors(result.stderr or "") or nil
+          extra = open_errors or {}
+          if killed or (not stdout:find("%S") and not open_errors) then
             notify.debug(
               "ripgrep scan failed (code "
                 .. tostring(result.code)
@@ -259,6 +298,9 @@ local function candidates_rg(root, needles, exts, cfg, cb)
         local files = {}
         for line in stdout:gmatch("[^\r\n]+") do
           files[#files + 1] = ftpath.to_absolute(line)
+        end
+        for _, file in ipairs(extra) do
+          files[#files + 1] = file
         end
         cb(files)
       end)
@@ -280,12 +322,13 @@ local WALK_CHUNK_SIZE = 20
 ---Whether `file` holds any of `needles` in its content. A file that cannot be read (locked, no
 ---permission) counts as a hit: it may hold one, and `run_plan` then reports it as unreadable, as it
 ---does for a file ripgrep named. Dropping it here left the count looking final without ripgrep.
+---A dangling symlink (git lists it like a file) holds nothing and is no hit.
 ---@param file string
 ---@param needles string[]
 ---@return boolean
 local function file_hits(file, needles)
   local lines = M.lines_of(file)
-  if not lines then return true end
+  if not lines then return not M.is_gone(file) end
   for _, line in ipairs(lines) do
     local lower = line:lower()
     for _, n in ipairs(needles) do
@@ -580,8 +623,9 @@ function M.run_plan(plan, ctx, cb, session)
     for _, file in ipairs(files) do
       local lines = M.lines_of(file)
       -- A candidate the search named but nobody can read may hold references: the count is then
-      -- only a lower bound, and the caller must be able to say so.
-      if not lines then unreadable[#unreadable + 1] = file end
+      -- only a lower bound, and the caller must be able to say so. A dangling symlink, or a file
+      -- deleted since the search, holds none: not unreadable.
+      if not lines and not M.is_gone(file) then unreadable[#unreadable + 1] = file end
       if lines then
         for i, text in ipairs(lines) do
           local found = plan.extract(file, i, text)
