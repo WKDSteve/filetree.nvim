@@ -85,7 +85,10 @@ M.DEFAULT_RUNNERS = {
   end,
   bat = function(kind)
     if kind == "cmd" or kind == "powershell" then return {} end
-    return { "cmd.exe", "/c" }
+    -- Git-Bash / MSYS rewrite an argument that starts with `/` into a path (`/c` -> `C:/`), and
+    -- cmd.exe then opens an interactive prompt instead of running the file; `//c` reaches it as
+    -- `/c`. WSL rewrites nothing, so `/c` stays there.
+    return { "cmd.exe", platform.is_windows() and "//c" or "/c" }
   end,
   sh = function()
     return { "bash" }

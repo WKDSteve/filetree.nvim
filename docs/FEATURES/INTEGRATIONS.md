@@ -210,7 +210,9 @@ cursor happens to be in the tree, no manual `cd` first.
 `<leader>.` hands the node under the cursor to a terminal. A **script** is
 run: in PowerShell a `.ps1` runs as itself (`& 'C:\my dir\x.ps1'` when the
 path needs quotes), from another shell through `pwsh -NoProfile -File`; a
-`.sh` through `bash`, a `.bat`/`.cmd` as itself in cmd.exe or PowerShell, a
+`.sh` through `bash`, a `.bat`/`.cmd` as itself in cmd.exe or PowerShell
+(from Git-Bash through `cmd.exe //c`: Git-Bash would rewrite `/c` into a
+path, and cmd.exe would open a prompt instead of running the file), a
 `.py` through `python`, `.js` through `node`, plus `.zsh`, `.fish`, `.rb`,
 `.pl`, and on Linux/macOS an executable file without an extension. **Anything
 else** — a folder, a text file — has its quoted path typed into the terminal

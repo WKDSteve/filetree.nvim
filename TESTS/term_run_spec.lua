@@ -130,6 +130,14 @@ eq("in bash a .ps1 goes through PowerShell -File", posix_plan.argv[2], "-NoProfi
 eq("... with -File in front of the path", posix_plan.argv[3], "-File")
 eq("... the path last, forward slashes", posix_plan.argv[4], ps1)
 eq("a .sh runs through bash", term_run.plan(sh, "posix").argv, { "bash", sh })
+local bat = touch("make.bat")
+eq(
+  "a .bat from bash goes through cmd.exe, //c on Windows (Git-Bash rewrites /c into C:/)",
+  term_run.plan(bat, "posix").argv,
+  { "cmd.exe", win and "//c" or "/c", bat }
+)
+local bat_line = term_run.plan(bat, "posix").line
+ok("... and //c stays unquoted on the line", win and bat_line:find(" //c ", 1, true) or not win)
 local txt_plan = term_run.plan(txt, "posix")
 eq("a .txt is only typed, not run", txt_plan.run, false)
 local sq = require("lib.nvim.cross.shell_quote")
