@@ -52,6 +52,8 @@ local ICON = {
   mark_list = nerd.glyph("F0C60", "l"), -- format-list-bulleted
   window = nerd.glyph("F0855", "w"), -- dock-left
   filetree = nerd.glyph("F0641", "T"), -- file-tree
+  link = nerd.glyph("F0337", "L"), -- link
+  spotlight = nerd.glyph("F0335", "s"), -- lightbulb
 }
 
 ---@internal
@@ -179,6 +181,62 @@ local function add_media_group(out)
   )
 end
 
+---@internal
+--- Path and type of the node under the cursor, nil when there is none (no adapter, no node, a row
+--- without a path). Asked per `items()` call, like `media_node()`.
+---@return string? path
+---@return string? type
+local function current_node()
+  local adapter = get_adapter()
+  if not (adapter and type(adapter.get_current_node) == "function") then return nil end
+  local ok, node = pcall(adapter.get_current_node)
+  if not (ok and type(node) == "table" and type(node.path) == "string") then return nil end
+  return node.path, node.type
+end
+
+---@internal
+--- Whether the sister plugin `name` is installed. An entry that only hands work to it is left out
+--- without it, the same as the OCR row without images.nvim.
+---@param name string
+---@return boolean
+local function installed(name)
+  return (pcall(require, name))
+end
+
+---@internal
+--- "Spotlight this name": the node's basename becomes a spotlight.nvim token (feature
+--- `spotlight_node`). Only with spotlight.nvim and a node that has a path.
+---@return table|nil
+local function spotlight_entry()
+  if not current_node() or not installed("spotlight") then return nil end
+  return entry("spotlight_node", "spotlight", "Spotlight this name", "<leader>sp", ICON.spotlight)
+end
+
+---@internal
+--- "Open in mdview": a Markdown file in mdview.nvim's browser preview (feature `mdview_open`,
+--- opt-in). Only on a Markdown file and with mdview.nvim installed.
+---@return table|nil
+local function mdview_entry()
+  local f = feature("mdview_open")
+  if not (f and type(f.is_markdown) == "function") then return nil end
+  local path, kind = current_node()
+  if kind ~= "file" or not f.is_markdown(path) or not installed("mdview") then return nil end
+  return entry("mdview_open", "open", "Open in mdview", "gM", ICON.preview)
+end
+
+---@internal
+--- "Repair broken link": only on a symlink whose target is gone (feature `link_create`). The
+--- search for the new target goes through gopath.nvim's tailsearch when it is installed; without
+--- it the repair still offers to delete or keep the link, so the row does not need gopath.
+---@return table|nil
+local function repair_entry()
+  local path = current_node()
+  if not path then return nil end
+  local ok, symlink = pcall(require, "filetree.util.symlink")
+  if not (ok and symlink.is_broken(path)) then return nil end
+  return entry("link_create", "repair", "Repair broken link", nil, ICON.link)
+end
+
 ---Whether a host that asks first (ui.nvim's `ui.menu`) may offer the
 ---"Open/Close filetree" row: `integrations.ui_menu` is not false and the `menu`
 ---group is not switched off. `items()`/`submenu()`/`window_entry()` themselves
@@ -268,7 +326,8 @@ function M.items()
       entry("smart_rename", "rename_current", "Rename (LSP refs)", "r", ICON.rename),
       entry("rename_batch", "open", "Batch rename", "<leader>rb", ICON.batch_rename),
       entry("move", "move", "Move to…", "M", ICON.move),
-      entry("create_from_template", "open_current", "New from template", "A", ICON.template)
+      entry("create_from_template", "open_current", "New from template", "A", ICON.template),
+      repair_entry()
     )
   end
 
@@ -294,7 +353,8 @@ function M.items()
       entry("open_variants", "open_tabnew", "Open in tab", "st", ICON.open_external),
       entry("open_with", "open_system", "Open with system app", "<leader>sm", ICON.open_external),
       entry("term_run", "run", "Run in terminal / type path", "<leader>.", ICON.terminal),
-      entry("open_in_fm", "open", "Reveal in file manager", "<leader>fm", ICON.open_external)
+      entry("open_in_fm", "open", "Reveal in file manager", "<leader>fm", ICON.open_external),
+      mdview_entry()
     )
   end
 
@@ -312,7 +372,8 @@ function M.items()
     add_group(
       out,
       entry("find_files", "find", "Find files", "f", ICON.search),
-      entry("grep_in_dir", "grep", "Grep in dir", "gr", ICON.search)
+      entry("grep_in_dir", "grep", "Grep in dir", "gr", ICON.search),
+      spotlight_entry()
     )
   end
 

@@ -60,13 +60,13 @@ return {
   -- entries. Entries whose feature is disabled are omitted automatically.
   menu = {
     enable = true,
-    fileops = true, -- create / rename / batch rename / move / template
+    fileops = true, -- create / rename / batch rename / move / template / repair a broken link
     clipboard = true, -- copy / cut / paste / copy to the system clipboard
     delete = true, -- trash
-    open = true, -- vsplit / split / tab / system app / file manager
+    open = true, -- vsplit / split / tab / system app / file manager / mdview (Markdown)
     media = true, -- image/PDF nodes only: preview / open externally / OCR / image info
     paths = true, -- copy path / markdown link
-    search = true, -- find files / grep in dir
+    search = true, -- find files / grep in dir / spotlight the name
     info = true, -- node info
     marks = true, -- toggle / mark all / unmark all / clear / show marked
     actions = true, -- own tree only: its actions that apply to the node (other plugins', the source's)

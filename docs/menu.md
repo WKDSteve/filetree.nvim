@@ -100,13 +100,13 @@ WHICH entries appear, for both the built-in trigger and any of your own):
 require("filetree").setup({
   menu = {
     enable    = true,
-    fileops   = true, -- create / rename / batch rename / move / template
+    fileops   = true, -- create / rename / batch rename / move / template / repair a broken link
     clipboard = true, -- copy / cut / paste / copy to the system clipboard
     delete    = true, -- trash
-    open      = true, -- vsplit / split / tab / system app / file manager
+    open      = true, -- vsplit / split / tab / system app / file manager / mdview (Markdown)
     media     = true, -- image/PDF nodes only: preview / open externally / OCR / image info
     paths     = true, -- copy path / markdown link
-    search    = true, -- find files / grep in dir
+    search    = true, -- find files / grep in dir / spotlight the name
     info      = true, -- node info + Inspect (`:Inspect`, highlight/treesitter groups at the click)
     marks     = true, -- toggle / mark all / unmark all / clear / show marked
     actions   = true, -- own tree only: the actions of its table that apply to the node
@@ -114,6 +114,14 @@ require("filetree").setup({
   },
 })
 ```
+
+Three rows hand the node to a sister plugin and appear only where they apply:
+**Spotlight this name** (search, with [spotlight.nvim](https://github.com/WKDSteve/spotlight.nvim)),
+**Open in mdview** (open, on a Markdown file, with the opt-in feature `mdview_open` and
+[mdview.nvim](https://github.com/WKDSteve/mdview.nvim)) and **Repair broken link**
+(fileops, on a symlink whose target is gone; with
+[gopath.nvim](https://github.com/WKDSteve/gopath.nvim) it searches for the new target,
+without it it offers to delete or keep the link).
 
 On the own tree (`adapter = "native"`) the menu follows the node: on a line
 without a path (the "N more" line of a long folder) the groups that act on a

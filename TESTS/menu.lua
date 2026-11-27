@@ -385,6 +385,98 @@ do
   package.loaded["filetree.integrations.menu"] = nil
 end
 
+-- ── Sister-plugin rows: spotlight, mdview, broken-link repair ────────────────
+-- Each row hands work to another plugin's feature and shows only where it applies:
+-- Spotlight with spotlight.nvim and a node path, mdview on a Markdown file with
+-- mdview.nvim, Repair on a broken symlink (gopath.nvim only sharpens the search).
+do
+  local features = {}
+  local spot_calls, md_calls, repair_calls
+  features.spotlight_node, spot_calls = stub_action("spotlight_node", { "spotlight" })
+  features.mdview_open, md_calls = stub_action("mdview_open", { "open" })
+  features.mdview_open.is_markdown = function(p)
+    return type(p) == "string" and p:match("%.md$") ~= nil
+  end
+  features.link_create, repair_calls = stub_action("link_create", { "repair" })
+
+  local broken = { ["/x/dead-link"] = true }
+  package.loaded["filetree.util.symlink"] = {
+    is_broken = function(p)
+      return broken[p] == true
+    end,
+  }
+
+  local function list_for(path, node_type, menu_cfg)
+    local menu = install_stub(menu_cfg or { enable = true }, features, {
+      get_current_node = function()
+        return path and { path = path, type = node_type or "file" } or nil
+      end,
+    })
+    return menu.items(), menu
+  end
+  local function find(items, label)
+    for _, it in ipairs(items) do
+      if it.name == label then return it end
+    end
+  end
+
+  -- Without the sister plugins installed the hand-over rows stay out.
+  package.loaded["spotlight"], package.loaded["mdview"] = nil, nil
+  package.preload["spotlight"], package.preload["mdview"] = nil, nil
+  local bare = names((list_for("/x/notes.md")))
+  check("cross: no Spotlight row without spotlight.nvim", not has(bare, "Spotlight this name"))
+  check("cross: no mdview row without mdview.nvim", not has(bare, "Open in mdview"))
+
+  package.loaded["spotlight"] = { add = function() end }
+  package.loaded["mdview"] = { open = function() end }
+
+  local md_items = list_for("/x/notes.md")
+  local spot = find(md_items, "Spotlight this name")
+  check("cross: Spotlight row with spotlight.nvim and a node", spot ~= nil)
+  if spot then spot.cmd() end
+  eq(
+    "cross: Spotlight row calls spotlight_node.spotlight",
+    spot_calls[1],
+    "spotlight_node.spotlight"
+  )
+  local md = find(md_items, "Open in mdview")
+  check("cross: mdview row on a Markdown file", md ~= nil)
+  if md then md.cmd() end
+  eq("cross: mdview row calls mdview_open.open", md_calls[1], "mdview_open.open")
+  check("cross: no Repair row on a healthy file", find(md_items, "Repair broken link") == nil)
+
+  local lua_names = names((list_for("/x/init.lua")))
+  check("cross: no mdview row on a non-Markdown file", not has(lua_names, "Open in mdview"))
+  local dir_names = names((list_for("/x/docs.md", "directory")))
+  check("cross: no mdview row on a folder named *.md", not has(dir_names, "Open in mdview"))
+  local none_names = names((list_for(nil)))
+  check("cross: no Spotlight row without a node", not has(none_names, "Spotlight this name"))
+
+  local dead_items = list_for("/x/dead-link")
+  local repair = find(dead_items, "Repair broken link")
+  check("cross: Repair row on a broken symlink", repair ~= nil)
+  if repair then repair.cmd() end
+  eq("cross: Repair row calls link_create.repair", repair_calls[1], "link_create.repair")
+
+  -- The rows follow their feature and their group like every other entry.
+  local saved_md = features.mdview_open
+  features.mdview_open = nil
+  check(
+    "cross: mdview_open disabled -> no mdview row",
+    not has(names((list_for("/x/notes.md"))), "Open in mdview")
+  )
+  features.mdview_open = saved_md
+  local no_search = names((list_for("/x/notes.md", "file", { enable = true, search = false })))
+  check("cross: search=false hides the Spotlight row", not has(no_search, "Spotlight this name"))
+  local no_fileops = names((list_for("/x/dead-link", "file", { enable = true, fileops = false })))
+  check("cross: fileops=false hides the Repair row", not has(no_fileops, "Repair broken link"))
+
+  package.loaded["spotlight"], package.loaded["mdview"] = nil, nil
+  package.loaded["filetree.util.symlink"] = nil
+  package.loaded["filetree"] = nil
+  package.loaded["filetree.integrations.menu"] = nil
+end
+
 -- ── enabled(): what ui.nvim's ui.menu asks first ─────────────────────────────
 do
   local menu_e = install_stub({ enable = true }, {}, nil)
