@@ -125,7 +125,13 @@ eq("in PowerShell a .ps1 runs as itself", plan.argv, { native_ps1 })
 eq("... and is run", plan.run, true)
 local spaced = term_run.plan(ps1_space, "powershell")
 ok("a path with a space gets the call operator: & '...'", spaced.line:sub(1, 3) == "& '")
+-- pwsh present, so the path stays as it is on every host (WSL without pwsh: see the WSL block)
+local real_has_executable = platform.has_executable
+platform.has_executable = function(exe)
+  return exe == "pwsh"
+end
 local posix_plan = term_run.plan(ps1, "posix")
+platform.has_executable = real_has_executable
 eq("in bash a .ps1 goes through PowerShell -File", posix_plan.argv[2], "-NoProfile")
 eq("... with -File in front of the path", posix_plan.argv[3], "-File")
 eq("... the path last, forward slashes", posix_plan.argv[4], ps1)
