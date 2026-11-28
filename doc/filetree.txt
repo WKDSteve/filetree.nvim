@@ -2780,14 +2780,14 @@ Module: lua/filetree/features/ui/cheatsheet/
 CONTEXT MENU                                           *filetree-context-menu*
 
 Right-click (`<RightMouse>`) opens a context menu through `ui.contextmenu`,
-which draws with its own themed `ui.kit.menu` (no third-party plugin
-needed), so right-click works out of the box. The clicked node's
-line is highlighted for as long as the menu stays open, and with the tree
-docked left/right the menu opens beside it rather than on top of it. Only a
-click on a node opens it: a right-click on the empty area below the last node,
-on the tree's statusline or separator, or in another window does nothing —
-no menu, and the cursor stays where it was. See docs/menu.md for the entries
-offered and the full detail on both.
+which draws with its own themed `ui.kit.menu` (no third-party plugin needed),
+so right-click works out of the box. The clicked node's line is highlighted
+for as long as the menu stays open, and with the tree docked left/right the
+menu opens beside it rather than on top of it. Only a click on a node opens
+it: a right-click on the empty area below the last node, on the tree's
+statusline or separator, or in another window does nothing — no menu, and
+the cursor stays where it was. See docs/menu.md for the entries offered and
+the full detail on both.
 
 Keymaps: <RightMouse>
 
