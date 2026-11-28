@@ -108,4 +108,10 @@ return {
     title = "A column shows the size of each file, and of each folder once a process has added it up",
     surface = { "command:FiletreeSizeRefresh", "config:features.size_info.show_dirs" },
   },
+  {
+    id = "filetree.context-menu",
+    title = "A right click on a node opens the context menu, a quick second one (a double click) too",
+    surface = { "config:features.context_menu.keymap" },
+    docs = "docs/FEATURES/UI.md",
+  },
 }
