@@ -51,6 +51,11 @@ manager's build step); from a running editor `:Filetree helper build` does the s
 `TESTS/native_helper_spec.lua` against it, keeps the programs as artifacts and attaches them to a
 release for every tag `helper-v*`.
 
+A downloaded program is asked for its protocol (`--version`) before it replaces anything; one that
+speaks another protocol than the client is not installed. So **raising `PROTOCOL` means tagging a
+release** (`helper-v<version>` from `Cargo.toml`): until then a machine without cargo gets no
+program at all and the Lua tiers serve.
+
 ```bash
 nvim --clean --headless -u NONE -l helper/bench/bench.lua helper/target/release/filetree-helper 5 <root> [<root> ...]
 ```

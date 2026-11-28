@@ -101,7 +101,7 @@ local function target_dir()
   return repo .. "/helper/target"
 end
 
----@alias Filetree.Fs.Helper.Run fun(argv: string[], done: fun(result: { code: integer, stderr?: string }))
+---@alias Filetree.Fs.Helper.Run fun(argv: string[], done: fun(result: { code: integer, stderr?: string, stdout?: string }))
 ---@alias Filetree.Fs.Helper.Done fun(ok: boolean, message: string)
 
 ---The steps of a build, the same for both forms: `run` starts a program and calls back with its end
@@ -165,13 +165,39 @@ local function install(opts, run, say, done)
         os.remove(part)
         return finish(false, "download failed: " .. vim.trim(result.stderr or ""))
       end
-      os.remove(target)
-      local moved, err = os.rename(part, target)
-      if not moved then
-        return finish(false, "cannot move the download into place: " .. tostring(err))
+      -- Ask the download which protocol it speaks before it replaces anything: a release older
+      -- than the client would ignore the walk options and answer into a fixed module, silently.
+      -- It is asked under a name that runs (`.exe` on Windows), beside the program in place.
+      local windows = uv.os_uname().sysname == "Windows_NT"
+      local check = target:gsub("%.exe$", "") .. ".new" .. (windows and ".exe" or "")
+      os.remove(check)
+      local renamed, rename_err = os.rename(part, check)
+      if not renamed then
+        os.remove(part)
+        return finish(false, "cannot move the download aside: " .. tostring(rename_err))
       end
-      if uv.os_uname().sysname ~= "Windows_NT" then uv.fs_chmod(target, tonumber("755", 8)) end
-      finish(true, "filetree-helper installed: " .. target)
+      if not windows then uv.fs_chmod(check, tonumber("755", 8)) end
+      say("checking the protocol of " .. asset)
+      run({ check, "--version" }, function(version)
+        local speaks = tonumber(tostring(version.stdout or ""):match("%(protocol (%d+)%)"))
+        if version.code ~= 0 or speaks ~= M.PROTOCOL then
+          os.remove(check)
+          return finish(
+            false,
+            ("the released filetree-helper speaks protocol %s, this client %d: install a Rust toolchain and build again"):format(
+              speaks and tostring(speaks) or "?",
+              M.PROTOCOL
+            )
+          )
+        end
+        os.remove(target)
+        local moved, err = os.rename(check, target)
+        if not moved then
+          os.remove(check)
+          return finish(false, "cannot move the download into place: " .. tostring(err))
+        end
+        finish(true, "filetree-helper installed: " .. target)
+      end)
     end)
   else
     finish(false, "cargo not found and downloading is off")
@@ -198,7 +224,8 @@ end
 local running = nil
 
 ---Put the program where `"auto"` finds it (`stdpath("data")/filetree-helper/`): built with cargo when
----a Rust toolchain is there, else downloaded from the latest release. For the `build` step of a plugin
+---a Rust toolchain is there, else downloaded from the latest release (installed only when it speaks
+---the client's protocol, which `--version` names). For the `build` step of a plugin
 ---manager: **blocks** until cargo or curl is done (minutes for a first build); from a running editor use
 ---`build_async()` (`:Filetree helper build`). Refuses on the workstation (`NVIM_MACHINE_ROLE=workstation`)
 ---and while a `build_async()` runs.

@@ -249,6 +249,14 @@ do
   write(part, "the downloaded program")
   exit(starts[1], { code = 0 })
   settle()
+  eq("the download is asked for its protocol first", starts[2] and starts[2].argv[2], "--version")
+  eq("... under a name beside the target, not the target", starts[2].argv[1] ~= target, true)
+  eq("... and nothing is decided yet", outcome, nil)
+  exit(
+    starts[2],
+    { code = 0, stdout = ("filetree-helper 0.2.0 (protocol %d)\n"):format(lib.PROTOCOL) }
+  )
+  settle()
   eq("the download ends: ok", outcome and outcome.ok, true)
   eq("... and it is the program now", read(target), "the downloaded program")
   ok("... with no .part left", not uv.fs_stat(part))
@@ -265,6 +273,26 @@ do
   )
   ok("... the .part is gone", not uv.fs_stat(part))
   eq("... and the program is untouched", read(target), "the downloaded program")
+
+  -- helper-v0.1.0 speaks protocol 2: it would ignore the walk options and answer into a fixed module
+  starts, outcome = {}, nil
+  helper.build_async({ download = true }, on_done)
+  write(part, "an old release")
+  exit(starts[1], { code = 0 })
+  settle()
+  local check = starts[2] and starts[2].argv[1]
+  exit(starts[2], { code = 0, stdout = "filetree-helper 0.1.0 (protocol 2)\n" })
+  settle()
+  eq("a release with another protocol: not ok", outcome and outcome.ok, false)
+  ok(
+    "... saying which protocols: " .. tostring(outcome and outcome.message),
+    outcome and outcome.message:find("protocol 2", 1, true) ~= nil
+  )
+  eq("... the program in place is untouched", read(target), "the downloaded program")
+  ok(
+    "... and the download is gone",
+    check ~= nil and not uv.fs_stat(check) and not uv.fs_stat(part)
+  )
 end
 
 -- ── build() still blocks, for the plugin manager ─────────────────────────────
