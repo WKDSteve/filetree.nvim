@@ -336,7 +336,10 @@ clicked node's line is highlighted for as long as the menu stays open, and
 with the tree docked left/right the menu opens beside it rather than on top
 of it. Only a click on a node opens it: a right-click on the empty area below the
 last node, on the tree's statusline or separator, or in another window does
-nothing — no menu, and the cursor stays where it was. See
+nothing — no menu, and the cursor stays where it was. A quick second
+right-click on the same node (right-click, `<Esc>`, right-click again) opens
+it again too: Neovim reports that one as a double click, and a configured
+`<RightMouse>` binds the double, triple and quadruple click with it. See
 [docs/menu.md](../menu.md) for the entries offered and the full detail on both.
 
 - **Module:** `lua/filetree/features/ui/context_menu/`

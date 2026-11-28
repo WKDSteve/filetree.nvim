@@ -1987,6 +1987,25 @@ do
     km[m.lhs] = m
   end
   check("context_menu: default keymap '<RightMouse>' bound", km["<RightMouse>"] ~= nil)
+  -- A quick second right click on the same cell (right click, <Esc>, right click
+  -- again) arrives as <2-RightMouse>: bound too, or Neovim takes it itself.
+  for _, lhs in ipairs({ "<2-RightMouse>", "<3-RightMouse>", "<4-RightMouse>" }) do
+    check("context_menu: the default trigger binds " .. lhs, km[lhs] ~= nil)
+  end
+  do
+    local cm = require("filetree.features.ui.context_menu")
+    check(
+      "context_menu: with_repeats keeps another key as configured",
+      cm.with_repeats("<F7>") == "<F7>"
+    )
+    local widened = cm.with_repeats({ "<F7>", "<RightMouse>" })
+    check(
+      "context_menu: with_repeats widens <RightMouse> inside a list, other keys kept",
+      type(widened) == "table"
+        and widened[1] == "<F7>"
+        and vim.tbl_contains(widened, "<2-RightMouse>")
+    )
+  end
 
   -- ui.contextmenu draws with its kit renderer (no third-party
   -- dependency), so a click must not just avoid erroring -- it must actually

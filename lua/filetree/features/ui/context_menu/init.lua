@@ -341,9 +341,46 @@ function M.setup(config, adapter)
 
   if not _cfg.keymap then return end
 
-  bind.bind("context_menu", _cfg, {
+  bind.bind("context_menu", { keymap = M.with_repeats(_cfg.keymap) }, {
     { name = "open", field = "keymap", rhs = open_menu, desc = "right-click context menu" },
   })
+end
+
+---Every right click a context menu answers, from `lib.nvim.contextmenu` (single to quadruple);
+---the same list for an older lib.nvim that does not export it yet.
+---@return string[]
+local function right_clicks()
+  local ok, cm = pcall(require, "lib.nvim.contextmenu")
+  if ok and type(cm) == "table" and type(cm.RIGHT_CLICKS) == "table" then return cm.RIGHT_CLICKS end
+  return { "<RightMouse>", "<2-RightMouse>", "<3-RightMouse>", "<4-RightMouse>" }
+end
+
+---The configured trigger with `<RightMouse>` widened to every right click. A second right click
+---on the same cell within 'mousetime' (right click, `<Esc>`, right click again) arrives as
+---`<2-RightMouse>`; bound to `<RightMouse>` alone, Neovim took it itself (extend a selection, or
+---its own PopUp menu) and the menu did not open. Any other key stays as configured.
+---@param keymap string|string[]
+---@return string|string[]
+function M.with_repeats(keymap)
+  local keys = type(keymap) == "table" and keymap or { keymap }
+  local out, seen = {}, {}
+  local function add(k)
+    if not seen[k] then
+      seen[k] = true
+      out[#out + 1] = k
+    end
+  end
+  for _, k in ipairs(keys) do
+    if k == "<RightMouse>" then
+      for _, r in ipairs(right_clicks()) do
+        add(r)
+      end
+    else
+      add(k)
+    end
+  end
+  if #out == 1 and type(keymap) == "string" then return out[1] end
+  return out
 end
 
 function M.teardown()
