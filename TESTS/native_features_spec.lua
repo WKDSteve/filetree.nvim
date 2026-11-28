@@ -268,8 +268,9 @@ eq("X clears the clipboard and the mark", right_of(dir .. "/lua/mod/b.lua"), "")
 
 -- ── current_hl and opened_sync: the file in the editor window ──────────────────
 vim.api.nvim_set_current_win(editor_win)
--- close_on_open takes a file opened within 400 ms of leaving the tree for one opened from it
-settle(500)
+-- close_on_open takes a file shown after leaving the tree for one opened from it until the next
+-- key: a user who left with `<C-w>l` types one before the `:edit`
+feed("0")
 vim.cmd("edit " .. vim.fn.fnameescape(dir .. "/lua/mod/b.lua"))
 vim.wait(1500, function()
   local d = drawn_on(dir .. "/lua/mod/b.lua")

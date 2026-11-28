@@ -141,12 +141,42 @@ end)
 open_from_tree(file_b)
 eq("a hold that nothing consumed expires (folder toggled with the key)", tree_alive(), false)
 
+-- A cold first open (filetype detection, ftplugins, a parser read from disk) takes longer than
+-- half a second between the tree's WinLeave and the file's BufWinEnter; the open still counts.
+layout()
+local slow = vim.api.nvim_create_autocmd("BufReadPre", {
+  once = true,
+  callback = function()
+    vim.wait(600, function()
+      return false
+    end)
+  end,
+})
+open_from_tree(file_b)
+pcall(vim.api.nvim_del_autocmd, slow)
+eq("a slow open from the tree still closes it", tree_alive(), false)
+
+-- `<C-w>l` and a later `:edit`: the user types keys in between, and the first one ends the open.
 layout()
 vim.api.nvim_set_current_win(editor_win)
-vim.wait(600, function()
+vim.api.nvim_feedkeys("0", "x", false)
+vim.cmd("edit " .. vim.fn.fnameescape(file_b))
+-- the close would run scheduled: give it the turn before looking
+vim.wait(100, function()
+  return false
+end)
+eq("`:edit` after a key typed in the editor does not close it", tree_alive(), true)
+
+-- No key at all: a file shown long after the tree was left is no open from it either.
+layout()
+vim.api.nvim_set_current_win(editor_win)
+vim.wait(3100, function()
   return false
 end)
 vim.cmd("edit " .. vim.fn.fnameescape(file_b))
+vim.wait(100, function()
+  return false
+end)
 eq("`:edit` long after leaving the tree does not close it", tree_alive(), true)
 
 layout()

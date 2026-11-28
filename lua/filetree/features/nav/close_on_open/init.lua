@@ -11,10 +11,10 @@
 --- ### How an open from the tree is recognised
 ---
 --- Backend-neutral, so it needs no hook into neo-tree / nvim-tree: the tree
---- window loses focus (`WinLeave`) and, within a split second, a normal file
---- buffer is shown in a non-floating window (`BufWinEnter`). A folder toggle
+--- window loses focus (`WinLeave`) and, before the next key is typed, a normal
+--- file buffer is shown in a non-floating window (`BufWinEnter`). A folder toggle
 --- never shows a buffer, a preview lives in a float, and a `<C-w>l` into the
---- editor followed later by `:edit` is outside the time window -- none of them
+--- editor followed later by `:edit` types keys in between -- none of them
 --- closes the tree. Backends that never leave the tree window to open (oil,
 --- netrw, mini.files replace their own window) do not trigger it: no-op there.
 ---
@@ -63,8 +63,12 @@ M.SCHEMA = {
 }
 
 ---How long after the tree lost focus a file shown in another window still
----counts as "opened from the tree".
-local OPEN_WINDOW_MS = 400
+---counts as "opened from the tree" when no key was typed in between. The key is
+---what tells the two apart (`<CR>` opens without one, `<C-w>l` and a later
+---`:edit` type some); the time only bounds an open no key started. It is not
+---short on purpose: a cold first open (filetype detection, ftplugins, a parser
+---loaded from disk) can take well over half a second between the two events.
+local OPEN_WINDOW_MS = 3000
 ---How long a keep mark lives when no open consumes it.
 local HOLD_MS = 400
 
@@ -79,6 +83,8 @@ local _adapter = nil
 ---@type integer|nil
 local _guard_until = nil
 local _guard_ns = vim.api.nvim_create_namespace("filetree_close_on_open")
+---Watches for the first key after the tree was left: it ends the open window.
+local _left_ns = vim.api.nvim_create_namespace("filetree_close_on_open_left")
 ---@type integer|nil
 local _augroup = nil
 ---The tree window that lost focus last: { win, at }.
@@ -186,6 +192,14 @@ function M.setup(config, adapter)
       local buf = vim.api.nvim_get_current_buf()
       if ftbuf.is_tree_buffer(buf) then
         _left = { win = vim.api.nvim_get_current_win(), at = now_ms() }
+        -- The key that made the tree open the file was handled before this
+        -- WinLeave; the next one is the user doing something else.
+        vim.on_key(function(key)
+          if key ~= nil and key ~= "" then
+            _left = nil
+            vim.on_key(nil, _left_ns)
+          end
+        end, _left_ns)
       end
     end,
   })
@@ -214,6 +228,7 @@ function M.teardown()
   _holding = false
   _guard_until = nil
   pcall(vim.on_key, nil, _guard_ns)
+  pcall(vim.on_key, nil, _left_ns)
   _hold_gen = _hold_gen + 1
 end
 

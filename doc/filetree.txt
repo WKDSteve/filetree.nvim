@@ -1804,13 +1804,14 @@ open, for browsing several files in a row. Focus is in the editor window in
 both cases.
 
 An open from the tree is recognised without a backend hook: the tree window
-loses focus and, within 400 ms, a normal file buffer is shown in a
-non-floating window. A folder toggle never shows a buffer, previews live in a
-float, and a `<C-w>l` into the editor followed later by `:edit` is outside the
-time window, so none of them closes the tree. `open_replace` keeps the tree
-open for its own keys when its `close_tree` / `swap_close_tree` say so.
-Backends that open in their own window (oil, netrw, mini.files) are not
-affected.
+loses focus and, before the next key is typed, a normal file buffer is shown
+in a non-floating window. A folder toggle never shows a buffer, previews live
+in a float, and a `<C-w>l` into the editor followed later by `:edit` types
+keys in between, so none of them closes the tree. A slow first open (filetype
+detection, ftplugins) still counts; a file shown without any key more than 3 s
+after leaving the tree does not. `open_replace` keeps the tree open for its
+own keys when its `close_tree` / `swap_close_tree` say so. Backends that open
+in their own window (oil, netrw, mini.files) are not affected.
 
 Breaking change (2026-11-05): `open_replace`'s swap key moved from `<M-CR>`
 (Alt+Enter is fullscreen in many terminals) to `<C-M-CR>`; its second key
