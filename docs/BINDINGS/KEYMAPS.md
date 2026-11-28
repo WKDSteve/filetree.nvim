@@ -92,7 +92,7 @@ at runtime with `:lua vim.print(require("filetree.bindings").live())` —
 | `r` | smart_rename | `keymap` | Rename with LSP reference update |
 | `M` | move | `keymap` | Move current node (or all marked) to a prompted destination |
 | `A` | create_from_template | `keymap` | Create from template — pick a template first, then a filename pre-filled with its extension |
-| `<RightMouse>` | context_menu | `keymap` | Open a right-click context menu via ui.contextmenu (nvzone/menu, or its own kit renderer) |
+| `<RightMouse>` | context_menu | `keymap` | Open a right-click context menu via ui.contextmenu (its kit renderer) |
 | `<leader>rb` | rename_batch | `keymap` | Open batch rename buffer |
 | `f` | find_files | `keymap_tree` | Find files (telescope/fzf-lua/builtin) |
 | `tf` | find_files | `keymap_pickers` | Find files, forcing pickers.nvim specifically |

@@ -447,10 +447,6 @@ function M.check()
     { mod = "fzf-lua", label = "fzf-lua (for future fzf integration)" },
     { mod = "pdfport", label = "pdfport.nvim (for pdf_open text extraction and pdf_create)" },
     { mod = "mdview", label = "mdview.nvim (for mdview_open)" },
-    {
-      mod = "menu",
-      label = "nvzone/menu (optional renderer for context_menu; ui.kit.menu is used otherwise)",
-    },
     { mod = "images", label = "images.nvim (preview image backend, works on native Windows)" },
     { mod = "image", label = "image.nvim (preview image backend, Kitty protocol terminals)" },
     { mod = "gopath", label = "gopath.nvim (link_create repair: broken-link target search)" },

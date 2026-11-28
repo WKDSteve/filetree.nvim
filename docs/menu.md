@@ -1,11 +1,10 @@
 # Menu
 
 filetree.nvim ships a context menu, drawn through
-[`ui.contextmenu`](https://github.com/WKDSteve/ui.nvim/blob/main/lua/ui/contextmenu/README.md) —
-[nvzone/menu](https://github.com/nvzone/menu) if it's installed, or
-`ui.kit.menu` (no third-party plugin, themed by whatever colorscheme
-kit is already using) otherwise. Either way filetree.nvim itself does **not**
-depend on nvzone/menu directly — the plugin *owns* its entries (create,
+[`ui.contextmenu`](https://github.com/WKDSteve/ui.nvim/blob/main/lua/ui/contextmenu/README.md),
+which draws it with `ui.kit.menu` (no third-party plugin, themed by whatever
+colorscheme kit is already using). filetree.nvim itself does **not** depend
+on a menu plugin — the plugin *owns* its entries (create,
 rename, copy/cut/paste, trash, open variants, path/markdown-link copy,
 find/grep, node info, `:Inspect`, marks, open/close the tree itself); only
 `lib.nvim` decides how they get drawn.
@@ -39,8 +38,7 @@ require("filetree").setup({
 })
 ```
 
-Right-click a node — that's the whole setup, with or without
-[nvzone/menu](https://github.com/nvzone/menu) installed. `context_menu`
+Right-click a node — that's the whole setup. `context_menu`
 degrades to a single notify (not repeated, and not an error) only if
 `ui.nvim` itself predates `ui.contextmenu`.
 
@@ -56,8 +54,7 @@ fallback when `vim.g.have_nerd_font` isn't set), so the icon column lines up
 whether or not a given entry has a glyph the same way `ui.contextmenu`
 already draws it for every other consumer.
 
-Two more things happen only with the kit renderer (`ui.contextmenu`'s
-own fallback -- nvzone/menu exposes neither hook this needs):
+Two more things happen with the kit renderer:
 
 - **The clicked node's line stays highlighted for as long as the menu is
   open**, so which node an entry would act on is never a guess. Cleared when

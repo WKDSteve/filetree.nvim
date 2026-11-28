@@ -1988,39 +1988,34 @@ do
   end
   check("context_menu: default keymap '<RightMouse>' bound", km["<RightMouse>"] ~= nil)
 
-  -- Without nvzone/menu on rtp: ui.contextmenu falls back to its own
-  -- kit renderer (no third-party dependency), so a click must not just avoid
-  -- erroring -- it must actually open something. This is the regression
-  -- this block exists for: the feature used to require("menu") directly and
-  -- only ever degrade to a notify when nvzone/menu wasn't installed, which
-  -- meant right-click opened NOTHING at all on a setup that (deliberately)
-  -- doesn't have nvzone/menu.
+  -- ui.contextmenu draws with its kit renderer (no third-party
+  -- dependency), so a click must not just avoid erroring -- it must actually
+  -- open something. This is the regression this block exists for: the
+  -- feature used to require a third-party menu directly and only ever degrade to a
+  -- notify, which meant right-click opened NOTHING at all.
   package.loaded["menu"] = nil
   local kit_menu = require("ui.kit.menu")
   kit_menu.close() -- in case an earlier test left one open
   local ok_no_menu = click_here(km["<RightMouse>"].callback)
-  check("context_menu: click without nvzone/menu installed does not error", ok_no_menu)
-  check("context_menu: falls back to the kit renderer and actually opens it", kit_menu.is_open())
+  check("context_menu: click does not error", ok_no_menu)
+  check("context_menu: opens the kit renderer", kit_menu.is_open())
   kit_menu.close()
 
-  -- With a stubbed nvzone/menu: ui.contextmenu must prefer it (its
-  -- documented "auto" default) and call menu.open(items, {mouse=true}) with
+  -- A loaded third-party `menu` module is never used: the kit still draws
   -- the SAME entries filetree.integrations.menu.items() builds (that
   -- module's own content is covered by TESTS/menu.lua; this only checks the
   -- wiring calls through correctly).
-  local captured
+  local foreign_called = false
   package.loaded["menu"] = {
-    open = function(items, opts)
-      captured = { items = items, opts = opts }
+    open = function()
+      foreign_called = true
     end,
   }
   local ok_menu = click_here(km["<RightMouse>"].callback)
-  check("context_menu: click with nvzone/menu present does not error", ok_menu)
-  check("context_menu: calls menu.open()", captured ~= nil)
-  if captured then
-    check("context_menu: opens with mouse=true", captured.opts.mouse == true)
-    check("context_menu: passes a non-empty item list", #captured.items > 0)
-  end
+  check("context_menu: click with a `menu` module loaded does not error", ok_menu)
+  check("context_menu: a loaded `menu` module is not called", not foreign_called)
+  check("context_menu: the kit opens instead", kit_menu.is_open())
+  kit_menu.close()
   package.loaded["menu"] = nil
 
   -- ui.contextmenu itself missing (an old ui.nvim): degrades to a

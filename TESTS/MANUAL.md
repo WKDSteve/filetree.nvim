@@ -13,8 +13,8 @@ Headless, no tree plugin needed (stub adapter). Exit 0 = pass, 1 = fail.
 - **[units.lua](units.lua)** — unit: the util layer (path, buffer, line_count,
   map/autocmd, select adapter) + neo-tree adapter helpers + the reference
   engine's apply/undo layer and the chooser each fileops feature drives.
-- **[menu.lua](menu.lua)** — unit: `integrations/menu.lua` (nvzone/menu context
-  menu). Stubs the top-level `filetree` module (`feature()`/`config()`) so it
+- **[menu.lua](menu.lua)** — unit: `integrations/menu.lua` (context-menu
+  entries). Stubs the top-level `filetree` module (`feature()`/`config()`) so it
   runs without a real adapter/tree window — the exact seam a host (RightMouse
   dispatcher) uses. Covers entries building, self-gating on feature
   availability, group-level opt-out (`config.menu`), the master `enable=false`

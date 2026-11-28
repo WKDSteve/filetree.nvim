@@ -9,11 +9,10 @@ outward to git, LSP, sessions and pdfport.nvim.
 
 ## Context menu
 
-`filetree.integrations.menu` contributes context-aware entries in the shape
-[nvzone/menu](https://github.com/nvzone/menu) expects, acting on the node
+`filetree.integrations.menu` contributes context-aware entries in the context-menu entry shape, acting on the node
 under the cursor. On the tree's own buffer filetree.nvim opens them itself
-through `ui.contextmenu`, which needs neither nvzone/menu nor any other
-third-party menu plugin (its own kit renderer draws them otherwise). A host —
+through `ui.contextmenu`, which needs no third-party menu plugin (its own
+kit renderer draws them). A host —
 typically your own `<RightMouse>` dispatcher, for buffers filetree.nvim does
 not own — can still compose the same entries into its own menu:
 

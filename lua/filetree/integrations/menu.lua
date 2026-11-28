@@ -1,19 +1,19 @@
 ---@module 'filetree.integrations.menu'
----@brief Context-menu entries for nvzone/menu (soft, opt-in integration).
+---@brief Context-menu entries (soft, opt-in integration).
 ---@description
 --- filetree.nvim does not depend on a menu plugin. It *provides* a curated list
---- of entries in the shape nvzone/menu expects (`{ name, cmd, rtxt }` plus
+--- of entries in the context-menu entry shape (`{ name, cmd, rtxt }` plus
 --- `{ name = "separator" }`), wired to the filetree feature actions. A host —
 --- typically the user's tree/RightMouse dispatcher — composes them for the tree
 --- window, e.g.:
 --- >
 ---   local items = require("filetree.integrations.menu").items()
----   require("menu").open(items, { mouse = true })
+---   require("ui.contextmenu").open(items)
 --- <
 --- Entries are self-gating: an action whose feature is disabled (so
 --- `require("filetree").feature(name)` is nil) is omitted, and whole groups can
---- be turned off via `config.menu` (see filetree.config.DEFAULTS). nvzone closes
---- the menu before running `cmd`, so the tree window/node is the active context —
+--- be turned off via `config.menu` (see filetree.config.DEFAULTS). The menu closes
+--- before running `cmd`, so the tree window/node is the active context —
 --- exactly as if the corresponding keymap had been pressed.
 
 local nerd = require("lib.nvim.ui.nerd_font")

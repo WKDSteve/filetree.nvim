@@ -214,15 +214,15 @@ reference see docs/BINDINGS/KEYMAPS.md.
 ------------------------------------------------------------------------------
 4.2 MENU INTEGRATION                                            *filetree-menu*
 
-filetree.nvim ships context-menu entries for nvzone/menu but does not depend on
-it. The plugin owns the entries; a host composes them for the tree window: >
+filetree.nvim ships context-menu entries but does not depend on a menu
+plugin. The plugin owns the entries; a host composes them for the tree window: >
 
     local ft = require("filetree.integrations.menu")
-    require("menu").open(ft.items(), { mouse = true })   -- inline entries
+    require("ui.contextmenu").open(ft.items())   -- inline entries
     -- ft.submenu() → a single "  Filetree" fly-out entry, or nil
 <
-Entries are self-gating (an action whose feature is disabled is omitted). nvzone
-closes the menu before running an entry, so the node under the cursor in the
+Entries are self-gating (an action whose feature is disabled is omitted). The
+menu closes before running an entry, so the node under the cursor in the
 tree is the active context. Opt out per group via `config.menu`: >
 
     require("filetree").setup({
@@ -2780,9 +2780,8 @@ Module: lua/filetree/features/ui/cheatsheet/
 CONTEXT MENU                                           *filetree-context-menu*
 
 Right-click (`<RightMouse>`) opens a context menu through `ui.contextmenu`,
-which draws with nvzone/menu if it is installed, or its own themed
-`ui.kit.menu` (no third-party plugin needed) otherwise — either way,
-right-click works out of the box. With the kit renderer, the clicked node's
+which draws with its own themed `ui.kit.menu` (no third-party plugin
+needed), so right-click works out of the box. The clicked node's
 line is highlighted for as long as the menu stays open, and with the tree
 docked left/right the menu opens beside it rather than on top of it. Only a
 click on a node opens it: a right-click on the empty area below the last node,

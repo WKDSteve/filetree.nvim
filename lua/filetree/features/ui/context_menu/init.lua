@@ -15,14 +15,12 @@
 --- vertical separator, another window -- opens no menu and leaves the cursor
 --- alone. `keymap` is a MOUSE trigger: it reads the pointer position.
 ---
---- `ui.contextmenu` resolves its own renderer -- nvzone/menu when it is
---- installed, `ui.kit.menu` (no third-party dependency) otherwise --
---- so this feature needs neither directly. It is never require()d until the
+--- `ui.contextmenu` draws the menu with `ui.kit.menu` (no third-party
+--- dependency), so this feature needs no menu plugin. It is never require()d until the
 --- first click. On by default (opt-out); degrades to a single notify, not an
 --- error, only if ui.nvim itself predates `ui.contextmenu`.
 ---
---- Two extras, both kit-renderer only (ui.contextmenu has no
---- equivalent hook for nvzone/menu, so they no-op there):
+--- Two extras of the kit renderer:
 ---  * the clicked node's line is highlighted for as long as the menu stays
 ---    open, so it is never ambiguous which node an entry would act on;
 ---  * with the tree docked left/right, the menu opens beside the tree
@@ -196,11 +194,10 @@ end
 --- Highlight the node the menu is about to act on. A one-shot fallback
 --- (the next time the cursor actually moves within the tree buffer) also
 --- clears it, in case the renderer never gives back a close hook to do it
---- promptly (nvzone/menu has none) or the menu fails to open at all.
+--- promptly (a disabled menu returns none) or the menu fails to open at all.
 ---
 --- Deliberately `CursorMoved` only, NOT `BufLeave`: opening the menu itself
---- moves focus to its own window (kit's float is `enter = true`; nvzone/menu
---- likely does the same), which fires `BufLeave` on the tree buffer as a
+--- moves focus to its own window (kit's float is `enter = true`), which fires `BufLeave` on the tree buffer as a
 --- pure side effect of the menu appearing -- before the user has even seen
 --- it. That cleared the highlight instantly on every click, which is a
 --- silent no-op from the user's perspective: indistinguishable from the
@@ -326,8 +323,8 @@ local function open_menu()
   local open_opts = vim.tbl_extend("force", { mouse = true }, beside_tree_opts())
   local surf = contextmenu.open(items, open_opts)
   -- Kit renderer: clear promptly when the menu actually closes, on top of
-  -- the CursorMoved/BufLeave fallback above. nvzone/menu (surf is nil here)
-  -- has no close hook to offer, so the fallback is all it gets.
+  -- the CursorMoved/BufLeave fallback above. A disabled menu (surf is nil
+  -- here) has no close hook to offer, so the fallback is all it gets.
   if surf and surf.on_close then surf:on_close(clear_node_highlight) end
 end
 

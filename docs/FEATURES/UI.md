@@ -330,10 +330,8 @@ require("filetree").setup({
 ## Context Menu
 
 Right-click (`<RightMouse>`) opens a context menu through
-`ui.contextmenu`, which draws with
-[nvzone/menu](https://github.com/nvzone/menu) if it is installed, or its own
-themed `ui.kit.menu` (no third-party plugin needed) otherwise —
-either way, right-click works out of the box. With the kit renderer, the
+`ui.contextmenu`, which draws with its own themed `ui.kit.menu` (no
+third-party plugin needed), so right-click works out of the box. The
 clicked node's line is highlighted for as long as the menu stays open, and
 with the tree docked left/right the menu opens beside it rather than on top
 of it. Only a click on a node opens it: a right-click on the empty area below the

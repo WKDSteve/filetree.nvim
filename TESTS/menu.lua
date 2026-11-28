@@ -1,4 +1,4 @@
--- menu.lua — headless unit tests for filetree.nvim's nvzone/menu integration.
+-- menu.lua — headless unit tests for filetree.nvim's context-menu integration.
 --
 -- Complements TESTS/smoke.lua and TESTS/units.lua. Exercises
 -- filetree.integrations.menu, which is a soft, opt-in layer: it reads

@@ -55,7 +55,7 @@ return {
   -- table and docs/FEATURES/FILEOPS.md for the full description.
   refs = require("filetree.refs.DEFAULTS"),
 
-  -- nvzone/menu integration (opt-in on the host side; entries provided by
+  -- context-menu integration (opt-in on the host side; entries provided by
   -- filetree.integrations.menu). Group-level opt-out; enable = false yields no
   -- entries. Entries whose feature is disabled are omitted automatically.
   menu = {
